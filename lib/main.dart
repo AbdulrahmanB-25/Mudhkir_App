@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:myapp/pages/add_dose.dart';
-import 'package:myapp/pages/login.dart';
-import 'package:myapp/pages/mainpage.dart';
-import 'package:myapp/pages/signup.dart';
-import 'package:myapp/pages/welcome.dart';
-import 'package:myapp/pages/dose_schedule.dart';
+import 'package:mudhkir_app/pages/add_dose.dart';
+import 'package:mudhkir_app/pages/login.dart';
+import 'package:mudhkir_app/pages/mainpage.dart';
+import 'package:mudhkir_app/pages/signup.dart';
+import 'package:mudhkir_app/pages/welcome.dart';
+import 'package:mudhkir_app/pages/dose_schedule.dart';
 
 void main() {
   runApp(const MyApp());
