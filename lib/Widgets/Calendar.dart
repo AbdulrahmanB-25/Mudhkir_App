@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+//TODO : RE DISIGEN THE CALENDAR PAGE FOR BETTER UX
+
 class Calendar extends StatefulWidget {
   const Calendar({super.key});
 
   @override
-  State<Calendar> createState() => _CalendarState();
+  State<Calendar> createState() => CalendarState();
 }
 
-class _CalendarState extends State<Calendar> {
-  int? _selectedIndex;
+class CalendarState extends State<Calendar> {
+  int? selectedIndex = 0; // Initialize with first date selected
+
+  @override
+  void initState() {
+    super.initState();
+    selectedIndex = 0; // first date is selected on load
+  }
 
   @override
   Widget build(BuildContext context) {
-    final days = _getNext14Days();
+    final days = getNext14Days();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
@@ -29,6 +37,7 @@ class _CalendarState extends State<Calendar> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          //TODO: BETTER WAY TO DISPLAY THE MONTHS
           const SizedBox(height: 16),
           SizedBox(
             height: 70,
@@ -39,15 +48,20 @@ class _CalendarState extends State<Calendar> {
                   final dayData = days[index];
                   return GestureDetector(
                     onTap: () => setState(() {
-                      _selectedIndex = _selectedIndex == index ? null : index;
+                      if (index == 0) {
+                        // Keep first date always selected
+                        selectedIndex = 0;
+                      } else {
+                        selectedIndex = selectedIndex == index ? null : index;
+                      }
                     }),
                     child: Container(
                       margin: const EdgeInsets.only(right: 12),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: _selectedIndex == index
+                        color: selectedIndex == index
                             ? Colors.grey[300]
-                            : Colors.transparent,
+                            : (index == 0 ? Colors.grey[300] : Colors.transparent),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -58,9 +72,9 @@ class _CalendarState extends State<Calendar> {
                               fontSize: 18,
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.bold,
-                              color: _selectedIndex == index
+                              color: selectedIndex == index
                                   ? Colors.black
-                                  : Colors.black87,
+                                  : (index == 0 ? Colors.black : Colors.black87),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -69,9 +83,9 @@ class _CalendarState extends State<Calendar> {
                             style: TextStyle(
                               fontSize: 16,
                               fontFamily: 'Poppins',
-                              color: _selectedIndex == index
+                              color: selectedIndex == index
                                   ? Colors.black54
-                                  : Colors.black54,
+                                  : (index == 0 ? Colors.black54 : Colors.black54),
                             ),
                           ),
                         ],
@@ -87,7 +101,7 @@ class _CalendarState extends State<Calendar> {
     );
   }
 
-  List<Map<String, String>> _getNext14Days() {
+  List<Map<String, String>> getNext14Days() {
     DateTime today = DateTime.now();
     return List.generate(14, (i) {
       DateTime day = today.add(Duration(days: i));

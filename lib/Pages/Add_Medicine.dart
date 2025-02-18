@@ -5,10 +5,10 @@ class Add_Medicine extends StatefulWidget {
   const Add_Medicine({super.key});
 
   @override
-  State<Add_Medicine> createState() => _Add_MedicineState();
+  State<Add_Medicine> createState() => Add_MedicineState();
 }
 
-class _Add_MedicineState extends State<Add_Medicine> {
+class Add_MedicineState extends State<Add_Medicine> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _dosageController = TextEditingController();
@@ -34,12 +34,6 @@ class _Add_MedicineState extends State<Add_Medicine> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add New Medicine'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _submitForm,
-          )
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -134,7 +128,7 @@ class _Add_MedicineState extends State<Add_Medicine> {
         'quantity': int.parse(_quantityController.text),
       };
 
-      // Here you would typically save to database or state management
+      //TODO: ADD TO save to database 
       print('New Medicine: $newMedicine');
 
       Navigator.pop(context, newMedicine);

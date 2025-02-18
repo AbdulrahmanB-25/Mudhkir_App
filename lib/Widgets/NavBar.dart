@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+//TODO : NAVBAR REWORK
+
 class NavBar extends StatelessWidget {
   final Function(int) onTabChange;
   final int currentIndex;
