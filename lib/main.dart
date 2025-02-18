@@ -1,46 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:mudhkir_app/Pages/Home.dart';
-import 'package:mudhkir_app/Pages/Cabinet.dart';
-import 'package:mudhkir_app/Widgets/NavBar.dart';
+import 'package:myapp/pages/login.dart';
+import 'package:myapp/pages/mainpage.dart';
+import 'package:myapp/pages/signup.dart';
+import 'package:myapp/pages/welcome.dart';
 
-void main() => runApp(const MyApp());
+
+void main() {
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Medication App',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const MainWrapper(),
+      initialRoute: "/",
+
+    routes: {
+      "/" : (context) => const Welcome(),
+      "/login" : (context) => const Login(),
+      "/signup" : (context) => const Signup(),
+      "/mainpage" : (context) => const MainPage(),
+    },
+
     );
   }
 }
 
-class MainWrapper extends StatefulWidget {
-  const MainWrapper({super.key});
-
-  @override
-  State<MainWrapper> createState() => _MainWrapperState();
-}
-
-class _MainWrapperState extends State<MainWrapper> {
-  int _currentIndex = 0;
-  final List<Widget> _screens = [
-    const Home(),
-    const Cabinet(),
-    const Placeholder(), // Settings screen
-  ];
+class App extends StatelessWidget {
+  const App({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
-      bottomNavigationBar: NavBar(
-        currentIndex: _currentIndex,
-        onTabChange: (index) => setState(() => _currentIndex = index),
-      ),
+
+
     );
   }
 }
