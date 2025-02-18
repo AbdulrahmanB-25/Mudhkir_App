@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:mudhkir_app/Pages/login.dart';
-import 'package:mudhkir_app/Pages/mainpage.dart';
-import 'package:mudhkir_app/Pages/signup.dart';
-import 'package:mudhkir_app/Pages/welcome.dart';
-import 'package:mudhkir_app/Pages/Cabinet.dart';
-import 'package:mudhkir_app/Pages/signup.dart';
-import 'package:mudhkir_app/Pages/welcome.dart';
-
+import 'package:myapp/pages/add_dose.dart';
+import 'package:myapp/pages/login.dart';
+import 'package:myapp/pages/mainpage.dart';
+import 'package:myapp/pages/signup.dart';
+import 'package:myapp/pages/welcome.dart';
+import 'package:myapp/pages/dose_schedule.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,7 +15,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return MaterialApp(
       initialRoute: "/",
 
@@ -26,12 +23,22 @@ class MyApp extends StatelessWidget {
       "/login" : (context) => const Login(),
       "/signup" : (context) => const Signup(),
       "/mainpage" : (context) => const MainPage(),
-      "/Cabinet" : (context) => const Cabinet(),
-
+      "/dose_schedule" : (context) => const dose_schedule(),
+      "/add_dose" : (context) => const add_dose(),
     },
 
     );
   }
-
 }
 
+class App extends StatelessWidget {
+  const App({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+
+
+    );
+  }
+}
