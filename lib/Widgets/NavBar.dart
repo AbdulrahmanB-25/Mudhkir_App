@@ -14,25 +14,25 @@ class NavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.medication),
-          label: 'Cabinet',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings),
-          label: 'Settings',
-        ),
-      ],
-      selectedItemColor: Colors.blue,
-      unselectedItemColor: Colors.grey,
-      onTap: onTabChange,
+    return  BottomNavigationBar(
+    items: <BottomNavigationBarItem>[
+    BottomNavigationBarItem(
+    icon: Icon(Icons.home),
+    label: 'الرئيسية',
+    ),
+    BottomNavigationBarItem(
+    icon: Icon(Icons.person),
+    label: 'الملف الشخصي',
+    ),
+    BottomNavigationBarItem(
+    icon: Icon(Icons.settings),
+    label: 'الإعدادات',
+    ),
+    ],
+    currentIndex: currentIndex,
+    selectedItemColor: Colors.blue.shade800,
+    unselectedItemColor: Colors.grey,
+    onTap: onTabChange,
     );
   }
 }

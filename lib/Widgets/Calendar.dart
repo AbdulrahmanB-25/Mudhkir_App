@@ -11,12 +11,12 @@ class Calendar extends StatefulWidget {
 }
 
 class CalendarState extends State<Calendar> {
-  int? selectedIndex = 0; // Initialize with first date selected
+  int? selectedIndex =0; // Initialize with first date selected
 
   @override
   void initState() {
     super.initState();
-    selectedIndex = 0; // first date is selected on load
+    selectedIndex =0 ; // first date is selected on load
   }
 
   @override
@@ -29,8 +29,9 @@ class CalendarState extends State<Calendar> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Next 14 Days',
+            '١٤ يوم من ادويتي',
             style: TextStyle(
+              height: 4,
               color: Colors.black54,
               fontSize: 24,
               fontFamily: 'Poppins',
@@ -48,12 +49,7 @@ class CalendarState extends State<Calendar> {
                   final dayData = days[index];
                   return GestureDetector(
                     onTap: () => setState(() {
-                      if (index == 0) {
-                        // Keep first date always selected
-                        selectedIndex = 0;
-                      } else {
-                        selectedIndex = selectedIndex == index ? null : index;
-                      }
+                      selectedIndex = selectedIndex == index ? null : index;
                     }),
                     child: Container(
                       margin: const EdgeInsets.only(right: 12),
@@ -61,7 +57,7 @@ class CalendarState extends State<Calendar> {
                       decoration: BoxDecoration(
                         color: selectedIndex == index
                             ? Colors.grey[300]
-                            : (index == 0 ? Colors.grey[300] : Colors.transparent),
+                            : (index == -1 ? Colors.grey[300] : Colors.transparent),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -77,7 +73,7 @@ class CalendarState extends State<Calendar> {
                                   : (index == 0 ? Colors.black : Colors.black87),
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 10),
                           Text(
                             dayData['day']!,
                             style: TextStyle(
