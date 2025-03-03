@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class add_dose extends StatefulWidget {
   const add_dose({super.key});
@@ -187,7 +188,7 @@ class _AddDoseState extends State<add_dose> {
   }
 
   /// 📨 Submit Form
-  void _submitForm() {
+  void _submitForm() async {
     if (_formKey.currentState!.validate()) {
       final newMedicine = {
         'name': _nameController.text,
@@ -196,12 +197,31 @@ class _AddDoseState extends State<add_dose> {
         'quantity': int.parse(_quantityController.text),
       };
 
-      //TODO: ADD TO save to database
-      print('New Medicine: $newMedicine');
+      try {
+        // Get reference to Firestore collection
+        CollectionReference medicines = FirebaseFirestore.instance.collection('medicines');
 
-      Navigator.pop(context, newMedicine);
+        // Add the new medicine to Firestore
+        await medicines.add(newMedicine);
+
+        // Optionally, show a success message
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('New Medicine added successfully!'),
+        ));
+
+        print('New Medicine added to Firestore: $newMedicine');
+      } catch (e) {
+        // Show error message to user
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to add medicine!'),
+          backgroundColor: Colors.red,
+        ));
+
+        print('Error adding medicine: $e');
+      }
     }
   }
+
 
   /// 🧹 Clean up Controllers
   @override

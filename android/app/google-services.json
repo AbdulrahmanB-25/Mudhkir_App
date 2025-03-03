@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "154166004472",
+    "firebase_url": "https://mudhkir-app-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "mudhkir-app",
+    "storage_bucket": "mudhkir-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:154166004472:android:6e83aa26aa9fffbeafc90d",
+        "android_client_info": {
+          "package_name": "com.example.mudhkir_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBeMV_Ug_725_WJQz7LntCFOGpOZbaShOE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
