@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mudhkir_app/Pages/companions.dart';
 import 'package:mudhkir_app/pages/add_dose.dart';
 import 'package:mudhkir_app/pages/login.dart';
 import 'package:mudhkir_app/pages/mainpage.dart';
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       initialRoute: "/",
     routes: {
       "/" : (context) => const Welcome(),
@@ -28,11 +30,19 @@ class MyApp extends StatelessWidget {
       "/mainpage" : (context) => const MainPage(),
       "/dose_schedule" : (context) => const dose_schedule(),
       "/add_dose" : (context) => const add_dose(),
+      "/companions" : (context) =>  Companions(),
+  
+
     },
 
     );
   }
 }
+
+
+
+
+
 
 class App extends StatelessWidget {
   const App({super.key});
