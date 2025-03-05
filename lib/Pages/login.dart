@@ -103,11 +103,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        Navigator.pushReplacementNamed(context, '/'); // Go to Welcome Page
-        return false;
-      },
+    return PopScope(
       child: Scaffold(
         body: Stack(
           children: [
