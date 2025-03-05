@@ -14,6 +14,9 @@ import 'package:flutter/foundation.dart'
 ///   options: DefaultFirebaseOptions.currentPlatform,
 /// );
 /// ```
+
+//TODO: MAKE THE DATABASE DOWNLOAD THE MED SECDUAL SO IT CAN WORK OFFLINE
+//TODO: MAKE THE COMPANIONS WORK.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {

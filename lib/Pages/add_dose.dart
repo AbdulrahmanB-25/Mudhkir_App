@@ -8,6 +8,8 @@ class add_dose extends StatefulWidget {
   State<add_dose> createState() => _AddDoseState();
 }
 
+
+//TODO: REWRITE THE FIELDS TO FIT BETTER
 class _AddDoseState extends State<add_dose> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
