@@ -45,8 +45,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Disable back button navigation
+    return PopScope(
       child: Scaffold(
         body: Stack(
           children: [
