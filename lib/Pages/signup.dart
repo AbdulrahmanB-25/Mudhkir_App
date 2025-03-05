@@ -32,7 +32,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: Duration(seconds: 2),
+      duration: const Duration(seconds: 2),
       vsync: this,
     );
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
@@ -55,7 +55,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     });
   }
 
-  /// **Validates Email**
   String _validateEmail(String email) {
     if (email.isEmpty) return 'الرجاء إدخال البريد الإلكتروني';
     if (!RegExp(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$").hasMatch(email)) {
@@ -64,20 +63,23 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     return '';
   }
 
-  /// **Validates Password**
   String _validatePassword(String password) {
     if (password.isEmpty) return 'الرجاء إدخال كلمة المرور';
-    if (password.length < 6) return 'يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل';
+    if (password.length < 8) return 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل';
+    if (!password.contains(RegExp(r'[A-Z]'))) return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
+    if (!password.contains(RegExp(r'[0-9]'))) return 'يجب أن تحتوي على رقم واحد على الأقل';
+    if (!password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+      return 'يجب أن تحتوي على رمز خاص واحد على الأقل (!@#\$% إلخ)';
+    }
     return '';
   }
 
-  /// **Handles Registration**
   void _registerUser() async {
     setState(() {
       _isSubmitted = true;
       _nameError = _nameController.text.isEmpty ? 'الرجاء إدخال الاسم' : '';
       _emailError = _validateEmail(_emailController.text);
-      _passwordError = _passwordController.text.isEmpty ? 'الرجاء إدخال كلمة المرور' : '';
+      _passwordError = _validatePassword(_passwordController.text);
       _confirmPasswordError = _confirmPasswordController.text.isEmpty
           ? 'الرجاء تأكيد كلمة المرور'
           : (_passwordController.text != _confirmPasswordController.text
@@ -86,16 +88,23 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
       _signupError = '';
     });
 
-    if (_nameError.isEmpty && _emailError.isEmpty && _passwordError.isEmpty && _confirmPasswordError.isEmpty) {
+    if (_nameError.isEmpty &&
+        _emailError.isEmpty &&
+        _passwordError.isEmpty &&
+        _confirmPasswordError.isEmpty) {
       try {
-        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        UserCredential userCredential =
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
         User? user = userCredential.user;
         if (user != null) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
             'username': _nameController.text.trim(),
             'email': _emailController.text.trim(),
           });
@@ -120,7 +129,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -130,8 +138,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
-
-          // Main Content
           Center(
             child: SingleChildScrollView(
               child: Padding(
@@ -139,78 +145,71 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Animated Logo
                     ScaleTransition(
                       scale: _animation,
                       child: CircleAvatar(
                         radius: 60,
                         backgroundColor: Colors.blue.shade50,
-                        child: Icon(Icons.person_add, size: 60, color: Colors.blue.shade800),
+                        child: Icon(Icons.person_add,
+                            size: 60, color: Colors.blue.shade800),
                       ),
                     ),
-                    SizedBox(height: 30),
-
-                    // Page Title
+                    const SizedBox(height: 30),
                     Text(
                       "إنشاء حساب",
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade800),
                     ),
-                    SizedBox(height: 20),
-
-                    // Full Name Field
+                    const SizedBox(height: 20),
                     _buildTextField(_nameController, "الاسم", Icons.person, _nameError),
-
-                    // Email Field
                     _buildTextField(_emailController, "البريد الإلكتروني", Icons.email, _emailError),
-
-                    // Password Field
-                    _buildPasswordField(_passwordController, "كلمة المرور", _passwordError, _obscurePassword, () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    }),
-
-                    // Confirm Password Field
-                    _buildConfirmPasswordField(_confirmPasswordController, "تأكيد كلمة المرور", _confirmPasswordError, _obscureConfirmPassword, () {
-                      setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
-                    }),
-
-                    // General Signup Error
+                    _buildPasswordField(),
+                    _buildConfirmPasswordField(),
                     if (_signupError.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Text(
                           _signupError,
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
-
-                    // Signup Button
                     ElevatedButton(
                       onPressed: _registerUser,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue.shade800,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                        padding: EdgeInsets.symmetric(vertical: 15),
-                        minimumSize: Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30)),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        minimumSize: const Size(double.infinity, 50),
                       ),
-                      child: Text("إنشاء حساب", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                      child: const Text("إنشاء حساب",
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w600)),
                     ),
-                    SizedBox(height: 20),
-
-                    // "لديك حساب؟ تسجيل الدخول"
+                    const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text("لديك حساب؟ ", style: TextStyle(color: Colors.blue.shade800)),
+                        Text("لديك حساب؟ ",
+                            style: TextStyle(color: Colors.blue.shade800)),
                         GestureDetector(
                           onTap: () => Navigator.pushNamed(context, '/login'),
-                          child: Text("تسجيل الدخول", style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
+                          child: Text("تسجيل الدخول",
+                              style: TextStyle(
+                                  color: Colors.blue.shade800,
+                                  fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -221,7 +220,8 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, String error) {
+  Widget _buildTextField(TextEditingController controller, String label,
+      IconData icon, String error) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -232,21 +232,100 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
             filled: true,
             fillColor: Colors.blue.shade50,
             prefixIcon: Icon(icon, color: Colors.blue.shade800),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(30),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
-        if (_isSubmitted && error.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(error, style: TextStyle(color: Colors.red))),
-        SizedBox(height: 15),
+        if (_isSubmitted && error.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text(error, style: const TextStyle(color: Colors.red)),
+          ),
+        const SizedBox(height: 15),
       ],
     );
   }
 
-  Widget _buildPasswordField(TextEditingController controller, String label, String error, bool obscureText, VoidCallback toggleVisibility) {
-    return _buildTextField(controller, label, Icons.lock, error);
+  Widget _buildPasswordField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          decoration: InputDecoration(
+            labelText: "كلمة المرور",
+            filled: true,
+            fillColor: Colors.blue.shade50,
+            prefixIcon: Icon(Icons.lock, color: Colors.blue.shade800),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                color: Colors.blue.shade800,
+              ),
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(30),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        if (_isSubmitted && _passwordError.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text(_passwordError,
+                style: const TextStyle(color: Colors.red)),
+          ),
+        const SizedBox(height: 15),
+      ],
+    );
   }
 
-  Widget _buildConfirmPasswordField(TextEditingController controller, String label, String error, bool obscureText, VoidCallback toggleVisibility) {
-    return _buildTextField(controller, label, Icons.lock_outline, error);
+  Widget _buildConfirmPasswordField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _confirmPasswordController,
+          obscureText: _obscureConfirmPassword,
+          decoration: InputDecoration(
+            labelText: "تأكيد كلمة المرور",
+            filled: true,
+            fillColor: Colors.blue.shade50,
+            prefixIcon:
+            Icon(Icons.lock_outline, color: Colors.blue.shade800),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscureConfirmPassword
+                    ? Icons.visibility_off
+                    : Icons.visibility,
+                color: Colors.blue.shade800,
+              ),
+              onPressed: () {
+                setState(
+                        () => _obscureConfirmPassword = !_obscureConfirmPassword);
+              },
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(30),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        if (_isSubmitted && _confirmPasswordError.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text(_confirmPasswordError,
+                style: const TextStyle(color: Colors.red)),
+          ),
+        const SizedBox(height: 15),
+      ],
+    );
   }
 
   @override
