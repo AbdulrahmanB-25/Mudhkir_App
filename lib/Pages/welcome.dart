@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class Welcome extends StatefulWidget {
   const Welcome({super.key});
@@ -20,6 +21,13 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
     );
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
+
+    // Redirect to main page if user is already logged in
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user != null) {
+        Navigator.pushReplacementNamed(context, '/mainpage');
+      }
+    });
   }
 
   @override
@@ -38,13 +46,12 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
             ),
           ),
 
-          // Main Content
+          // Main Content in a Column
           Center(
             child: SingleChildScrollView(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated Logo
                   ScaleTransition(
                     scale: _animation,
                     child: CircleAvatar(
@@ -58,8 +65,6 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   SizedBox(height: 30),
-
-                  // App Name with Stylish Font
                   Text(
                     "مُذَكِّر",
                     style: TextStyle(
@@ -70,8 +75,6 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   SizedBox(height: 15),
-
-                  // Welcoming Words
                   Text(
                     "مرحباً بك في مُذَكِّر،\nمساعدك الأمثل لتتبع الأدوية.",
                     textAlign: TextAlign.center,
@@ -82,8 +85,6 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   SizedBox(height: 40),
-
-                  // Sign In Button
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: ElevatedButton(
@@ -111,13 +112,11 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   SizedBox(height: 20),
-
-                  // Sign Up Button
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.pushNamed(context, '/mainpage');
+                        Navigator.pushNamed(context, '/signup');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color.fromARGB(255, 226, 241, 243),
@@ -140,12 +139,13 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  SizedBox(height: 50), // Add spacing before social icons
                 ],
               ),
             ),
           ),
 
-          // Social Media Icons at the Bottom
+          // Social Media Icons at the Bottom (Wrapped in Stack)
           Positioned(
             bottom: 20,
             left: 0,

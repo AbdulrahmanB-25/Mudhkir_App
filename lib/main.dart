@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mudhkir_app/Pages/companions.dart';
+import 'package:mudhkir_app/Pages/personal_data.dart';
 import 'package:mudhkir_app/pages/add_dose.dart';
 import 'package:mudhkir_app/pages/login.dart';
 import 'package:mudhkir_app/pages/mainpage.dart';
@@ -31,18 +32,13 @@ class MyApp extends StatelessWidget {
       "/dose_schedule" : (context) => const dose_schedule(),
       "/add_dose" : (context) => const add_dose(),
       "/companions" : (context) =>  Companions(),
-  
+      "/personal_data": (context) => const PersonalDataPage(),
 
     },
 
     );
   }
 }
-
-
-
-
-
 
 class App extends StatelessWidget {
   const App({super.key});

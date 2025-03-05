@@ -48,11 +48,20 @@ class _AddDoseState extends State<add_dose> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,  // This will stretch the column's children across the screen width
                 children: [
-                  /// 📌 Title
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: IconButton(
+                      icon: Icon(Icons.arrow_back, color: Colors.blue.shade800),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
                   Text(
                     "إضافة دواء جديد",
+                    textAlign: TextAlign.right,  // Ensures the text is right-aligned
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
