@@ -61,7 +61,7 @@ class _MainPageState extends State<MainPage> {
                   children: [
                     /// Greeting
                     Text(
-                      "${_username} مرحبا بك",
+                      "$_username مرحبا بك",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,

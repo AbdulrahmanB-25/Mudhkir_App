@@ -10,7 +10,7 @@ class PersonalDataPage extends StatefulWidget {
 }
 
 class _PersonalDataPageState extends State<PersonalDataPage> {
-  int _selectedIndex = 1; // Highlights "Profile" tab
+  final int _selectedIndex = 1; // Highlights "Profile" tab
   String _username = '...loading'; // Placeholder while fetching username
   String _email = '...loading'; // Placeholder while fetching email
 
