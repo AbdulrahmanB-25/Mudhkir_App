@@ -4,7 +4,7 @@ class Companions extends StatefulWidget {
   const Companions({super.key});
 
 
-  //TODO: REMOVE HARDCODED MAKE DYNAMIC
+  //TODO: NEED FUNCTIONALITY
   @override
   _CompanionsState createState() => _CompanionsState();
 }

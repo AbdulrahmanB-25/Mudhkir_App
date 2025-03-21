@@ -58,6 +58,7 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                       radius: 75,
                       backgroundColor: Colors.blue.shade50,
                       child: Icon(
+                        //TODO : NEW ICON
                         Icons.medical_services_outlined,
                         size: 80,
                         color: Colors.blue.shade800,

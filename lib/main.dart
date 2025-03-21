@@ -18,7 +18,7 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
-
+//TODO : ORGANIZE  THE FILES AND FOLDERS
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
