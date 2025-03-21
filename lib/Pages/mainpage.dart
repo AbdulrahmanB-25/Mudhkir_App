@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -9,8 +12,32 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
+  String _userName = '';
 
-  /// Handles Bottom Navigation Bar Tap
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? name = prefs.getString('userName');
+    if (name == null) {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        name = userDoc['username'];
+        if (name != null) {
+          await prefs.setString('userName', name);
+        }
+      }
+    }
+    setState(() {
+      _userName = name ?? 'User';
+    });
+  }
+
   void _onItemTapped(int index) {
     if (index == 1) {
       Navigator.pushNamed(context, "/personal_data").then((_) {
@@ -36,7 +63,6 @@ class _MainPageState extends State<MainPage> {
     return Scaffold(
       body: Stack(
         children: [
-          /// 🌈 Background Gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -46,17 +72,14 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
           ),
-
-          /// 📜 Main Content
           SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end, 
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  /// 👋 Greeting
                   Text(
-                    "مرحبا بك",
+                    "مرحبا بك، $_userName",
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -71,10 +94,7 @@ class _MainPageState extends State<MainPage> {
                     ),
                   ),
                   SizedBox(height: 30),
-
-                  /// 💊 Coming Drug Dose Section (Handles Multiple Doses)
                   Container(
-                    
                     padding: EdgeInsets.all(15),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -90,16 +110,13 @@ class _MainPageState extends State<MainPage> {
                     child: Column(
                       children: [
                         DoseTile("بانادول 500 ملجم", "8:00 مساءً"),
-                        DoseTile("باراسيتامول", "8:00 مساءً"), 
+                        DoseTile("باراسيتامول", "8:00 مساءً"),
                       ],
                     ),
                   ),
                   SizedBox(height: 30),
-
-                  /// 🚀 Quick Actions
                   Column(
                     children: [
-                      /// First Row (2 Cards)
                       Row(
                         children: [
                           Expanded(
@@ -124,8 +141,6 @@ class _MainPageState extends State<MainPage> {
                         ],
                       ),
                       SizedBox(height: 20),
-
-                      /// Second Row (1 Large Companion Card)
                       ActionCard(
                         icon: Icons.people,
                         label: "المرافقين",
@@ -142,8 +157,6 @@ class _MainPageState extends State<MainPage> {
           ),
         ],
       ),
-
-      /// 📌 Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
         items: const [
           BottomNavigationBarItem(
@@ -168,7 +181,6 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-/// 💊 Widget to Show Each Dose in the Next Dose Section
 class DoseTile extends StatelessWidget {
   final String medicationName;
   final String time;
@@ -209,7 +221,6 @@ class DoseTile extends StatelessWidget {
   }
 }
 
-/// 🎯 Widget for Quick Actions (Add Dose, View Schedule, View Companions)
 class ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -228,7 +239,7 @@ class ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: isFullWidth ? double.infinity : null,
-      height: 100, // Ensuring uniform height
+      height: 100,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),

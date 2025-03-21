@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 class Login extends StatefulWidget {
   const Login({super.key});
 
-  //TODO: FORGET PASSWORD PAGE
   @override
   _LoginState createState() => _LoginState();
 }
@@ -17,8 +16,8 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   String _emailError = '';
   String _passwordError = '';
-  String _loginError = ''; // General login error (wrong credentials)
-  bool _isSubmitted = false; // Track if login button was pressed
+  String _loginError = '';
+  bool _isSubmitted = false;
 
   @override
   void initState() {
@@ -30,7 +29,6 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
 
-    // Remove error messages when user starts typing
     _emailController.addListener(() {
       if (_isSubmitted) {
         setState(() {
@@ -50,7 +48,6 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     });
   }
 
-  /// **Validates Email (After Button Press)**
   String _validateEmail(String email) {
     if (email.isEmpty) {
       return 'الرجاء إدخال البريد الإلكتروني';
@@ -61,7 +58,6 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     return '';
   }
 
-  /// **Validates Password Format (On Unfocus)**
   String _validatePassword(String password) {
     if (password.isEmpty) {
       return 'الرجاء إدخال كلمة المرور';
@@ -72,13 +68,12 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     return '';
   }
 
-  /// **Handles User Login with Firebase**
   void _login() async {
     setState(() {
-      _isSubmitted = true; // Mark that login button was pressed
+      _isSubmitted = true;
       _emailError = _validateEmail(_emailController.text);
       _passwordError = _passwordController.text.isEmpty ? 'الرجاء إدخال كلمة المرور' : '';
-      _loginError = ''; // Reset login error when button is pressed
+      _loginError = '';
     });
 
     if (_emailError.isEmpty && _passwordError.isEmpty) {
@@ -104,171 +99,150 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      child: Scaffold(
-        body: Stack(
-          children: [
-            // Background Gradient
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade100, Colors.white],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+    return Scaffold(
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade100, Colors.white],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
             ),
-
-            // Main Content
-            Center(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 30),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Animated Logo
-                      ScaleTransition(
-                        scale: _animation,
-                        child: CircleAvatar(
-                          radius: 60,
-                          backgroundColor: Colors.blue.shade50,
-                          child: Icon(
-                            Icons.lock_open,
-                            size: 60,
-                            color: Colors.blue.shade800,
-                          ),
+          ),
+          Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 30),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ScaleTransition(
+                      scale: _animation,
+                      child: CircleAvatar(
+                        radius: 60,
+                        backgroundColor: Colors.blue.shade50,
+                        child: Icon(Icons.lock_open, size: 60, color: Colors.blue.shade800),
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    Text(
+                      "تسجيل الدخول",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: "البريد الإلكتروني",
+                        filled: true,
+                        fillColor: Colors.blue.shade50,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                          borderSide: BorderSide.none,
+                        ),
+                        prefixIcon: Icon(Icons.email, color: Colors.blue.shade800),
+                      ),
+                    ),
+                    if (_isSubmitted && _emailError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(
+                          _emailError,
+                          style: TextStyle(color: Colors.red, fontSize: 14),
                         ),
                       ),
-                      SizedBox(height: 30),
-
-                      // Page Title
-                      Text(
-                        "تسجيل الدخول",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Email Field
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
+                    const SizedBox(height: 15),
+                    Focus(
+                      onFocusChange: (hasFocus) {
+                        if (!hasFocus) {
+                          setState(() {
+                            _passwordError = _validatePassword(_passwordController.text);
+                          });
+                        }
+                      },
+                      child: TextField(
+                        controller: _passwordController,
+                        obscureText: true,
                         decoration: InputDecoration(
-                          labelText: "البريد الإلكتروني",
-                          labelStyle: TextStyle(color: Colors.blue.shade800),
+                          labelText: "كلمة المرور",
                           filled: true,
                           fillColor: Colors.blue.shade50,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(30),
                             borderSide: BorderSide.none,
                           ),
-                          prefixIcon: Icon(Icons.email, color: Colors.blue.shade800),
+                          prefixIcon: Icon(Icons.lock, color: Colors.blue.shade800),
                         ),
                       ),
-                      if (_isSubmitted && _emailError.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: Text(
-                            _emailError,
-                            style: TextStyle(color: Colors.red, fontSize: 14),
-                          ),
-                        ),
-                      SizedBox(height: 15),
-
-                      // Password Field
-                      Focus(
-                        onFocusChange: (hasFocus) {
-                          if (!hasFocus) {
-                            setState(() {
-                              _passwordError = _validatePassword(_passwordController.text);
-                            });
-                          }
-                        },
-                        child: TextField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: "كلمة المرور",
-                            labelStyle: TextStyle(color: Colors.blue.shade800),
-                            filled: true,
-                            fillColor: Colors.blue.shade50,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                            prefixIcon: Icon(Icons.lock, color: Colors.blue.shade800),
-                          ),
-                        ),
-                      ),
-                      if (_isSubmitted && _passwordError.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: Text(
-                            _passwordError,
-                            style: TextStyle(color: Colors.red, fontSize: 14),
-                          ),
-                        ),
-                      SizedBox(height: 10),
-
-                      // General Login Error (Appears Above Login Button)
-                      if (_loginError.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text(
-                            _loginError,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-
-                      // Login Button
-                      ElevatedButton(
-                        onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade800,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: 15),
-                          minimumSize: Size(double.infinity, 50),
-                          elevation: 3,
-                          shadowColor: Colors.black26,
-                        ),
+                    ),
+                    if (_isSubmitted && _passwordError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
                         child: Text(
-                          "تسجيل الدخول",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          _passwordError,
+                          style: TextStyle(color: Colors.red, fontSize: 14),
                         ),
                       ),
-                      SizedBox(height: 20),
-
-                      // Sign Up Link
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text("ليس لديك حساب؟ ", style: TextStyle(color: Colors.blue.shade800)),
-                          GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, '/signup'),
-                            child: Text("إنشاء حساب", style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
+                    const SizedBox(height: 10),
+                    if (_loginError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          _loginError,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                       ),
-                    ],
-                  ),
+                    ElevatedButton(
+                      onPressed: _login,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                      child: const Text(
+                        "تسجيل الدخول",
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("ليس لديك حساب؟ ", style: TextStyle(color: Colors.blue.shade800)),
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, '/signup'),
+                          child: Text("إنشاء حساب", style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: () => Navigator.pushNamed(context, '/forget_password'),
+                      child: Text(
+                        "نسيت كلمة المرور؟",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
