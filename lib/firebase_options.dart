@@ -4,18 +4,7 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-/// Default [FirebaseOptions] for use with your Firebase apps.
-///
-/// Example:
-/// ```dart
-/// import 'firebase_options.dart';
-/// // ...
-/// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
-/// );
-/// ```
 
-//TODO: MAKE THE DATABASE DOWNLOAD THE MED SECDUAL SO IT CAN WORK OFFLINE
 //TODO: MAKE THE COMPANIONS WORK.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {

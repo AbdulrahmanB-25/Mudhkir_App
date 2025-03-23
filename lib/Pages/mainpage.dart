@@ -9,7 +9,7 @@ class MainPage extends StatefulWidget {
   @override
   _MainPageState createState() => _MainPageState();
 }
-// TODO: NEED NEXT MEDCALANDER WORKING
+
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
   String _userName = '';
@@ -22,20 +22,118 @@ class _MainPageState extends State<MainPage> {
 
   Future<void> _loadUserName() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? name = prefs.getString('userName');
-    if (name == null) {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        name = userDoc['username'];
-        if (name != null) {
-          await prefs.setString('userName', name);
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      String name = userDoc['username'];
+      await prefs.setString('userName', name);
+      setState(() {
+        _userName = name;
+      });
+    }
+  }
+
+  // Helper to pad a date string to "yyyy-MM-dd" format.
+  String formatDateString(String dateString) {
+    List<String> parts = dateString.split('-');
+    if (parts.length != 3) return dateString;
+    try {
+      String year = parts[0].trim();
+      int m = int.parse(parts[1].trim());
+      int d = int.parse(parts[2].trim());
+      String month = m.toString().padLeft(2, '0');
+      String day = d.toString().padLeft(2, '0');
+      return '$year-$month-$day';
+    } catch (e) {
+      print("Error parsing date '$dateString': $e");
+      return dateString;
+    }
+  }
+
+  // Updated _parseTime function using RegExp to extract hour and minute robustly.
+  TimeOfDay _parseTime(String timeString) {
+    timeString = timeString.trim();
+    bool isPM = timeString.contains("مساءً") || timeString.contains("PM");
+    bool isAM = timeString.contains("صباحاً") || timeString.contains("AM");
+    // Remove markers (Arabic and English)
+    timeString = timeString.replaceAll(RegExp(r'(مساءً|صباحاً|PM|AM)'), "").trim();
+    // Use RegExp to extract hour and minute (minute is optional)
+    RegExp regExp = RegExp(r'(\d{1,2})\D*(\d{0,2})');
+    Match? match = regExp.firstMatch(timeString);
+    if (match == null) {
+      // If no match, default to 0:00.
+      return const TimeOfDay(hour: 0, minute: 0);
+    }
+    int hour = int.tryParse(match.group(1) ?? "0") ?? 0;
+    int minute = 0;
+    if (match.group(2) != null && match.group(2)!.isNotEmpty) {
+      minute = int.tryParse(match.group(2)!) ?? 0;
+    }
+    if (isPM && hour < 12) {
+      hour += 12;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  // Helper: Format a TimeOfDay to a string (e.g., "8:00 مساءً").
+  String _formatTimeOfDay(TimeOfDay time) {
+    final int displayHour =
+    time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final String period = time.hour >= 12 ? "مساءً" : "صباحاً";
+    final String minuteStr = time.minute.toString().padLeft(2, '0');
+    return "$displayHour:$minuteStr $period";
+  }
+
+  // Fetch upcoming medications and compute each medication's next dose time.
+  Future<List<Map<String, String>>> _fetchUpcomingMedications() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return [];
+    QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('medicines')
+        .where('userId', isEqualTo: user.uid)
+        .get();
+    List<Map<String, String>> upcoming = [];
+    DateTime now = DateTime.now();
+    int nowMinutes = TimeOfDay.now().hour * 60 + TimeOfDay.now().minute;
+    for (var doc in snapshot.docs) {
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      // Reformat date strings to "yyyy-MM-dd" before parsing.
+      String startDateStr = formatDateString(data['startDate']);
+      String endDateStr = formatDateString(data['endDate']);
+      DateTime startDate = DateTime.parse(startDateStr);
+      DateTime endDate = DateTime.parse(endDateStr);
+      // Check if today is within the active period.
+      if (now.isBefore(startDate) || now.isAfter(endDate)) continue;
+      List<dynamic> times = data['times'] ?? [];
+      TimeOfDay? nextDose;
+      int? minDiff;
+      for (var timeStr in times) {
+        TimeOfDay scheduled = _parseTime(timeStr);
+        int scheduledMinutes = scheduled.hour * 60 + scheduled.minute;
+        int diff = scheduledMinutes - nowMinutes;
+        if (diff < 0) diff += 24 * 60; // Wrap to next day if needed.
+        if (minDiff == null || diff < minDiff) {
+          minDiff = diff;
+          nextDose = scheduled;
         }
       }
+      if (nextDose != null) {
+        String nextDoseStr = _formatTimeOfDay(nextDose);
+        upcoming.add({'name': data['name'], 'nextDose': nextDoseStr});
+      }
     }
-    setState(() {
-      _userName = name ?? 'User';
+    // Sort medications by next dose time (in minutes).
+    upcoming.sort((a, b) {
+      TimeOfDay timeA = _parseTime(a['nextDose']!);
+      TimeOfDay timeB = _parseTime(b['nextDose']!);
+      int minutesA = timeA.hour * 60 + timeA.minute;
+      int minutesB = timeB.hour * 60 + timeB.minute;
+      return minutesA.compareTo(minutesB);
     });
+    return upcoming;
   }
 
   void _onItemTapped(int index) {
@@ -93,13 +191,14 @@ class _MainPageState extends State<MainPage> {
                       color: Colors.blue.shade600,
                     ),
                   ),
-                  SizedBox(height: 30),
+                  const SizedBox(height: 30),
+                  // Dynamic upcoming medications section.
                   Container(
-                    padding: EdgeInsets.all(15),
+                    padding: const EdgeInsets.all(15),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
+                      boxShadow: const [
                         BoxShadow(
                           color: Colors.black12,
                           blurRadius: 10,
@@ -107,14 +206,36 @@ class _MainPageState extends State<MainPage> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      children: [
-                        DoseTile("بانادول 500 ملجم", "8:00 مساءً"),
-                        DoseTile("باراسيتامول", "8:00 مساءً"),
-                      ],
+                    child: FutureBuilder<List<Map<String, String>>>(
+                      future: _fetchUpcomingMedications(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        } else if (snapshot.hasError) {
+                          return Text('Error: ${snapshot.error}');
+                        } else {
+                          final upcoming = snapshot.data!;
+                          if (upcoming.isEmpty) {
+                            return Text(
+                              "لا يوجد جرعات قادمة اليوم",
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.blue.shade800,
+                              ),
+                            );
+                          }
+                          // For each medication, show a DoseTile.
+                          return Column(
+                            children: upcoming.map((med) {
+                              return DoseTile(med['name']!, med['nextDose']!);
+                            }).toList(),
+                          );
+                        }
+                      },
                     ),
                   ),
-                  SizedBox(height: 30),
+                  const SizedBox(height: 30),
                   Column(
                     children: [
                       Row(
@@ -128,7 +249,7 @@ class _MainPageState extends State<MainPage> {
                               },
                             ),
                           ),
-                          SizedBox(width: 20),
+                          const SizedBox(width: 20),
                           Expanded(
                             child: ActionCard(
                               icon: Icons.calendar_today,
@@ -140,7 +261,7 @@ class _MainPageState extends State<MainPage> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       ActionCard(
                         icon: Icons.people,
                         label: "المرافقين",
@@ -181,10 +302,12 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
+/// Updated DoseTile widget which shows the medication name and next scheduled dose.
 class DoseTile extends StatelessWidget {
   final String medicationName;
-  final String time;
-  const DoseTile(this.medicationName, this.time, {super.key});
+  final String nextDose;
+
+  const DoseTile(this.medicationName, this.nextDose, {super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +316,7 @@ class DoseTile extends StatelessWidget {
       child: Row(
         children: [
           Icon(Icons.medical_services, size: 40, color: Colors.blue.shade800),
-          SizedBox(width: 15),
+          const SizedBox(width: 15),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -205,9 +328,9 @@ class DoseTile extends StatelessWidget {
                   color: Colors.blue.shade800,
                 ),
               ),
-              SizedBox(height: 5),
+              const SizedBox(height: 5),
               Text(
-                time,
+                nextDose,
                 style: TextStyle(
                   fontSize: 15,
                   color: Colors.blue.shade600,
@@ -221,6 +344,7 @@ class DoseTile extends StatelessWidget {
   }
 }
 
+/// ActionCard remains unchanged.
 class ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -243,7 +367,7 @@ class ActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Colors.black12,
             blurRadius: 10,
@@ -260,12 +384,14 @@ class ActionCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 50, color: Colors.blue.shade800),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               Text(
                 label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: Colors.blue.shade800, fontWeight: FontWeight.bold),
+                  color: Colors.blue.shade800,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),

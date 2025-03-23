@@ -19,6 +19,7 @@ class _add_doseState extends State<add_dose> {
   List<TimeOfDay?> _selectedTimes = [];
   String _frequencyType = 'يومي';
   int _frequencyNumber = 1;
+  DateTime? _startDate = DateTime.now();
   DateTime? _endDate;
   late Future<List<String>> _medicineNamesFuture;
   FocusNode _nameFocusNode = FocusNode();
@@ -40,10 +41,24 @@ class _add_doseState extends State<add_dose> {
         'assets/Mediciens/trade_names.json',
       );
       final List<dynamic> jsonList = json.decode(jsonString);
-      return List<String>.from(jsonList); // ✅ correct structure
+      return List<String>.from(jsonList);
     } catch (e) {
       print('Error loading medicine names: $e');
       return [];
+    }
+  }
+
+  Future<void> _selectStartDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(DateTime.now().year + 5),
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+      });
     }
   }
 
@@ -92,20 +107,24 @@ class _add_doseState extends State<add_dose> {
           'dosage': '${_dosageController.text} $_dosageUnit',
           'frequency': '$_frequencyNumber $_frequencyType',
           'times': _selectedTimes.map((time) => time?.format(context)).toList(),
+          'startDate': _startDate != null
+              ? "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}"
+              : null,
           'endDate': _endDate != null
-              ? "${_endDate!.year}-${_endDate!.month}-${_endDate!.day}"
+              ? "${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}"
               : null,
         };
 
         try {
-          CollectionReference medicines = FirebaseFirestore.instance.collection(
-            'medicines',
-          );
+          CollectionReference medicines =
+          FirebaseFirestore.instance.collection('medicines');
           await medicines.add(newMedicine);
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('تمت إضافة الدواء بنجاح!')),
           );
+
+          Navigator.pop(context, true);
         } catch (e) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -192,13 +211,15 @@ class _add_doseState extends State<add_dose> {
                                     if (textEditingValue.text.length < 2) {
                                       return const Iterable<String>.empty();
                                     }
-                                    return medicineNames.where((
-                                        String medicine,
-                                        ) {
-                                      return medicine.toLowerCase().startsWith(
-                                        textEditingValue.text.toLowerCase(),
-                                      );
-                                    }).toList();
+                                    return medicineNames.where(
+                                          (String medicine) {
+                                        return medicine
+                                            .toLowerCase()
+                                            .startsWith(
+                                          textEditingValue.text.toLowerCase(),
+                                        );
+                                      },
+                                    ).toList();
                                   },
                                   onSelected: (String selection) {
                                     _nameController.text = selection;
@@ -220,8 +241,7 @@ class _add_doseState extends State<add_dose> {
                                           color: Colors.blue.shade800,
                                         ),
                                       ),
-                                      validator:
-                                          (value) =>
+                                      validator: (value) =>
                                       (value == null || value.isEmpty)
                                           ? 'ادخل اسم الدواء'
                                           : null,
@@ -245,8 +265,7 @@ class _add_doseState extends State<add_dose> {
                                     ),
                                   ),
                                   keyboardType: TextInputType.number,
-                                  validator:
-                                      (value) =>
+                                  validator: (value) =>
                                   (value == null || value.isEmpty)
                                       ? 'ادخل الجرعة'
                                       : null,
@@ -255,11 +274,9 @@ class _add_doseState extends State<add_dose> {
                               const SizedBox(width: 10),
                               DropdownButton<String>(
                                 value: _dosageUnit,
-                                onChanged:
-                                    (value) =>
+                                onChanged: (value) =>
                                     setState(() => _dosageUnit = value!),
-                                items:
-                                _dosageUnits.map((unit) {
+                                items: _dosageUnits.map((unit) {
                                   return DropdownMenuItem(
                                     value: unit,
                                     child: Text(unit),
@@ -287,8 +304,7 @@ class _add_doseState extends State<add_dose> {
                                       _updateTimeFields();
                                     });
                                   },
-                                  items:
-                                  _frequencyNumbers.map((num) {
+                                  items: _frequencyNumbers.map((num) {
                                     return DropdownMenuItem(
                                       value: num,
                                       child: Text(num.toString()),
@@ -307,12 +323,9 @@ class _add_doseState extends State<add_dose> {
                                       color: Colors.blue.shade800,
                                     ),
                                   ),
-                                  onChanged:
-                                      (value) => setState(
-                                        () => _frequencyType = value!,
-                                  ),
-                                  items:
-                                  _frequencyTypes.map((type) {
+                                  onChanged: (value) =>
+                                      setState(() => _frequencyType = value!),
+                                  items: _frequencyTypes.map((type) {
                                     return DropdownMenuItem(
                                       value: type,
                                       child: Text(type),
@@ -345,9 +358,7 @@ class _add_doseState extends State<add_dose> {
                                       child: Text(
                                         _selectedTimes[index] == null
                                             ? 'اختر الوقت'
-                                            : _selectedTimes[index]!.format(
-                                          context,
-                                        ),
+                                            : _selectedTimes[index]!.format(context),
                                       ),
                                     ),
                                   ],
@@ -362,9 +373,22 @@ class _add_doseState extends State<add_dose> {
                               color: Colors.blue.shade800,
                             ),
                             title: Text(
+                              _startDate == null
+                                  ? 'اختر تاريخ البدء'
+                                  : "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}",
+                            ),
+                            onTap: _selectStartDate,
+                          ),
+                          const SizedBox(height: 20),
+                          ListTile(
+                            leading: Icon(
+                              Icons.calendar_today,
+                              color: Colors.blue.shade800,
+                            ),
+                            title: Text(
                               _endDate == null
                                   ? 'اختر تاريخ الانتهاء'
-                                  : "${_endDate!.year}-${_endDate!.month}-${_endDate!.day}",
+                                  : "${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}",
                             ),
                             onTap: _selectEndDate,
                           ),

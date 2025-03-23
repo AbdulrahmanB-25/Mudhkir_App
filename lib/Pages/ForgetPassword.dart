@@ -10,7 +10,6 @@ class ForgetPassword extends StatefulWidget {
 
 class _ForgetPasswordState extends State<ForgetPassword> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
   final TextEditingController _emailController = TextEditingController();
 
   String _emailError = '';
@@ -24,7 +23,6 @@ class _ForgetPasswordState extends State<ForgetPassword> with SingleTickerProvid
       duration: Duration(seconds: 2),
       vsync: this,
     );
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
 
     _emailController.addListener(() {
