@@ -45,7 +45,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
     final Map<DateTime, List<dynamic>> newDoses = {};
 
     for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data() ;
       final String medicationName = data['name'] ?? 'No Name';
       final String startDateString = data['startDate']; // e.g. "2025-3-23"
       final String endDateString = data['endDate'];     // e.g. "2025-12-30"

@@ -57,7 +57,6 @@ class _MainPageState extends State<MainPage> {
   TimeOfDay _parseTime(String timeString) {
     timeString = timeString.trim();
     bool isPM = timeString.contains("مساءً") || timeString.contains("PM");
-    bool isAM = timeString.contains("صباحاً") || timeString.contains("AM");
     // Remove markers (Arabic and English)
     timeString = timeString.replaceAll(RegExp(r'(مساءً|صباحاً|PM|AM)'), "").trim();
     // Use RegExp to extract hour and minute (minute is optional)
