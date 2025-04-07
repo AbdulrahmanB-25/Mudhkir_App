@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -13,124 +14,148 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
   String _userName = '';
+  String _closestMedName = '';
+  String _closestMedDose = '';
+  String _closestMedDocId = '';
 
   @override
   void initState() {
     super.initState();
     _loadUserName();
+    _loadClosestMed();
   }
 
+  // Always fetch the username from Firestore. If it's different from the cached value, update the cache.
   Future<void> _loadUserName() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? cachedName = prefs.getString('userName');
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
-      String name = userDoc['username'];
-      await prefs.setString('userName', name);
-      setState(() {
-        _userName = name;
-      });
+      String fetchedName = userDoc['username'];
+      if (cachedName == null || cachedName != fetchedName) {
+        await prefs.setString('userName', fetchedName);
+        setState(() {
+          _userName = fetchedName;
+        });
+      } else {
+        setState(() {
+          _userName = cachedName;
+        });
+      }
     }
   }
 
-  String formatDateString(String dateString) {
-    List<String> parts = dateString.split('-');
-    if (parts.length != 3) return dateString;
-    try {
-      String year = parts[0].trim();
-      int m = int.parse(parts[1].trim());
-      int d = int.parse(parts[2].trim());
-      String month = m.toString().padLeft(2, '0');
-      String day = d.toString().padLeft(2, '0');
-      return '$year-$month-$day';
-    } catch (e) {
-      print("Error parsing date '$dateString': $e");
-      return dateString;
-    }
-  }
-
-  TimeOfDay _parseTime(String timeString) {
-    timeString = timeString.trim();
-    bool isPM = timeString.contains("مساءً") || timeString.contains("PM");
-    timeString = timeString.replaceAll(RegExp(r'(مساءً|صباحاً|PM|AM)'), "").trim();
-    RegExp regExp = RegExp(r'(\d{1,2})\D*(\d{0,2})');
-    Match? match = regExp.firstMatch(timeString);
-    if (match == null) {
-      return const TimeOfDay(hour: 0, minute: 0);
-    }
-    int hour = int.tryParse(match.group(1) ?? "0") ?? 0;
-    int minute = 0;
-    if (match.group(2) != null && match.group(2)!.isNotEmpty) {
-      minute = int.tryParse(match.group(2)!) ?? 0;
-    }
-    if (isPM && hour < 12) {
-      hour += 12;
+  // Helper to parse a time string into a TimeOfDay.
+  TimeOfDay _parseTime(String timeStr) {
+    final cleaned = timeStr.replaceAll(RegExp(r'[^\d:]'), '').trim();
+    final parts = cleaned.split(':');
+    int hour = int.tryParse(parts[0]) ?? 0;
+    int minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    if (timeStr.contains("PM") || timeStr.contains("مساءً")) {
+      if (hour < 12) hour += 12;
     }
     return TimeOfDay(hour: hour, minute: minute);
   }
 
+  // Helper to format a TimeOfDay as a string.
   String _formatTimeOfDay(TimeOfDay time) {
-    final int displayHour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
-    final String period = time.hour >= 12 ? "مساءً" : "صباحاً";
+    final int displayHour =
+    time.hour == 0 ? 12 : (time.hour > 12 ? time.hour - 12 : time.hour);
     final String minuteStr = time.minute.toString().padLeft(2, '0');
-    return "$displayHour:$minuteStr $period";
+    final String suffix = time.hour >= 12 ? "مساءً" : "صباحاً";
+    return "$displayHour:$minuteStr $suffix";
   }
 
-  Future<List<Map<String, String>>> _fetchUpcomingMedications() async {
+  // Fetch upcoming doses from Firestore from the path users/{uid}/medicines.
+  // Return only the closest upcoming dose (with docId).
+  Future<List<Map<String, String>>> _getUpcomingDoses() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
-    QuerySnapshot snapshot = await FirebaseFirestore.instance
+    final medsSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
         .collection('medicines')
-        .where('userId', isEqualTo: user.uid)
         .get();
+    final now = DateTime.now();
+    final nowMinutes = now.hour * 60 + now.minute;
     List<Map<String, String>> upcoming = [];
-    DateTime now = DateTime.now();
-    int nowMinutes = TimeOfDay.now().hour * 60 + TimeOfDay.now().minute;
-    for (var doc in snapshot.docs) {
-      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      String startDateStr = formatDateString(data['startDate']);
-      String endDateStr = formatDateString(data['endDate']);
-      DateTime startDate = DateTime.parse(startDateStr);
-      DateTime endDate = DateTime.parse(endDateStr);
+    for (var doc in medsSnapshot.docs) {
+      final data = doc.data();
+      final startDate = DateTime.tryParse(data['startDate'] ?? '');
+      final endDate = DateTime.tryParse(data['endDate'] ?? '');
+      if (startDate == null || endDate == null) continue;
       if (now.isBefore(startDate) || now.isAfter(endDate)) continue;
-      List<dynamic> times = data['times'] ?? [];
-      TimeOfDay? nextDose;
-      int? minDiff;
-      for (var timeStr in times) {
-        TimeOfDay scheduled = _parseTime(timeStr);
-        int scheduledMinutes = scheduled.hour * 60 + scheduled.minute;
-        int diff = scheduledMinutes - nowMinutes;
-        if (diff < 0) diff += 24 * 60;
-        if (minDiff == null || diff < minDiff) {
+      final times = List<String>.from(data['times'] ?? []);
+      String? closestTime;
+      int minDiff = 24 * 60;
+      for (String time in times) {
+        final parsed = _parseTime(time);
+        final totalMins = parsed.hour * 60 + parsed.minute;
+        final diff = (totalMins - nowMinutes + 24 * 60) % (24 * 60);
+        if (diff < minDiff) {
           minDiff = diff;
-          nextDose = scheduled;
+          closestTime = _formatTimeOfDay(parsed);
         }
       }
-      if (nextDose != null) {
-        String nextDoseStr = _formatTimeOfDay(nextDose);
-        upcoming.add({'name': data['name'], 'nextDose': nextDoseStr});
+      if (closestTime != null) {
+        upcoming.add({
+          'name': data['name'],
+          'nextDose': closestTime,
+          'docId': doc.id, // Include docId for deletion
+        });
       }
     }
+    // Sort by the upcoming dose time.
     upcoming.sort((a, b) {
-      TimeOfDay timeA = _parseTime(a['nextDose']!);
-      TimeOfDay timeB = _parseTime(b['nextDose']!);
-      int minutesA = timeA.hour * 60 + timeA.minute;
-      int minutesB = timeB.hour * 60 + timeB.minute;
-      return minutesA.compareTo(minutesB);
+      final aTime = _parseTime(a['nextDose']!);
+      final bTime = _parseTime(b['nextDose']!);
+      return (aTime.hour * 60 + aTime.minute)
+          .compareTo(bTime.hour * 60 + bTime.minute);
     });
+    return upcoming.take(1).toList();
+  }
 
-    if (upcoming.isNotEmpty) {
-      String nearestTime = upcoming.first['nextDose']!;
-      List<Map<String, String>> nearestMeds = upcoming.where((med) => med['nextDose'] == nearestTime).toList();
-      if (nearestMeds.length > 2) {
-        nearestMeds = nearestMeds.sublist(0, 2);
+  // Always fetch the closest medication from Firestore and update SharedPreferences if it's changed.
+  Future<void> _loadClosestMed() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    List<Map<String, String>> meds = await _getUpcomingDoses();
+    if (meds.isNotEmpty) {
+      final closestMed = meds.first;
+      String? cachedMedName = prefs.getString('closestMedName');
+      String? cachedMedDose = prefs.getString('closestMedDose');
+      if (cachedMedName == null ||
+          cachedMedName != closestMed['name'] ||
+          cachedMedDose == null ||
+          cachedMedDose != closestMed['nextDose']) {
+        await prefs.setString('closestMedName', closestMed['name']!);
+        await prefs.setString('closestMedDose', closestMed['nextDose']!);
+        await prefs.setString('closestMedDocId', closestMed['docId']!);
+        setState(() {
+          _closestMedName = closestMed['name']!;
+          _closestMedDose = closestMed['nextDose']!;
+          _closestMedDocId = closestMed['docId']!;
+        });
+      } else {
+        setState(() {
+          _closestMedName = cachedMedName;
+          _closestMedDose = cachedMedDose;
+          _closestMedDocId = prefs.getString('closestMedDocId') ?? '';
+        });
       }
-      return nearestMeds;
+    } else {
+      await prefs.remove('closestMedName');
+      await prefs.remove('closestMedDose');
+      await prefs.remove('closestMedDocId');
+      setState(() {
+        _closestMedName = '';
+        _closestMedDose = '';
+        _closestMedDocId = '';
+      });
     }
-    return upcoming;
   }
 
   void _onItemTapped(int index) {
@@ -139,12 +164,14 @@ class _MainPageState extends State<MainPage> {
         setState(() {
           _selectedIndex = 1;
         });
+        _loadClosestMed();
       });
     } else if (index == 2) {
       Navigator.pushNamed(context, "/SettingsPage").then((_) {
         setState(() {
           _selectedIndex = 2;
         });
+        _loadClosestMed();
       });
     } else {
       setState(() {
@@ -156,6 +183,7 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Background Gradient.
       body: Stack(
         children: [
           Container(
@@ -167,6 +195,7 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
           ),
+          // Main Content.
           SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
@@ -189,6 +218,7 @@ class _MainPageState extends State<MainPage> {
                     ),
                   ),
                   const SizedBox(height: 30),
+                  // Upcoming Dose Section.
                   Container(
                     padding: const EdgeInsets.all(15),
                     decoration: BoxDecoration(
@@ -196,51 +226,30 @@ class _MainPageState extends State<MainPage> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: const [
                         BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 10,
-                          offset: Offset(0, 5),
-                        ),
+                            color: Colors.black12,
+                            blurRadius: 10,
+                            offset: Offset(0, 5)),
                       ],
                     ),
-                    child: FutureBuilder<List<Map<String, String>>>(
-                      future: _fetchUpcomingMedications(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        } else if (snapshot.hasError) {
-                          return Text('Error: ${snapshot.error}');
-                        } else {
-                          final upcoming = snapshot.data!;
-                          if (upcoming.isEmpty) {
-                            return Column(
-                              children: [
-                                Text(
-                                  "لا يوجد جرعات قادمة اليوم",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.blue.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.pushNamed(context, '/add_dose');
-                                  },
-                                  child: const Text("إضافة دواء جديد"),
-                                ),
-                              ],
-                            );
-                          }
-                          return Column(
-                            children: upcoming.map((med) {
-                              return DoseTile(med['name']!, med['nextDose']!);
-                            }).toList(),
-                          );
-                        }
-                      },
+                    child: _closestMedName.isEmpty
+                        ? Center(
+                      child: Text(
+                        "لا يوجد جرعات قادمة اليوم",
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.blue.shade800,
+                        ),
+                      ),
+                    )
+                        : DoseTile(
+                      medicationName: _closestMedName,
+                      nextDose: _closestMedDose,
+                      docId: _closestMedDocId,
+                      onDelete: _loadClosestMed,
                     ),
                   ),
                   const SizedBox(height: 30),
+                  // Action Cards Section.
                   Column(
                     children: [
                       Row(
@@ -250,7 +259,8 @@ class _MainPageState extends State<MainPage> {
                               icon: Icons.add_circle,
                               label: "إضافة دواء جديد",
                               onTap: () {
-                                Navigator.pushNamed(context, '/add_dose');
+                                Navigator.pushNamed(context, '/add_dose')
+                                    .then((_) => _loadClosestMed());
                               },
                             ),
                           ),
@@ -283,6 +293,7 @@ class _MainPageState extends State<MainPage> {
           ),
         ],
       ),
+      // Bottom Navigation Bar.
       bottomNavigationBar: BottomNavigationBar(
         items: const [
           BottomNavigationBarItem(
@@ -307,44 +318,124 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-class DoseTile extends StatelessWidget {
+// Widget to display each upcoming dose.
+class DoseTile extends StatefulWidget {
   final String medicationName;
   final String nextDose;
+  final String docId;
+  final VoidCallback onDelete;
 
-  const DoseTile(this.medicationName, this.nextDose, {super.key});
+  const DoseTile({
+    super.key,
+    required this.medicationName,
+    required this.nextDose,
+    required this.docId,
+    required this.onDelete,
+  });
+
+  @override
+  _DoseTileState createState() => _DoseTileState();
+}
+
+class _DoseTileState extends State<DoseTile> {
+  Future<bool?> _confirmDismiss(BuildContext context) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            const SizedBox(width: 10),
+            const Text(
+              "تأكيد الحذف",
+              style: TextStyle(color: Colors.red),
+            ),
+          ],
+        ),
+        content: const Text("هل أنت متأكد من حذف هذا الدواء؟"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("إلغاء", style: TextStyle(color: Colors.blue)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text("حذف"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteMedication(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(widget.docId)
+          .delete();
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("تم حذف الدواء بنجاح")),
+    );
+    widget.onDelete();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Icon(Icons.medical_services, size: 40, color: Colors.blue.shade800),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  medicationName,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  nextDose,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.blue.shade600,
-                  ),
-                ),
-              ],
+    return Dismissible(
+      key: Key(widget.docId),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.red,
+        child: const Icon(Icons.delete, color: Colors.white, size: 30),
+      ),
+      confirmDismiss: (direction) => _confirmDismiss(context),
+      onDismissed: (direction) async {
+        await _deleteMedication(context);
+      },
+      child: Card(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 4,
+        child: ListTile(
+          // Always show the default medication icon.
+          leading: Icon(
+            Icons.medication_liquid,
+            color: Colors.blue.shade800,
+            size: 40,
+          ),
+          title: Text(
+            widget.medicationName,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue.shade800,
             ),
           ),
-        ],
+          subtitle: Text(
+            widget.nextDose,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.blue.shade600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -374,10 +465,7 @@ class ActionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 5),
-          ),
+              color: Colors.black12, blurRadius: 10, offset: Offset(0, 5)),
         ],
       ),
       child: Material(

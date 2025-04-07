@@ -12,10 +12,18 @@ import 'package:mudhkir_app/pages/ForgetPassword.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:mudhkir_app/Widgets/AuthWrapper.dart';
 import 'firebase_options.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp();
+
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.debug,
+    appleProvider: AppleProvider.debug,
+  );
   runApp(const MyApp());
 }
 //TODO : ORGANIZE  THE FILES AND FOLDERS
@@ -35,7 +43,7 @@ class MyApp extends StatelessWidget {
         "/signup" : (context) => const Signup(),
         "/mainpage" : (context) => const MainPage(),
         "/dose_schedule" : (context) => const DoseSchedule(),
-        "/add_dose" : (context) => const add_dose(),
+        "/add_dose" : (context) => const AddDose(),
         "/companions" : (context) =>  Companions(),
         "/personal_data": (context) => const PersonalDataPage(),
         "/SettingsPage": (context) => const SettingsPage(),
