@@ -68,6 +68,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
           newDoses[normalizedDate]!.add({
             'medicationName': medicationName,
             'time': time,
+            'docId': doc.id,
           });
         }
       }
@@ -156,29 +157,10 @@ class _DoseScheduleState extends State<DoseSchedule> {
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: _getEventsForDay(_selectedDay)
-                    .map((dose) => Card(
-                  elevation: 5,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.medical_services,
-                      color: Colors.blue.shade800,
-                      size: 40,
-                    ),
-                    title: Text(
-                      dose['medicationName'],
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800),
-                    ),
-                    subtitle: Text(dose['time'] ?? 'No time specified'),
-                    trailing: Icon(
-                      Icons.alarm,
-                      color: Colors.blue.shade800,
-                    ),
-                  ),
+                    .map((dose) => DoseTile(
+                  dose['medicationName'],
+                  dose['time'],
+                  dose['docId'],
                 ))
                     .toList(),
               ),
@@ -192,5 +174,80 @@ class _DoseScheduleState extends State<DoseSchedule> {
   @override
   void dispose() {
     super.dispose();
+  }
+}
+
+class DoseTile extends StatelessWidget {
+  final String medicationName;
+  final String nextDose;
+  final String docId;
+
+  const DoseTile(this.medicationName, this.nextDose, this.docId, {super.key});
+
+  Future<void> _removeMedication(BuildContext context) async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Confirm Deletion"),
+          content: const Text("Are you sure you want to delete this medication?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text("Delete"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm) {
+      await FirebaseFirestore.instance.collection('medicines').doc(docId).delete();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Medication deleted successfully")),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  medicationName,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  nextDose,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.blue.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: () => _removeMedication(context),
+          ),
+        ],
+      ),
+    );
   }
 }

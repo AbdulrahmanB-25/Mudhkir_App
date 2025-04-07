@@ -78,6 +78,7 @@ class _CompanionsState extends State<Companions> {
                     }
 
                     try {
+                      // Check if email exists in 'users' collection
                       final query = await FirebaseFirestore.instance
                           .collection('users')
                           .where('email', isEqualTo: email)
@@ -89,6 +90,28 @@ class _CompanionsState extends State<Companions> {
                           errorText = "❌ هذا البريد غير مسجل في التطبيق";
                         });
                       } else {
+                        // Optional: Save to Firestore companions collection here if needed
+
+                        final currentUser = FirebaseAuth.instance.currentUser;
+                        if (currentUser == null) {
+                          setState(() {
+                            errorText = "لم يتم تسجيل الدخول";
+                          });
+                          return;
+                        }
+
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(currentUser.uid)
+                            .collection('companions')
+                            .add({
+                          'name': name,
+                          'relation': relation,
+                          'email': email,
+                          'addedBy': currentUser.email,
+                          'addedAt': FieldValue.serverTimestamp(),
+                        });
+
                         setState(() {
                           companions.add({
                             'name': name,
