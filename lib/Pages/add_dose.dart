@@ -5,11 +5,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class add_dose extends StatefulWidget {
-  const add_dose({Key? key}) : super(key: key);
+  const add_dose({super.key});
 
   @override
   State<add_dose> createState() => _add_doseState();
 }
+
+
+
+//TODO : MAKE IT PAGES FOR EVERY CATAGORIE
+
+
 
 class _add_doseState extends State<add_dose> {
   final _formKey = GlobalKey<FormState>();

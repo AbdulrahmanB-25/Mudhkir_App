@@ -19,6 +19,8 @@ void main() async {
   runApp(const MyApp());
 }
 //TODO : ORGANIZE  THE FILES AND FOLDERS
+
+// TODO : TRY 3GS FOR ANIMATIONS AND DESIGN
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 

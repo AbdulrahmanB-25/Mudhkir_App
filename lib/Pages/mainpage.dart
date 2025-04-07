@@ -36,7 +36,6 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  // Helper to pad a date string to "yyyy-MM-dd" format.
   String formatDateString(String dateString) {
     List<String> parts = dateString.split('-');
     if (parts.length != 3) return dateString;
@@ -53,17 +52,13 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  // Updated _parseTime function using RegExp to extract hour and minute robustly.
   TimeOfDay _parseTime(String timeString) {
     timeString = timeString.trim();
     bool isPM = timeString.contains("مساءً") || timeString.contains("PM");
-    // Remove markers (Arabic and English)
     timeString = timeString.replaceAll(RegExp(r'(مساءً|صباحاً|PM|AM)'), "").trim();
-    // Use RegExp to extract hour and minute (minute is optional)
     RegExp regExp = RegExp(r'(\d{1,2})\D*(\d{0,2})');
     Match? match = regExp.firstMatch(timeString);
     if (match == null) {
-      // If no match, default to 0:00.
       return const TimeOfDay(hour: 0, minute: 0);
     }
     int hour = int.tryParse(match.group(1) ?? "0") ?? 0;
@@ -77,16 +72,13 @@ class _MainPageState extends State<MainPage> {
     return TimeOfDay(hour: hour, minute: minute);
   }
 
-  // Helper: Format a TimeOfDay to a string (e.g., "8:00 مساءً").
   String _formatTimeOfDay(TimeOfDay time) {
-    final int displayHour =
-    time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final int displayHour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final String period = time.hour >= 12 ? "مساءً" : "صباحاً";
     final String minuteStr = time.minute.toString().padLeft(2, '0');
     return "$displayHour:$minuteStr $period";
   }
 
-  // Fetch upcoming medications and compute each medication's next dose time.
   Future<List<Map<String, String>>> _fetchUpcomingMedications() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
@@ -99,12 +91,10 @@ class _MainPageState extends State<MainPage> {
     int nowMinutes = TimeOfDay.now().hour * 60 + TimeOfDay.now().minute;
     for (var doc in snapshot.docs) {
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      // Reformat date strings to "yyyy-MM-dd" before parsing.
       String startDateStr = formatDateString(data['startDate']);
       String endDateStr = formatDateString(data['endDate']);
       DateTime startDate = DateTime.parse(startDateStr);
       DateTime endDate = DateTime.parse(endDateStr);
-      // Check if today is within the active period.
       if (now.isBefore(startDate) || now.isAfter(endDate)) continue;
       List<dynamic> times = data['times'] ?? [];
       TimeOfDay? nextDose;
@@ -113,7 +103,7 @@ class _MainPageState extends State<MainPage> {
         TimeOfDay scheduled = _parseTime(timeStr);
         int scheduledMinutes = scheduled.hour * 60 + scheduled.minute;
         int diff = scheduledMinutes - nowMinutes;
-        if (diff < 0) diff += 24 * 60; // Wrap to next day if needed.
+        if (diff < 0) diff += 24 * 60;
         if (minDiff == null || diff < minDiff) {
           minDiff = diff;
           nextDose = scheduled;
@@ -124,7 +114,6 @@ class _MainPageState extends State<MainPage> {
         upcoming.add({'name': data['name'], 'nextDose': nextDoseStr});
       }
     }
-    // Sort medications by next dose time (in minutes).
     upcoming.sort((a, b) {
       TimeOfDay timeA = _parseTime(a['nextDose']!);
       TimeOfDay timeB = _parseTime(b['nextDose']!);
@@ -132,6 +121,15 @@ class _MainPageState extends State<MainPage> {
       int minutesB = timeB.hour * 60 + timeB.minute;
       return minutesA.compareTo(minutesB);
     });
+
+    if (upcoming.isNotEmpty) {
+      String nearestTime = upcoming.first['nextDose']!;
+      List<Map<String, String>> nearestMeds = upcoming.where((med) => med['nextDose'] == nearestTime).toList();
+      if (nearestMeds.length > 2) {
+        nearestMeds = nearestMeds.sublist(0, 2);
+      }
+      return nearestMeds;
+    }
     return upcoming;
   }
 
@@ -191,7 +189,6 @@ class _MainPageState extends State<MainPage> {
                     ),
                   ),
                   const SizedBox(height: 30),
-                  // Dynamic upcoming medications section.
                   Container(
                     padding: const EdgeInsets.all(15),
                     decoration: BoxDecoration(
@@ -208,23 +205,32 @@ class _MainPageState extends State<MainPage> {
                     child: FutureBuilder<List<Map<String, String>>>(
                       future: _fetchUpcomingMedications(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(child: CircularProgressIndicator());
                         } else if (snapshot.hasError) {
                           return Text('Error: ${snapshot.error}');
                         } else {
                           final upcoming = snapshot.data!;
                           if (upcoming.isEmpty) {
-                            return Text(
-                              "لا يوجد جرعات قادمة اليوم",
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.blue.shade800,
-                              ),
+                            return Column(
+                              children: [
+                                Text(
+                                  "لا يوجد جرعات قادمة اليوم",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.pushNamed(context, '/add_dose');
+                                  },
+                                  child: const Text("إضافة دواء جديد"),
+                                ),
+                              ],
                             );
                           }
-                          // For each medication, show a DoseTile.
                           return Column(
                             children: upcoming.map((med) {
                               return DoseTile(med['name']!, med['nextDose']!);
@@ -301,7 +307,6 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-/// Updated DoseTile widget which shows the medication name and next scheduled dose.
 class DoseTile extends StatelessWidget {
   final String medicationName;
   final String nextDose;
@@ -316,26 +321,28 @@ class DoseTile extends StatelessWidget {
         children: [
           Icon(Icons.medical_services, size: 40, color: Colors.blue.shade800),
           const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                medicationName,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade800,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  medicationName,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                nextDose,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.blue.shade600,
+                const SizedBox(height: 5),
+                Text(
+                  nextDose,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.blue.shade600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -343,7 +350,6 @@ class DoseTile extends StatelessWidget {
   }
 }
 
-/// ActionCard remains unchanged.
 class ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
