@@ -12,6 +12,39 @@ class Companions extends StatefulWidget {
 class _CompanionsState extends State<Companions> {
   final List<Map<String, String>> companions = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadCompanionsFromFirestore();
+  }
+
+  Future<void> _loadCompanionsFromFirestore() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('companions')
+          .get();
+
+      setState(() {
+        companions.clear();
+        companions.addAll(snapshot.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'name': data['name'] ?? '',
+            'relation': data['relation'] ?? '',
+            'email': data['email'] ?? '',
+          };
+        }));
+      });
+    } catch (e) {
+      print('🚫 Error loading companions: $e');
+    }
+  }
+
   void _showAddCompanionDialog() {
     TextEditingController nameController = TextEditingController();
     TextEditingController relationController = TextEditingController();
@@ -45,7 +78,7 @@ class _CompanionsState extends State<Companions> {
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
                       textAlign: TextAlign.right,
-                      decoration: const InputDecoration(labelText: "البريد الإلكتروني"),
+                      decoration: const InputDecoration(labelText: "البريد الإلكتروني للمرافق"),
                     ),
                     if (errorText.isNotEmpty)
                       Padding(
@@ -78,7 +111,7 @@ class _CompanionsState extends State<Companions> {
                     }
 
                     try {
-                      // Check if email exists in 'users' collection
+                      // Check if that email exists (optional validation)
                       final query = await FirebaseFirestore.instance
                           .collection('users')
                           .where('email', isEqualTo: email)
@@ -89,42 +122,46 @@ class _CompanionsState extends State<Companions> {
                         setState(() {
                           errorText = "❌ هذا البريد غير مسجل في التطبيق";
                         });
-                      } else {
-                        // Optional: Save to Firestore companions collection here if needed
+                        return;
+                      }
 
-                        final currentUser = FirebaseAuth.instance.currentUser;
-                        if (currentUser == null) {
-                          setState(() {
-                            errorText = "لم يتم تسجيل الدخول";
-                          });
-                          return;
-                        }
+                      // Get your UID (current user)
+                      final currentUser = FirebaseAuth.instance.currentUser;
+                      if (currentUser == null || currentUser.email == null) {
+                        setState(() {
+                          errorText = "لم يتم تسجيل الدخول";
+                        });
+                        return;
+                      }
 
-                        await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(currentUser.uid)
-                            .collection('companions')
-                            .add({
+                      // ✅ Save companion under YOUR account
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUser.uid)
+                          .collection('companions')
+                          .add({
+                        'name': name,
+                        'relation': relation,
+                        'email': email,
+                        'addedAt': FieldValue.serverTimestamp(),
+                      });
+
+                      print("✅ Companion saved under your account");
+
+                      setState(() {
+                        companions.add({
                           'name': name,
                           'relation': relation,
                           'email': email,
-                          'addedBy': currentUser.email,
-                          'addedAt': FieldValue.serverTimestamp(),
                         });
+                        errorText = '';
+                      });
 
-                        setState(() {
-                          companions.add({
-                            'name': name,
-                            'relation': relation,
-                            'email': email,
-                          });
-                          errorText = '';
-                        });
-                        Navigator.pop(context);
-                      }
+                      Navigator.pop(context);
                     } catch (e) {
+                      print("🔥 Error saving companion: $e");
                       setState(() {
-                        errorText = "حدث خطأ أثناء التحقق من البريد";
+                        errorText = "حدث خطأ أثناء الإضافة";
                       });
                     }
                   },
@@ -138,7 +175,25 @@ class _CompanionsState extends State<Companions> {
     );
   }
 
-  void _deleteCompanion(int index) {
+  void _deleteCompanion(int index) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final emailToDelete = companions[index]['email'];
+
+    final query = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('companions')
+        .where('email', isEqualTo: emailToDelete)
+        .limit(1)
+        .get();
+
+    if (query.docs.isNotEmpty) {
+      await query.docs.first.reference.delete();
+      print("🗑️ Companion deleted");
+    }
+
     setState(() {
       companions.removeAt(index);
     });
@@ -189,7 +244,7 @@ class _CompanionsState extends State<Companions> {
                         ),
                       ),
                       Text(
-                        "إدارة المرافقين المسجلين",
+                        "المرافقين المرتبطين بحسابك",
                         style: TextStyle(
                           fontSize: 20,
                           color: Colors.blue.shade600,

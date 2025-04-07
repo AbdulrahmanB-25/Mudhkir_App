@@ -25,7 +25,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
     _fetchDoses();
   }
 
-  /// Converts a date string from "yyyy-M-d" to "yyyy-MM-dd"
   String formatDate(String dateString) {
     List<String> parts = dateString.split('-');
     if (parts.length != 3) return dateString;
@@ -36,7 +35,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
   }
 
   Future<void> _fetchDoses() async {
-    // Query the medicines collection for the current user.
     final snapshot = await FirebaseFirestore.instance
         .collection('medicines')
         .where('userId', isEqualTo: _user.uid)
@@ -45,17 +43,15 @@ class _DoseScheduleState extends State<DoseSchedule> {
     final Map<DateTime, List<dynamic>> newDoses = {};
 
     for (var doc in snapshot.docs) {
-      final data = doc.data() ;
+      final data = doc.data();
       final String medicationName = data['name'] ?? 'No Name';
-      final String startDateString = data['startDate']; // e.g. "2025-3-23"
-      final String endDateString = data['endDate'];     // e.g. "2025-12-30"
+      final String startDateString = data['startDate'];
+      final String endDateString = data['endDate'];
       final List<dynamic> times = data['times'] ?? [];
 
-      // Reformat date strings to proper ISO format
       final DateTime startDate = DateTime.parse(formatDate(startDateString));
       final DateTime endDate = DateTime.parse(formatDate(endDateString));
 
-      // Loop through each day from startDate to endDate (inclusive)
       for (DateTime date = startDate;
       !date.isAfter(endDate);
       date = date.add(const Duration(days: 1))) {
@@ -63,7 +59,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
         DateTime(date.year, date.month, date.day);
         newDoses.putIfAbsent(normalizedDate, () => []);
 
-        // Add each time entry as a separate medication entry.
         for (var time in times) {
           newDoses[normalizedDate]!.add({
             'medicationName': medicationName,
@@ -74,7 +69,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
       }
     }
 
-    // Sort medications for each day by time (assuming time is in "HH:mm" or similar format)
     newDoses.forEach((date, meds) {
       meds.sort((a, b) {
         final String timeA = a['time'] as String;
@@ -161,6 +155,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
                   dose['medicationName'],
                   dose['time'],
                   dose['docId'],
+                  onDelete: _fetchDoses,
                 ))
                     .toList(),
               ),
@@ -181,8 +176,10 @@ class DoseTile extends StatelessWidget {
   final String medicationName;
   final String nextDose;
   final String docId;
+  final VoidCallback onDelete;
 
-  const DoseTile(this.medicationName, this.nextDose, this.docId, {super.key});
+  const DoseTile(this.medicationName, this.nextDose, this.docId,
+      {required this.onDelete, super.key});
 
   Future<void> _removeMedication(BuildContext context) async {
     bool confirm = await showDialog(
@@ -210,43 +207,50 @@ class DoseTile extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Medication deleted successfully")),
       );
+      onDelete();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  medicationName,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    medicationName,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade800,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  nextDose,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.blue.shade600,
+                  const SizedBox(height: 5),
+                  Text(
+                    nextDose,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.blue.shade600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () => _removeMedication(context),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _removeMedication(context),
+            ),
+          ],
+        ),
       ),
     );
   }
