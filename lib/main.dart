@@ -10,45 +10,63 @@ import 'package:mudhkir_app/pages/welcome.dart';
 import 'package:mudhkir_app/pages/dose_schedule.dart';
 import 'package:mudhkir_app/pages/ForgetPassword.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:mudhkir_app/Widgets/AuthWrapper.dart';
+import 'package:mudhkir_app/Widgets/AuthWrapper.dart'; // Assuming AuthWrapper is in Widgets folder
 import 'package:firebase_app_check/firebase_app_check.dart';
 
-
+// Import the intl package localization data initialization function
+import 'package:intl/date_symbol_data_local.dart'; // <-- ADD THIS IMPORT
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  WidgetsFlutterBinding.ensureInitialized(); // Ensures widgets are ready
+  await Firebase.initializeApp(); // Initializes Firebase
 
+  // Activate Firebase App Check (Keep this if you use it)
   await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.debug,
-    appleProvider: AppleProvider.debug,
+    androidProvider: AndroidProvider.debug, // Use PlayIntegrity in production
+    appleProvider: AppleProvider.debug,   // Use AppAttest in production
   );
-  runApp(const MyApp());
+
+  // --- FIX: Initialize locale data for intl package ---
+  // You need to initialize every locale you use with DateFormat
+  await initializeDateFormatting('ar_SA', null); // <-- INITIALIZE ARABIC LOCALE DATA
+  // await initializeDateFormatting('en_US', null); // <-- Add others if needed (e.g., English)
+  // ----------------------------------------------------
+
+  runApp(const MyApp()); // Runs your app
 }
+
 //TODO : ORGANIZE  THE FILES AND FOLDERS
 
 // TODO : TRY 3GS FOR ANIMATIONS AND DESIGN
+
+//TODO : MAKE THE PAGES TRANSATION SLOWER
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      initialRoute: "/",
+      debugShowCheckedModeBanner: false, // Hides the debug banner
+      initialRoute: "/", // Sets the initial route (AuthWrapper handles auth check)
       routes: {
-        "/" : (context) => const AuthWrapper(),
-        "/login" : (context) => const Login(),
-        "/signup" : (context) => const Signup(),
-        "/mainpage" : (context) => const MainPage(),
-        "/dose_schedule" : (context) => const DoseSchedule(),
-        "/add_dose" : (context) => const AddDose(),
-        "/companions" : (context) =>  Companions(),
-        "/personal_data": (context) => const PersonalDataPage(),
-        "/settings": (context) => const SettingsPage(),
-        "/welcome": (context) => const Welcome(),
-        "/forget_password": (context) => const ForgetPassword(),
+        // Defines the navigation routes for your app
+        "/" : (context) => const AuthWrapper(), // Entry point, checks auth state
+        "/login" : (context) => const Login(), // Login page
+        "/signup" : (context) => const Signup(), // Signup page
+        "/mainpage" : (context) => const MainPage(), // Main page after login
+        "/dose_schedule" : (context) => const DoseSchedule(), // The page causing the error
+        "/add_dose" : (context) => const AddDose(), // Add dose page
+        "/companions" : (context) =>  Companions(), // Companions page
+        "/personal_data": (context) => const PersonalDataPage(), // Personal data page
+        "/settings": (context) => const SettingsPage(), // Settings page
+        "/welcome": (context) => const Welcome(), // Welcome page
+        "/forget_password": (context) => const ForgetPassword(), // Forget password page
       },
+      // Optional: You can set theme, locales etc. here if needed
+      // theme: ThemeData(...),
+      // locale: Locale('ar', 'SA'), // Example: Set default locale
+      // supportedLocales: [Locale('ar', 'SA'), Locale('en', 'US')], // Example
     );
   }
 }
