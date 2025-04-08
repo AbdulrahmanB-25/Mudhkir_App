@@ -20,6 +20,3 @@ tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
 
-dependencies {
-    implementation("com.google.firebase:firebase-appcheck:16.0.0")
-}
