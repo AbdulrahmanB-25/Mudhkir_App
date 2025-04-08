@@ -3,9 +3,52 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Simple custom bottom navigation bar (if you are using this approach)
+class CustomBottomNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onItemTapped;
+  const CustomBottomNavigationBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onItemTapped,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        color: Colors.white.withValues(alpha:0.8),
+        child: BottomNavigationBar(
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'الرئيسية',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person),
+              label: 'الملف الشخصي',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'الإعدادات',
+            ),
+          ],
+          currentIndex: selectedIndex,
+          selectedItemColor: Colors.blue,
+          unselectedItemColor: Colors.grey,
+          onTap: onItemTapped,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+        ),
+      ),
+    );
+  }
+}
+
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
-
   @override
   _MainPageState createState() => _MainPageState();
 }
@@ -24,7 +67,7 @@ class _MainPageState extends State<MainPage> {
     _loadClosestMed();
   }
 
-  // Always fetch the username from Firestore. Update the cache if it differs.
+  // Always fetch the username from Firestore. Update cache if different.
   Future<void> _loadUserName() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? cachedName = prefs.getString('userName');
@@ -71,7 +114,7 @@ class _MainPageState extends State<MainPage> {
     return "$displayHour:$minuteStr $suffix";
   }
 
-  // Fetch upcoming doses from Firestore. Return only the closest upcoming dose.
+  // Fetch upcoming doses from Firestore; return only the closest upcoming dose.
   Future<List<Map<String, String>>> _getUpcomingDoses() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
@@ -119,7 +162,7 @@ class _MainPageState extends State<MainPage> {
     return upcoming.take(1).toList();
   }
 
-  // Always fetch the closest med and update SharedPreferences only if changed.
+  // Always fetch and update the closest med.
   Future<void> _loadClosestMed() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     List<Map<String, String>> meds = await _getUpcomingDoses();
@@ -170,7 +213,7 @@ class _MainPageState extends State<MainPage> {
         _loadClosestMed();
       });
     } else if (index == 2) {
-      Navigator.pushNamed(context, "/SettingsPage").then((_) {
+      Navigator.pushNamed(context, "/settings").then((_) {
         setState(() {
           _selectedIndex = 2;
         });
@@ -229,9 +272,10 @@ class _MainPageState extends State<MainPage> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: const [
                         BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 10,
-                            offset: Offset(0, 5)),
+                          color: Colors.black12,
+                          blurRadius: 10,
+                          offset: Offset(0, 5),
+                        ),
                       ],
                     ),
                     child: _closestMedName.isEmpty
@@ -248,8 +292,11 @@ class _MainPageState extends State<MainPage> {
                       medicationName: _closestMedName,
                       nextDose: _closestMedDose,
                       docId: _closestMedDocId,
+                      // For the upcoming dose, you may not show an image.
+                      imageUrl: "",
+                      // No deletion functionality.
                       onDelete: _loadClosestMed,
-                      deletable: false, // Disable deletion.
+                      deletable: false,
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -297,44 +344,29 @@ class _MainPageState extends State<MainPage> {
           ),
         ],
       ),
-      // Bottom Navigation Bar.
-      bottomNavigationBar: BottomNavigationBar(
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'الرئيسية',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'الملف الشخصي',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'الإعدادات',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blue.shade800,
-        unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped,
+      bottomNavigationBar: CustomBottomNavigationBar(
+        selectedIndex: _selectedIndex,
+        onItemTapped: _onItemTapped,
       ),
     );
   }
 }
 
-/// DoseTile now includes a "deletable" flag. For the upcoming dose, deletable is false.
+/// DoseTile now displays medication info without deletion.
+/// If no imageUrl is provided, a medication icon is shown.
 class DoseTile extends StatefulWidget {
   final String medicationName;
   final String nextDose;
   final String docId;
+  final String imageUrl;
   final VoidCallback onDelete;
   final bool deletable;
-
   const DoseTile({
     super.key,
     required this.medicationName,
     required this.nextDose,
     required this.docId,
+    required this.imageUrl,
     required this.onDelete,
     this.deletable = true,
   });
@@ -344,62 +376,9 @@ class DoseTile extends StatefulWidget {
 }
 
 class _DoseTileState extends State<DoseTile> {
-  Future<bool?> _confirmDismiss(BuildContext context) async {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.red),
-            const SizedBox(width: 10),
-            const Text(
-              "تأكيد",
-              style: TextStyle(color: Colors.red),
-            ),
-          ],
-        ),
-        content: const Text("هل أنت متأكد من حذف هذا الدواء؟"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("إلغاء", style: TextStyle(color: Colors.blue)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text("حذف"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _deleteMedication(BuildContext context) async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('medicines')
-          .doc(widget.docId)
-          .delete();
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("تم حذف الدواء بنجاح")),
-    );
-    widget.onDelete();
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Create a Card to display the dose info.
     Widget tile = Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
@@ -407,13 +386,25 @@ class _DoseTileState extends State<DoseTile> {
       ),
       elevation: 4,
       child: ListTile(
-        // For this version, we remove the delete ability by showing a default icon.
         leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10), // Rounded rectangle edges.
-          child: Icon(
-            Icons.medication_liquid,
-            color: Colors.blue.shade800,
-            size: 40,
+          borderRadius: BorderRadius.circular(10), // Rectangle with round edges.
+          child: widget.imageUrl.isNotEmpty
+              ? Image.network(
+            widget.imageUrl,
+            width: 60,
+            height: 60,
+            fit: BoxFit.cover,
+          )
+              : Container(
+            width: 60,
+            height: 60,
+            color: Colors.grey.shade300,
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.medication, // Medication icon used as fallback.
+              size: 40,
+              color: Colors.blue.shade800,
+            ),
           ),
         ),
         title: Text(
@@ -433,28 +424,12 @@ class _DoseTileState extends State<DoseTile> {
         ),
       ),
     );
-
-    // If deletable is true, wrap the tile in Dismissible; otherwise, simply return the tile.
-    return widget.deletable
-        ? Dismissible(
-      key: Key(widget.docId),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        color: Colors.red,
-        child: const Icon(Icons.delete, color: Colors.white, size: 30),
-      ),
-      confirmDismiss: (direction) => _confirmDismiss(context),
-      onDismissed: (direction) async {
-        await _deleteMedication(context);
-      },
-      child: tile,
-    )
-        : tile;
+    // Since deletion is not required, simply return the tile.
+    return tile;
   }
 }
 
+/// A simple ActionCard widget.
 class ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -467,7 +442,6 @@ class ActionCard extends StatelessWidget {
     required this.onTap,
     this.isFullWidth = false,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(

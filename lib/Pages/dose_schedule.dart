@@ -17,13 +17,12 @@ class DoseSchedule extends StatefulWidget {
 class _DoseScheduleState extends State<DoseSchedule>
     with SingleTickerProviderStateMixin {
   late User _user;
-  // Show a full month view.
   CalendarFormat _calendarFormat = CalendarFormat.month;
   Map<DateTime, List<dynamic>> _doses = {};
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
 
-  // Dummy variables for demonstration.
+  // Dummy resources for demonstration.
   final FocusNode myFocusNode = FocusNode();
   late AnimationController myAnimationController;
   StreamSubscription? myStreamSubscription;
@@ -33,14 +32,14 @@ class _DoseScheduleState extends State<DoseSchedule>
     super.initState();
     _user = FirebaseAuth.instance.currentUser!;
     _fetchDoses();
-    // Initialize the animation controller.
-    myAnimationController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 1));
+    myAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
   }
 
   @override
   void dispose() {
-    // Dispose dummy resources.
     myFocusNode.dispose();
     myAnimationController.dispose();
     myStreamSubscription?.cancel();
@@ -72,7 +71,7 @@ class _DoseScheduleState extends State<DoseSchedule>
         final String? startDateString = data['startDate'];
         final String? endDateString = data['endDate'];
         final List<dynamic> times = List<dynamic>.from(data['times'] ?? []);
-        // Get both the public image URL and the deletion hash.
+        // Retrieve the image URL and the delete hash.
         final String imageUrl = data['imageUrl'] ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] ?? '';
 
@@ -109,7 +108,6 @@ class _DoseScheduleState extends State<DoseSchedule>
       }
     }
 
-    // Sort doses for each day by time.
     newDoses.forEach((date, meds) {
       meds.sort((a, b) {
         final String timeA = a['time']?.toString() ?? '';
@@ -131,15 +129,7 @@ class _DoseScheduleState extends State<DoseSchedule>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "جدول الأدوية",
-          style: TextStyle(color: Colors.blue),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      // Instead of an AppBar, we build a custom top tile.
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -148,110 +138,144 @@ class _DoseScheduleState extends State<DoseSchedule>
             end: Alignment.bottomCenter,
           ),
         ),
-        child: Column(
-          children: [
-            // Calendar Section.
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TableCalendar(
-                    focusedDay: _focusedDay,
-                    firstDay: DateTime(2000),
-                    lastDay: DateTime(2100),
-                    calendarFormat: _calendarFormat,
-                    headerStyle: HeaderStyle(
-                      formatButtonVisible: false,
-                      titleCentered: true,
-                      titleTextStyle: TextStyle(
-                        fontSize: 18,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Top Tile mimicking the style from AddDose:
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Back button.
+                    IconButton(
+                      icon: Icon(Icons.arrow_back, color: Colors.blue.shade800),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    // Title text.
+                    Text(
+                      "جدول الأدوية",
+                      style: TextStyle(
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: Colors.blue.shade800,
                       ),
+                      textAlign: TextAlign.right,
                     ),
-                    eventLoader: _getEventsForDay,
-                    calendarBuilders: CalendarBuilders(
-                      markerBuilder: (context, date, events) =>
-                      const SizedBox.shrink(),
+                    // (Spacer: an empty Container to balance the Row.)
+                    const SizedBox(width: 48),
+                  ],
+                ),
+                const SizedBox(height: 30),
+                // Calendar Section.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    onDaySelected: (selectedDay, focusedDay) {
-                      setState(() {
-                        _selectedDay = selectedDay;
-                        _focusedDay = selectedDay;
-                      });
-                    },
-                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    calendarStyle: CalendarStyle(
-                      todayDecoration: BoxDecoration(
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: TableCalendar(
+                        focusedDay: _focusedDay,
+                        firstDay: DateTime(2000),
+                        lastDay: DateTime(2100),
+                        calendarFormat: _calendarFormat,
+                        headerStyle: HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                          titleTextStyle: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                        eventLoader: _getEventsForDay,
+                        calendarBuilders: CalendarBuilders(
+                          markerBuilder: (context, date, events) =>
+                          const SizedBox.shrink(),
+                        ),
+                        onDaySelected: (selectedDay, focusedDay) {
+                          setState(() {
+                            _selectedDay = selectedDay;
+                            _focusedDay = selectedDay;
+                          });
+                        },
+                        selectedDayPredicate: (day) =>
+                            isSameDay(_selectedDay, day),
+                        calendarStyle: CalendarStyle(
+                          todayDecoration: BoxDecoration(
+                            color: Colors.blue.shade800,
+                            shape: BoxShape.circle,
+                          ),
+                          selectedDecoration: BoxDecoration(
+                            color: Colors.blue.shade400,
+                            shape: BoxShape.circle,
+                          ),
+                          todayTextStyle:
+                          const TextStyle(color: Colors.white),
+                          selectedTextStyle:
+                          const TextStyle(color: Colors.white),
+                          defaultTextStyle:
+                          TextStyle(color: Colors.blue.shade800),
+                          weekendTextStyle:
+                          TextStyle(color: Colors.blue.shade800),
+                        ),
+                        daysOfWeekStyle: DaysOfWeekStyle(
+                          weekdayStyle:
+                          TextStyle(color: Colors.blue.shade800),
+                          weekendStyle:
+                          TextStyle(color: Colors.blue.shade800),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                // Dose List Section.
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _getEventsForDay(_selectedDay).isEmpty
+                      ? Center(
+                    child: Text(
+                      "لا يوجد جرعات لهذا اليوم",
+                      style: TextStyle(
+                        fontSize: 18,
                         color: Colors.blue.shade800,
-                        shape: BoxShape.circle,
-                      ),
-                      selectedDecoration: BoxDecoration(
-                        color: Colors.blue.shade400,
-                        shape: BoxShape.circle,
-                      ),
-                      todayTextStyle: const TextStyle(color: Colors.white),
-                      selectedTextStyle: const TextStyle(color: Colors.white),
-                      defaultTextStyle:
-                      TextStyle(color: Colors.blue.shade800),
-                      weekendTextStyle:
-                      TextStyle(color: Colors.blue.shade800),
-                      markerDecoration: const BoxDecoration(
-                        color: Colors.transparent,
                       ),
                     ),
-                    daysOfWeekStyle: DaysOfWeekStyle(
-                      weekdayStyle: TextStyle(color: Colors.blue.shade800),
-                      weekendStyle: TextStyle(color: Colors.blue.shade800),
-                    ),
+                  )
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _getEventsForDay(_selectedDay).length,
+                    itemBuilder: (context, index) {
+                      final dose = _getEventsForDay(_selectedDay)[index];
+                      return DoseTile(
+                        medicationName: dose['medicationName'],
+                        nextDose: dose['time'],
+                        docId: dose['docId'],
+                        imageUrl: dose['imageUrl'],
+                        imgbbDeleteHash: dose['imgbbDeleteHash'] ?? '',
+                        onDelete: _fetchDoses,
+                      );
+                    },
                   ),
                 ),
-              ),
+              ],
             ),
-            // Dose List Section.
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _getEventsForDay(_selectedDay).isEmpty
-                    ? Center(
-                  child: Text(
-                    "لا يوجد جرعات لهذا اليوم",
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.blue.shade800,
-                    ),
-                  ),
-                )
-                    : ListView.builder(
-                  itemCount: _getEventsForDay(_selectedDay).length,
-                  itemBuilder: (context, index) {
-                    final dose = _getEventsForDay(_selectedDay)[index];
-                    return DoseTile(
-                      medicationName: dose['medicationName'],
-                      nextDose: dose['time'],
-                      docId: dose['docId'],
-                      imageUrl: dose['imageUrl'],
-                      imgbbDeleteHash: dose['imgbbDeleteHash'] ?? '',
-                      onDelete: _fetchDoses,
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// DoseTile now carries an imgbbDeleteHash and when deleted,
-/// it also calls the helper to delete the image from imgbb.
+/// DoseTile displays medication info.
+/// (Deletion functionality still exists here—adjust or remove as needed.)
 class DoseTile extends StatefulWidget {
   final String medicationName;
   final String nextDose;
@@ -259,6 +283,7 @@ class DoseTile extends StatefulWidget {
   final String imageUrl;
   final String imgbbDeleteHash;
   final VoidCallback onDelete;
+
   const DoseTile({
     super.key,
     required this.medicationName,
@@ -274,24 +299,6 @@ class DoseTile extends StatefulWidget {
 }
 
 class _DoseTileState extends State<DoseTile> {
-  // Helper to delete the image from ImgBB using its delete hash.
-  Future<void> _deleteImgBBImage(String deleteHash) async {
-    // Use your imgbb API key here.
-    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
-    final url = Uri.parse(
-        'https://api.imgbb.com/1/delete?key=$imgbbApiKey&deletehash=$deleteHash');
-    try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        print("ImgBB image deleted successfully.");
-      } else {
-        print("Failed to delete image from ImgBB. Status: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Error deleting image from ImgBB: $e");
-    }
-  }
-
   Future<bool?> _confirmDismiss(BuildContext context) async {
     return showDialog<bool>(
       context: context,
@@ -320,7 +327,6 @@ class _DoseTileState extends State<DoseTile> {
       if (widget.imgbbDeleteHash.isNotEmpty) {
         await _deleteImgBBImage(widget.imgbbDeleteHash);
       }
-      // Delete the med document from Firestore.
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -334,9 +340,25 @@ class _DoseTileState extends State<DoseTile> {
     widget.onDelete();
   }
 
+  Future<void> _deleteImgBBImage(String deleteHash) async {
+    // Use your imgbb API key here.
+    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+    final url = Uri.parse(
+        'https://api.imgbb.com/1/delete?key=$imgbbApiKey&deletehash=$deleteHash');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        print("ImgBB image deleted successfully.");
+      } else {
+        print("Failed to delete image from ImgBB. Status: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error deleting image from ImgBB: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // For this example, we keep the original tile design.
     Widget tile = Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
@@ -344,14 +366,14 @@ class _DoseTileState extends State<DoseTile> {
       ),
       elevation: 4,
       child: ListTile(
-        // Here we use ClipRRect with a BorderRadius to get a rectangle with rounded edges.
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: widget.imageUrl.isNotEmpty
-              ? EnlargeableImage(
-            imageUrl: widget.imageUrl,
+              ? Image.network(
+            widget.imageUrl,
             width: 60,
             height: 60,
+            fit: BoxFit.cover,
           )
               : Container(
             width: 60,
@@ -382,7 +404,6 @@ class _DoseTileState extends State<DoseTile> {
       ),
     );
 
-    // Wrap in a Dismissible only if deletion is desired.
     return Dismissible(
       key: Key(widget.docId),
       direction: DismissDirection.endToStart,
@@ -449,8 +470,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          // Set the iconTheme so that the back button is white.
-          iconTheme: const IconThemeData(color: Colors.white),
+          iconTheme: const IconThemeData(color: Colors.white), // Back button white
         ),
         body: Center(
           child: InteractiveViewer(

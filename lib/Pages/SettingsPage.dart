@@ -1,20 +1,76 @@
 import 'package:flutter/material.dart';
 
-class SettingsPage extends StatelessWidget {
+/// You can import your custom bottom navigation widget here if it is in a separate file.
+
+/// For demonstration, here is a simple CustomBottomNavigationBar implementation.
+class CustomBottomNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onItemTapped;
+
+  const CustomBottomNavigationBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onItemTapped,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        color: Colors.white.withValues(alpha:0.8),
+        child: BottomNavigationBar(
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'الرئيسية',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person),
+              label: 'الملف الشخصي',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'الإعدادات',
+            ),
+          ],
+          currentIndex: selectedIndex,
+          selectedItemColor: Colors.blue.shade800,
+          unselectedItemColor: Colors.grey,
+          onTap: onItemTapped,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  _SettingsPageState createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  // For the bottom navigation bar, we track the selected index.
+  int _selectedIndex = 2; // Set index 2 to show that we're on the "Settings" page.
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           "الإعدادات",
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.blue.shade800,
       ),
       body: Container(
-        padding: EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [Colors.blue.shade100, Colors.white],
@@ -22,79 +78,78 @@ class SettingsPage extends StatelessWidget {
             end: Alignment.bottomCenter,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// 🔔 Notifications Toggle
-            SettingTile(
-              icon: Icons.notifications,
-              title: "الإشعارات",
-              subtitle: "تشغيل أو إيقاف إشعارات الجرعات",
-              trailing: Switch(
-                value: true, // You can replace this with a state variable
-                onChanged: (bool value) {
-                  // Handle toggle logic
-                },
-                activeColor: Colors.blue.shade800,
-              ),
-            ),
-
-            /// 🌐 Language Settings
-            SettingTile(
-              icon: Icons.language,
-              title: "اللغة",
-              subtitle: "تغيير لغة التطبيق",
-              onTap: () {
-                // Handle language change navigation
-              },
-            ),
-
-            /// 🔒 Privacy & Security
-            SettingTile(
-              icon: Icons.lock,
-              title: "الخصوصية والأمان",
-              subtitle: "إدارة بياناتك وإعدادات الأمان",
-              onTap: () {
-                // Handle privacy settings navigation
-              },
-            ),
-
-            /// 📞 Contact Support
-            SettingTile(
-              icon: Icons.help,
-              title: "الدعم والمساعدة",
-              subtitle: "تواصل معنا في حال واجهتك مشكلة",
-              onTap: () {
-                // Handle support contact navigation
-              },
-            ),
-
-            /// 🚪 Logout Button
-            SizedBox(height: 30),
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // Handle logout logic
-                },
-                icon: Icon(Icons.exit_to_app, color: Colors.white),
-                label: Text("تسجيل الخروج"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              /// 🔔 Notifications Toggle
+              SettingTile(
+                icon: Icons.notifications,
+                title: "الإشعارات",
+                subtitle: "تشغيل أو إيقاف إشعارات الجرعات",
+                trailing: Switch(
+                  value: true, // Replace with your state variable if needed.
+                  onChanged: (bool value) {
+                    // Handle toggle logic.
+                  },
+                  activeColor: Colors.blue.shade800,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              /// 🌐 Language Settings
+              SettingTile(
+                icon: Icons.language,
+                title: "اللغة",
+                subtitle: "تغيير لغة التطبيق",
+                onTap: () {
+                  // Handle language change navigation.
+                },
+              ),
+              const SizedBox(height: 10),
+              /// 🔒 Privacy & Security
+              SettingTile(
+                icon: Icons.lock,
+                title: "الخصوصية والأمان",
+                subtitle: "إدارة بياناتك وإعدادات الأمان",
+                onTap: () {
+                  // Handle privacy settings navigation.
+                },
+              ),
+              const SizedBox(height: 10),
+              /// 📞 Contact Support
+              SettingTile(
+                icon: Icons.help,
+                title: "الدعم والمساعدة",
+                subtitle: "تواصل معنا في حال واجهتك مشكلة",
+                onTap: () {
+                  // Handle support contact navigation.
+                },
+              ),
+            ],
+          ),
         ),
+      ),
+      bottomNavigationBar: CustomBottomNavigationBar(
+        selectedIndex: _selectedIndex,
+        onItemTapped: (int index) {
+          // Handle bottom navigation taps.
+          setState(() {
+            _selectedIndex = index;
+          });
+          // For example, navigate to the corresponding screen.
+          if (index == 0) {
+            Navigator.pushReplacementNamed(context, '/mainpage');
+          } else if (index == 1) {
+            Navigator.pushReplacementNamed(context, '/personal_data');
+          }
+          // Do nothing for index 2 because we are on the Settings page.
+        },
       ),
     );
   }
 }
 
-/// 🎯 Reusable Widget for Each Setting Option
+/// Reusable widget for each setting option.
 class SettingTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -122,10 +177,10 @@ class SettingTile extends StatelessWidget {
         leading: Icon(icon, color: Colors.blue.shade800, size: 30),
         title: Text(
           title,
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(subtitle),
-        trailing: trailing ?? Icon(Icons.arrow_forward_ios, size: 20),
+        trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 20),
         onTap: onTap,
       ),
     );

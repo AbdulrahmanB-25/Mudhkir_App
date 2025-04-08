@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
         "/add_dose" : (context) => const AddDose(),
         "/companions" : (context) =>  Companions(),
         "/personal_data": (context) => const PersonalDataPage(),
-        "/SettingsPage": (context) => const SettingsPage(),
+        "/settings": (context) => const SettingsPage(),
         "/welcome": (context) => const Welcome(),
         "/forget_password": (context) => const ForgetPassword(),
       },
