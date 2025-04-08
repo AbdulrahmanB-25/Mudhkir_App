@@ -1,7 +1,11 @@
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 class DoseSchedule extends StatefulWidget {
   const DoseSchedule({super.key});
@@ -10,28 +14,46 @@ class DoseSchedule extends StatefulWidget {
   _DoseScheduleState createState() => _DoseScheduleState();
 }
 
-class _DoseScheduleState extends State<DoseSchedule> {
+class _DoseScheduleState extends State<DoseSchedule>
+    with SingleTickerProviderStateMixin {
   late User _user;
-  // Force the calendar to show full month view.
+  // Show a full month view.
   CalendarFormat _calendarFormat = CalendarFormat.month;
   Map<DateTime, List<dynamic>> _doses = {};
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
+
+  // Dummy variables for demonstration.
+  final FocusNode myFocusNode = FocusNode();
+  late AnimationController myAnimationController;
+  StreamSubscription? myStreamSubscription;
 
   @override
   void initState() {
     super.initState();
     _user = FirebaseAuth.instance.currentUser!;
     _fetchDoses();
+    // Initialize the animation controller.
+    myAnimationController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 1));
+  }
+
+  @override
+  void dispose() {
+    // Dispose dummy resources.
+    myFocusNode.dispose();
+    myAnimationController.dispose();
+    myStreamSubscription?.cancel();
+    super.dispose();
   }
 
   String formatDate(String dateString) {
-    List<String> parts = dateString.split('-');
-    if (parts.length != 3) return dateString;
-    String year = parts[0];
-    String month = parts[1].padLeft(2, '0');
-    String day = parts[2].padLeft(2, '0');
-    return '$year-$month-$day';
+    try {
+      final DateTime parsedDate = DateTime.parse(dateString);
+      return '${parsedDate.year}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateString;
+    }
   }
 
   Future<void> _fetchDoses() async {
@@ -44,40 +66,54 @@ class _DoseScheduleState extends State<DoseSchedule> {
     final Map<DateTime, List<dynamic>> newDoses = {};
 
     for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final String medicationName = data['name'] ?? 'No Name';
-      final String startDateString = data['startDate'];
-      final String endDateString = data['endDate'];
-      final List<dynamic> times = data['times'] ?? [];
-      final String imageUrl = data['imageUrl'] ?? '';
+      try {
+        final data = doc.data();
+        final String medicationName = data['name'] ?? 'No Name';
+        final String? startDateString = data['startDate'];
+        final String? endDateString = data['endDate'];
+        final List<dynamic> times = List<dynamic>.from(data['times'] ?? []);
+        // Get both the public image URL and the deletion hash.
+        final String imageUrl = data['imageUrl'] ?? '';
+        final String imgbbDeleteHash = data['imgbbDeleteHash'] ?? '';
 
-      if (startDateString == null || endDateString == null) continue;
-
-      final DateTime startDate = DateTime.parse(formatDate(startDateString));
-      final DateTime endDate = DateTime.parse(formatDate(endDateString));
-
-      for (DateTime date = startDate;
-      !date.isAfter(endDate);
-      date = date.add(const Duration(days: 1))) {
-        final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
-        newDoses.putIfAbsent(normalizedDate, () => []);
-
-        for (var time in times) {
-          newDoses[normalizedDate]!.add({
-            'medicationName': medicationName,
-            'time': time,
-            'docId': doc.id,
-            'imageUrl': imageUrl,
-          });
+        if (startDateString == null || endDateString == null) {
+          print('Document ${doc.id} missing dates');
+          continue;
         }
+
+        final DateTime startDate = DateTime.parse(formatDate(startDateString));
+        final DateTime endDate = DateTime.parse(formatDate(endDateString));
+
+        for (DateTime date = startDate;
+        !date.isAfter(endDate);
+        date = date.add(const Duration(days: 1))) {
+          final DateTime normalizedDate =
+          DateTime(date.year, date.month, date.day);
+          newDoses.putIfAbsent(normalizedDate, () => []);
+
+          for (var time in times) {
+            if (time != null) {
+              newDoses[normalizedDate]!.add({
+                'medicationName': medicationName,
+                'time': time.toString(),
+                'docId': doc.id,
+                'imageUrl': imageUrl,
+                'imgbbDeleteHash': imgbbDeleteHash,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        print('Error processing document ${doc.id}: $e');
+        continue;
       }
     }
 
     // Sort doses for each day by time.
     newDoses.forEach((date, meds) {
       meds.sort((a, b) {
-        final String timeA = a['time'] as String;
-        final String timeB = b['time'] as String;
+        final String timeA = a['time']?.toString() ?? '';
+        final String timeB = b['time']?.toString() ?? '';
         return timeA.compareTo(timeB);
       });
     });
@@ -161,8 +197,10 @@ class _DoseScheduleState extends State<DoseSchedule> {
                       ),
                       todayTextStyle: const TextStyle(color: Colors.white),
                       selectedTextStyle: const TextStyle(color: Colors.white),
-                      defaultTextStyle: TextStyle(color: Colors.blue.shade800),
-                      weekendTextStyle: TextStyle(color: Colors.blue.shade800),
+                      defaultTextStyle:
+                      TextStyle(color: Colors.blue.shade800),
+                      weekendTextStyle:
+                      TextStyle(color: Colors.blue.shade800),
                       markerDecoration: const BoxDecoration(
                         color: Colors.transparent,
                       ),
@@ -197,7 +235,8 @@ class _DoseScheduleState extends State<DoseSchedule> {
                       medicationName: dose['medicationName'],
                       nextDose: dose['time'],
                       docId: dose['docId'],
-                      imageUrl: dose['imageUrl'], // pass imageUrl here
+                      imageUrl: dose['imageUrl'],
+                      imgbbDeleteHash: dose['imgbbDeleteHash'] ?? '',
                       onDelete: _fetchDoses,
                     );
                   },
@@ -211,19 +250,22 @@ class _DoseScheduleState extends State<DoseSchedule> {
   }
 }
 
+/// DoseTile now carries an imgbbDeleteHash and when deleted,
+/// it also calls the helper to delete the image from imgbb.
 class DoseTile extends StatefulWidget {
   final String medicationName;
   final String nextDose;
   final String docId;
   final String imageUrl;
+  final String imgbbDeleteHash;
   final VoidCallback onDelete;
-
   const DoseTile({
     super.key,
     required this.medicationName,
     required this.nextDose,
     required this.docId,
     required this.imageUrl,
+    required this.imgbbDeleteHash,
     required this.onDelete,
   });
 
@@ -232,6 +274,24 @@ class DoseTile extends StatefulWidget {
 }
 
 class _DoseTileState extends State<DoseTile> {
+  // Helper to delete the image from ImgBB using its delete hash.
+  Future<void> _deleteImgBBImage(String deleteHash) async {
+    // Use your imgbb API key here.
+    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+    final url = Uri.parse(
+        'https://api.imgbb.com/1/delete?key=$imgbbApiKey&deletehash=$deleteHash');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        print("ImgBB image deleted successfully.");
+      } else {
+        print("Failed to delete image from ImgBB. Status: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error deleting image from ImgBB: $e");
+    }
+  }
+
   Future<bool?> _confirmDismiss(BuildContext context) async {
     return showDialog<bool>(
       context: context,
@@ -254,8 +314,13 @@ class _DoseTileState extends State<DoseTile> {
   }
 
   Future<void> _deleteMedication(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      // If an ImgBB delete hash exists, call the deletion helper.
+      if (widget.imgbbDeleteHash.isNotEmpty) {
+        await _deleteImgBBImage(widget.imgbbDeleteHash);
+      }
+      // Delete the med document from Firestore.
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -271,6 +336,53 @@ class _DoseTileState extends State<DoseTile> {
 
   @override
   Widget build(BuildContext context) {
+    // For this example, we keep the original tile design.
+    Widget tile = Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      elevation: 4,
+      child: ListTile(
+        // Here we use ClipRRect with a BorderRadius to get a rectangle with rounded edges.
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: widget.imageUrl.isNotEmpty
+              ? EnlargeableImage(
+            imageUrl: widget.imageUrl,
+            width: 60,
+            height: 60,
+          )
+              : Container(
+            width: 60,
+            height: 60,
+            color: Colors.grey.shade300,
+            alignment: Alignment.center,
+            child: const Text(
+              'No Image',
+              style: TextStyle(color: Colors.white, fontSize: 10),
+            ),
+          ),
+        ),
+        title: Text(
+          widget.medicationName,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue.shade800,
+          ),
+        ),
+        subtitle: Text(
+          widget.nextDose,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.blue.shade600,
+          ),
+        ),
+      ),
+    );
+
+    // Wrap in a Dismissible only if deletion is desired.
     return Dismissible(
       key: Key(widget.docId),
       direction: DismissDirection.endToStart,
@@ -284,46 +396,106 @@ class _DoseTileState extends State<DoseTile> {
       onDismissed: (direction) async {
         await _deleteMedication(context);
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+      child: tile,
+    );
+  }
+}
+
+class EnlargeableImage extends StatefulWidget {
+  final String imageUrl;
+  final double width;
+  final double height;
+
+  const EnlargeableImage({
+    super.key,
+    required this.imageUrl,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  _EnlargeableImageState createState() => _EnlargeableImageState();
+}
+
+class _EnlargeableImageState extends State<EnlargeableImage> {
+  late Future<File?> _imageFileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageFileFuture = _downloadAndSaveImage(widget.imageUrl);
+  }
+
+  Future<File?> _downloadAndSaveImage(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final Directory directory = await getTemporaryDirectory();
+        final String filePath = '${directory.path}/${url.hashCode}.png';
+        File file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        return file;
+      }
+    } catch (e) {
+      print("Error downloading image: $e");
+    }
+    return null;
+  }
+
+  void _openEnlargedImage(File imageFile) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          // Set the iconTheme so that the back button is white.
+          iconTheme: const IconThemeData(color: Colors.white),
         ),
-        elevation: 4,
-        child: ListTile(
-          // Display the image if imageUrl is provided; otherwise, show default icon.
-          leading: widget.imageUrl.isNotEmpty
-              ? ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              widget.imageUrl,
-              width: 40,
-              height: 40,
+        body: Center(
+          child: InteractiveViewer(
+            child: Image.file(imageFile),
+          ),
+        ),
+      );
+    }));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<File?>(
+      future: _imageFileFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            width: widget.width,
+            height: widget.height,
+            color: Colors.grey.shade300,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        } else if (snapshot.hasData && snapshot.data != null) {
+          return GestureDetector(
+            onTap: () => _openEnlargedImage(snapshot.data!),
+            child: Image.file(
+              snapshot.data!,
+              width: widget.width,
+              height: widget.height,
               fit: BoxFit.cover,
             ),
-          )
-              : Icon(
-            Icons.medication_liquid,
-            color: Colors.blue.shade800,
-            size: 40,
-          ),
-          title: Text(
-            widget.medicationName,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue.shade800,
+          );
+        } else {
+          return Container(
+            width: widget.width,
+            height: widget.height,
+            color: Colors.grey.shade300,
+            alignment: Alignment.center,
+            child: const Text(
+              'No Image',
+              style: TextStyle(color: Colors.white, fontSize: 10),
             ),
-          ),
-          subtitle: Text(
-            widget.nextDose,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.blue.shade600,
-            ),
-          ),
-        ),
-      ),
+          );
+        }
+      },
     );
   }
 }
@@ -333,7 +505,6 @@ class ActionCard extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool isFullWidth;
-
   const ActionCard({
     super.key,
     required this.icon,

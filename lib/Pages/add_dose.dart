@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
+import 'package:http/http.dart' as http;
 
 class AddDose extends StatefulWidget {
   const AddDose({super.key});
@@ -15,8 +15,14 @@ class AddDose extends StatefulWidget {
 }
 
 class _AddDoseState extends State<AddDose> {
+  final String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+
   final PageController _pageController = PageController();
-  final _formKey = GlobalKey<FormState>();
+  // Use three separate form keys—one for each page.
+  final GlobalKey<FormState> _formKeyPage1 = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKeyPage2 = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKeyPage3 = GlobalKey<FormState>();
+
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _dosageController = TextEditingController();
   String _dosageUnit = 'ملغم';
@@ -26,10 +32,9 @@ class _AddDoseState extends State<AddDose> {
   DateTime? _startDate = DateTime.now();
   DateTime? _endDate;
   late Future<List<String>> _medicineNamesFuture;
-  FocusNode _nameFocusNode = FocusNode();
 
-  // Variable for the captured image.
   File? _capturedImage;
+  String? _uploadedImageUrl;
 
   final List<String> _dosageUnits = ['ملغم', 'غرام', 'مل', 'وحدة'];
   final List<String> _frequencyTypes = ['يومي', 'اسبوعي'];
@@ -54,6 +59,15 @@ class _AddDoseState extends State<AddDose> {
     }
   }
 
+  void _updateTimeFields() {
+    setState(() {
+      _selectedTimes = List.generate(
+        _frequencyNumber,
+            (index) => _selectedTimes.length > index ? _selectedTimes[index] : null,
+      );
+    });
+  }
+
   Future<void> _selectStartDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -61,11 +75,7 @@ class _AddDoseState extends State<AddDose> {
       firstDate: DateTime(2000),
       lastDate: DateTime(DateTime.now().year + 5),
     );
-    if (picked != null) {
-      setState(() {
-        _startDate = picked;
-      });
-    }
+    if (picked != null) setState(() => _startDate = picked);
   }
 
   Future<void> _selectEndDate() async {
@@ -75,11 +85,7 @@ class _AddDoseState extends State<AddDose> {
       firstDate: DateTime.now(),
       lastDate: DateTime(DateTime.now().year + 5),
     );
-    if (picked != null) {
-      setState(() {
-        _endDate = picked;
-      });
-    }
+    if (picked != null) setState(() => _endDate = picked);
   }
 
   Future<void> _selectTime(int index) async {
@@ -87,131 +93,102 @@ class _AddDoseState extends State<AddDose> {
       context: context,
       initialTime: TimeOfDay.now(),
     );
-    if (picked != null) {
-      setState(() {
-        _selectedTimes[index] = picked;
-      });
-    }
+    if (picked != null) setState(() => _selectedTimes[index] = picked);
   }
 
-  void _updateTimeFields() {
-    setState(() {
-      _selectedTimes = List.generate(
-        _frequencyNumber,
-            (index) =>
-        _selectedTimes.length > index ? _selectedTimes[index] : null,
-      );
-    });
-  }
-
-  // Function to capture image from the camera using image_picker.
-Future<void> _pickImage() async {
-  try {
-final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
-if (pickedFile != null) {
-      setState(() {
-        _capturedImage = File(pickedFile.path);
-      });
-    }
-  } catch (e) {
-    print("Image picker error: $e");
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("حدث خطأ أثناء التقاط الصورة")),
-    );
-  }
-}
-
-  // Function to upload the image to Firebase Storage and return its download URL.
-  Future<String?> _uploadImage(String userId) async {
-    // Check if image exists
-    if (_capturedImage == null) {
-      print('No image captured to upload.');
-      return null;
-    }
-
+  Future<void> _pickImage() async {
     try {
-      // Create unique filename
-      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      // Create storage reference
-      final storageRef = firebase_storage.FirebaseStorage.instance
-          .ref()
-          .child('users')
-          .child(userId)
-          .child('medicines')
-          .child(fileName);
-
-      // Upload file
-      final metadata = firebase_storage.SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {'userId': userId}
-      );
-
-      final uploadTask = await storageRef.putFile(_capturedImage!, metadata);
-
-      // Get download URL
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      print('Image uploaded successfully. URL: $downloadUrl');
-      return downloadUrl;
-
+      final pickedFile =
+      await ImagePicker().pickImage(source: ImageSource.camera);
+      if (pickedFile != null) {
+        setState(() => _capturedImage = File(pickedFile.path));
+        await _uploadImageToImgBB(_capturedImage!);
+      }
     } catch (e) {
-      print('Error uploading image: $e');
+      print("Image picker error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('حدث خطأ أثناء رفع الصورة'))
+        const SnackBar(content: Text("حدث خطأ أثناء التقاط الصورة")),
       );
-      return null;
     }
   }
 
+  Future<void> _uploadImageToImgBB(File imageFile) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      final url = Uri.parse('https://api.imgbb.com/1/upload?key=$imgbbApiKey');
+
+      final response = await http.post(url, body: {'image': base64Image});
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        setState(() {
+          _uploadedImageUrl = jsonResponse['data']['url'];
+        });
+        print("Image uploaded to ImgBB: $_uploadedImageUrl");
+      } else {
+        print("ImgBB upload failed: ${response.body}");
+      }
+    } catch (e) {
+      print("Error uploading image to ImgBB: $e");
+    }
+  }
 
   void _submitForm() async {
-                if (_formKey.currentState!.validate()) {
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    // Upload the image if available.
-                    String? imageUrl = await _uploadImage(user.uid);
+    if (_formKeyPage3.currentState!.validate()) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        if (_capturedImage != null && _uploadedImageUrl == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("يتم تحميل الصورة... الرجاء الانتظار")),
+          );
+          return;
+        }
 
-                    final newMedicine = {
-                      'userId': user.uid,
-                      'name': _nameController.text,
-                      'dosage': '${_dosageController.text} $_dosageUnit',
-                      'frequency': '$_frequencyNumber $_frequencyType',
-                      'times': _selectedTimes.map((time) => time?.format(context)).toList(),
-                      'startDate': _startDate != null
-                          ? "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}"
-                          : null,
-                      'endDate': _endDate != null
-                          ? "${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}"
-                          : null,
-                      'createdAt': FieldValue.serverTimestamp(),
-                      if (imageUrl != null) 'imageUrl': imageUrl,
-                    };
+        final newMedicine = {
+          'userId': user.uid,
+          'name': _nameController.text,
+          'dosage': '${_dosageController.text} $_dosageUnit',
+          'frequency': '$_frequencyNumber $_frequencyType',
+          'times': _selectedTimes.map((t) => t?.format(context)).toList(),
+          'startDate': _startDate != null
+              ? "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}"
+              : null,
+          'endDate': _endDate != null
+              ? "${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}"
+              : null,
+          'createdAt': FieldValue.serverTimestamp(),
+        };
 
-                    try {
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user.uid)
-                          .collection('medicines')
-                          .add(newMedicine);
+        if (_uploadedImageUrl != null) {
+          newMedicine['imageUrl'] = _uploadedImageUrl;
+          print("✅ Image URL ready: $_uploadedImageUrl");
+        }
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تمت إضافة الدواء بنجاح!')),
-                      );
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('medicines')
+              .add(newMedicine);
 
-                      Navigator.pop(context, true);
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('حدث خطأ أثناء إضافة الدواء!'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                }
-              }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تمت إضافة الدواء بنجاح!')),
+          );
 
-  // Widget for capturing and displaying the image.
+          Navigator.pop(context, true);
+        } catch (e) {
+          print("❌ Firestore error: $e");
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('حدث خطأ أثناء إضافة الدواء!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Widget _buildImagePicker() {
     return GestureDetector(
       onTap: _pickImage,
@@ -223,7 +200,7 @@ if (pickedFile != null) {
           borderRadius: BorderRadius.circular(8),
         ),
         child: _capturedImage != null
-            ? Image.file(_capturedImage!, fit: BoxFit.contain)
+            ? Image.file(_capturedImage!, fit: BoxFit.cover)
             : Center(
           child: Text(
             'اضغط لالتقاط صورة',
@@ -236,7 +213,7 @@ if (pickedFile != null) {
 
   Widget _buildMedicationNamePage() {
     return Form(
-      key: _formKey,
+      key: _formKeyPage1,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
         child: Column(
@@ -253,49 +230,50 @@ if (pickedFile != null) {
               "إضافة دواء جديد",
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-              ),
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade800),
             ),
             const SizedBox(height: 30),
-            // Use image_picker to capture the image.
             _buildImagePicker(),
             const SizedBox(height: 20),
             FutureBuilder<List<String>>(
               future: _medicineNamesFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return const CircularProgressIndicator();
                 } else {
                   final medicineNames = snapshot.data ?? [];
                   return Autocomplete<String>(
                     optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.length < 2) {
+                      if (textEditingValue.text.length < 2)
                         return const Iterable<String>.empty();
-                      }
-                      return medicineNames.where((String medicine) {
-                        return medicine
-                            .toLowerCase()
-                            .startsWith(textEditingValue.text.toLowerCase());
-                      });
+                      return medicineNames.where((String name) =>
+                          name.toLowerCase().contains(
+                              textEditingValue.text.toLowerCase()));
                     },
                     onSelected: (String selection) {
                       _nameController.text = selection;
                     },
-                    fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                      _nameFocusNode = focusNode;
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onEditingComplete) {
+                      // Simply attach the provided controller and focus node.
+                      controller.text = _nameController.text;
+                      controller.addListener(() {
+                        _nameController.text = controller.text;
+                        _nameController.selection = controller.selection;
+                      });
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
                         decoration: InputDecoration(
                           labelText: 'اسم الدواء',
-                          icon: Icon(Icons.medication, color: Colors.blue.shade800),
+                          icon: Icon(Icons.medication,
+                              color: Colors.blue.shade800),
                         ),
-                        validator: (value) =>
-                        (value == null || value.isEmpty) ? 'ادخل اسم الدواء' : null,
+                        validator: (value) => (value == null || value.isEmpty)
+                            ? 'ادخل اسم الدواء'
+                            : null,
                       );
                     },
                   );
@@ -305,19 +283,19 @@ if (pickedFile != null) {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                if (_formKey.currentState != null && _formKey.currentState!.validate()) {
+                if (_formKeyPage1.currentState!.validate()) {
                   _pageController.nextPage(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut);
                 }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade800,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
               ),
-              child: const Text('التالي', style: TextStyle(color: Colors.white)),
+              child:
+              const Text('التالي', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -327,7 +305,7 @@ if (pickedFile != null) {
 
   Widget _buildDosageAndTimesPage() {
     return Form(
-      key: _formKey,
+      key: _formKeyPage2,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
         child: Column(
@@ -338,19 +316,17 @@ if (pickedFile != null) {
               child: IconButton(
                 icon: Icon(Icons.arrow_back, color: Colors.blue.shade800),
                 onPressed: () => _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                ),
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut),
               ),
             ),
             Text(
               "الجرعة والأوقات",
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-              ),
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade800),
             ),
             const SizedBox(height: 30),
             Row(
@@ -358,26 +334,23 @@ if (pickedFile != null) {
                 Expanded(
                   child: TextFormField(
                     controller: _dosageController,
+                    keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: 'الجرعة',
                       icon: Icon(Icons.science, color: Colors.blue.shade800),
                     ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) => (value == null || value.isEmpty)
-                        ? 'ادخل الجرعة'
-                        : null,
+                    validator: (value) =>
+                    (value == null || value.isEmpty) ? 'ادخل الجرعة' : null,
                   ),
                 ),
                 const SizedBox(width: 10),
                 DropdownButton<String>(
                   value: _dosageUnit,
                   onChanged: (value) => setState(() => _dosageUnit = value!),
-                  items: _dosageUnits.map((unit) {
-                    return DropdownMenuItem(
-                      value: unit,
-                      child: Text(unit),
-                    );
-                  }).toList(),
+                  items: _dosageUnits
+                      .map((unit) =>
+                      DropdownMenuItem(value: unit, child: Text(unit)))
+                      .toList(),
                 ),
               ],
             ),
@@ -399,9 +372,7 @@ if (pickedFile != null) {
                     },
                     items: _frequencyNumbers.map((num) {
                       return DropdownMenuItem(
-                        value: num,
-                        child: Text(num.toString()),
-                      );
+                          value: num, child: Text(num.toString()));
                     }).toList(),
                   ),
                 ),
@@ -411,14 +382,12 @@ if (pickedFile != null) {
                     value: _frequencyType,
                     decoration: InputDecoration(
                       labelText: 'النوع',
-                      icon: Icon(Icons.calendar_today, color: Colors.blue.shade800),
+                      icon:
+                      Icon(Icons.calendar_today, color: Colors.blue.shade800),
                     ),
                     onChanged: (value) => setState(() => _frequencyType = value!),
                     items: _frequencyTypes.map((type) {
-                      return DropdownMenuItem(
-                        value: type,
-                        child: Text(type),
-                      );
+                      return DropdownMenuItem(value: type, child: Text(type));
                     }).toList(),
                   ),
                 ),
@@ -426,45 +395,35 @@ if (pickedFile != null) {
             ),
             const SizedBox(height: 20),
             Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('أوقات الجرعة', style: TextStyle(color: Colors.blue.shade800)),
-                ...List.generate(_frequencyNumber, (index) {
-                  return Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.access_time, color: Colors.blue.shade800),
-                        onPressed: () => _selectTime(index),
-                      ),
-                      GestureDetector(
-                        onTap: () => _selectTime(index),
-                        child: Text(
-                          _selectedTimes[index] == null
-                              ? 'اختر الوقت'
-                              : _selectedTimes[index]!.format(context),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ],
+              children: List.generate(_frequencyNumber, (index) {
+                return ListTile(
+                  leading:
+                  Icon(Icons.access_time, color: Colors.blue.shade800),
+                  title: Text(
+                    _selectedTimes[index] == null
+                        ? 'اختر الوقت'
+                        : _selectedTimes[index]!.format(context),
+                  ),
+                  onTap: () => _selectTime(index),
+                );
+              }),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                if (_formKey.currentState!.validate()) {
+                if (_formKeyPage2.currentState!.validate()) {
                   _pageController.nextPage(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut);
                 }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade800,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
               ),
-              child: const Text('التالي', style: TextStyle(color: Colors.white)),
+              child:
+              const Text('التالي', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -474,7 +433,7 @@ if (pickedFile != null) {
 
   Widget _buildStartDateEndDatePage() {
     return Form(
-      key: _formKey,
+      key: _formKeyPage3,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
         child: Column(
@@ -485,9 +444,8 @@ if (pickedFile != null) {
               child: IconButton(
                 icon: Icon(Icons.arrow_back, color: Colors.blue.shade800),
                 onPressed: () => _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                ),
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut),
               ),
             ),
             Text(
@@ -500,22 +458,19 @@ if (pickedFile != null) {
             ),
             const SizedBox(height: 30),
             ListTile(
-              leading: Icon(Icons.calendar_today, color: Colors.blue.shade800),
-              title: Text(
-                _startDate == null
-                    ? 'اختر تاريخ البدء'
-                    : "${_startDate!.year}-${_startDate!.month.toString().padLeft(2, '0')}-${_startDate!.day.toString().padLeft(2, '0')}",
-              ),
+              leading:
+              Icon(Icons.calendar_today, color: Colors.blue.shade800),
+              title: Text(_startDate == null
+                  ? 'اختر تاريخ البدء'
+                  : "${_startDate!.year}-${_startDate!.month}-${_startDate!.day}"),
               onTap: _selectStartDate,
             ),
-            const SizedBox(height: 20),
             ListTile(
-              leading: Icon(Icons.calendar_today, color: Colors.blue.shade800),
-              title: Text(
-                _endDate == null
-                    ? 'اختر تاريخ الانتهاء'
-                    : "${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}",
-              ),
+              leading:
+              Icon(Icons.calendar_today, color: Colors.blue.shade800),
+              title: Text(_endDate == null
+                  ? 'اختر تاريخ الانتهاء'
+                  : "${_endDate!.year}-${_endDate!.month}-${_endDate!.day}"),
               onTap: _selectEndDate,
             ),
             const SizedBox(height: 30),
@@ -523,10 +478,11 @@ if (pickedFile != null) {
               onPressed: _submitForm,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade800,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
               ),
-              child: const Text('اضف الدواء لخزانتي', style: TextStyle(color: Colors.white)),
+              child: const Text('اضف الدواء لخزانتي',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -537,9 +493,8 @@ if (pickedFile != null) {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        _nameFocusNode.unfocus();
-      },
+      // Instead of using a disposed FocusNode, unfocus via the FocusScope.
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         body: Stack(
           children: [
@@ -571,7 +526,6 @@ if (pickedFile != null) {
   void dispose() {
     _nameController.dispose();
     _dosageController.dispose();
-    _nameFocusNode.dispose();
     super.dispose();
   }
 }

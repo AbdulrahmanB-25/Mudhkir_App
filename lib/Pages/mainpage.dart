@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:table_calendar/table_calendar.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -25,7 +24,7 @@ class _MainPageState extends State<MainPage> {
     _loadClosestMed();
   }
 
-  // Always fetch the username from Firestore. If it's different from the cached value, update the cache.
+  // Always fetch the username from Firestore. Update the cache if it differs.
   Future<void> _loadUserName() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? cachedName = prefs.getString('userName');
@@ -35,13 +34,15 @@ class _MainPageState extends State<MainPage> {
           .collection('users')
           .doc(user.uid)
           .get();
-      String fetchedName = userDoc['username'];
+      String fetchedName = userDoc['username'] as String;
       if (cachedName == null || cachedName != fetchedName) {
         await prefs.setString('userName', fetchedName);
+        if (!mounted) return;
         setState(() {
           _userName = fetchedName;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _userName = cachedName;
         });
@@ -70,8 +71,7 @@ class _MainPageState extends State<MainPage> {
     return "$displayHour:$minuteStr $suffix";
   }
 
-  // Fetch upcoming doses from Firestore from the path users/{uid}/medicines.
-  // Return only the closest upcoming dose (with docId).
+  // Fetch upcoming doses from Firestore. Return only the closest upcoming dose.
   Future<List<Map<String, String>>> _getUpcomingDoses() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
@@ -103,13 +103,13 @@ class _MainPageState extends State<MainPage> {
       }
       if (closestTime != null) {
         upcoming.add({
-          'name': data['name'],
+          'name': data['name'] as String,
           'nextDose': closestTime,
-          'docId': doc.id, // Include docId for deletion
+          'docId': doc.id,
         });
       }
     }
-    // Sort by the upcoming dose time.
+    // Sort by upcoming dose time.
     upcoming.sort((a, b) {
       final aTime = _parseTime(a['nextDose']!);
       final bTime = _parseTime(b['nextDose']!);
@@ -119,7 +119,7 @@ class _MainPageState extends State<MainPage> {
     return upcoming.take(1).toList();
   }
 
-  // Always fetch the closest medication from Firestore and update SharedPreferences if it's changed.
+  // Always fetch the closest med and update SharedPreferences only if changed.
   Future<void> _loadClosestMed() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     List<Map<String, String>> meds = await _getUpcomingDoses();
@@ -134,12 +134,14 @@ class _MainPageState extends State<MainPage> {
         await prefs.setString('closestMedName', closestMed['name']!);
         await prefs.setString('closestMedDose', closestMed['nextDose']!);
         await prefs.setString('closestMedDocId', closestMed['docId']!);
+        if (!mounted) return;
         setState(() {
           _closestMedName = closestMed['name']!;
           _closestMedDose = closestMed['nextDose']!;
           _closestMedDocId = closestMed['docId']!;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _closestMedName = cachedMedName;
           _closestMedDose = cachedMedDose;
@@ -150,6 +152,7 @@ class _MainPageState extends State<MainPage> {
       await prefs.remove('closestMedName');
       await prefs.remove('closestMedDose');
       await prefs.remove('closestMedDocId');
+      if (!mounted) return;
       setState(() {
         _closestMedName = '';
         _closestMedDose = '';
@@ -246,6 +249,7 @@ class _MainPageState extends State<MainPage> {
                       nextDose: _closestMedDose,
                       docId: _closestMedDocId,
                       onDelete: _loadClosestMed,
+                      deletable: false, // Disable deletion.
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -318,12 +322,13 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-// Widget to display each upcoming dose.
+/// DoseTile now includes a "deletable" flag. For the upcoming dose, deletable is false.
 class DoseTile extends StatefulWidget {
   final String medicationName;
   final String nextDose;
   final String docId;
   final VoidCallback onDelete;
+  final bool deletable;
 
   const DoseTile({
     super.key,
@@ -331,6 +336,7 @@ class DoseTile extends StatefulWidget {
     required this.nextDose,
     required this.docId,
     required this.onDelete,
+    this.deletable = true,
   });
 
   @override
@@ -350,7 +356,7 @@ class _DoseTileState extends State<DoseTile> {
             Icon(Icons.warning, color: Colors.red),
             const SizedBox(width: 10),
             const Text(
-              "تأكيد الحذف",
+              "تأكيد",
               style: TextStyle(color: Colors.red),
             ),
           ],
@@ -377,7 +383,7 @@ class _DoseTileState extends State<DoseTile> {
   }
 
   Future<void> _deleteMedication(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
+    User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await FirebaseFirestore.instance
           .collection('users')
@@ -394,7 +400,43 @@ class _DoseTileState extends State<DoseTile> {
 
   @override
   Widget build(BuildContext context) {
-    return Dismissible(
+    Widget tile = Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      elevation: 4,
+      child: ListTile(
+        // For this version, we remove the delete ability by showing a default icon.
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(10), // Rounded rectangle edges.
+          child: Icon(
+            Icons.medication_liquid,
+            color: Colors.blue.shade800,
+            size: 40,
+          ),
+        ),
+        title: Text(
+          widget.medicationName,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue.shade800,
+          ),
+        ),
+        subtitle: Text(
+          widget.nextDose,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.blue.shade600,
+          ),
+        ),
+      ),
+    );
+
+    // If deletable is true, wrap the tile in Dismissible; otherwise, simply return the tile.
+    return widget.deletable
+        ? Dismissible(
       key: Key(widget.docId),
       direction: DismissDirection.endToStart,
       background: Container(
@@ -407,37 +449,9 @@ class _DoseTileState extends State<DoseTile> {
       onDismissed: (direction) async {
         await _deleteMedication(context);
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        elevation: 4,
-        child: ListTile(
-          // Always show the default medication icon.
-          leading: Icon(
-            Icons.medication_liquid,
-            color: Colors.blue.shade800,
-            size: 40,
-          ),
-          title: Text(
-            widget.medicationName,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue.shade800,
-            ),
-          ),
-          subtitle: Text(
-            widget.nextDose,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.blue.shade600,
-            ),
-          ),
-        ),
-      ),
-    );
+      child: tile,
+    )
+        : tile;
   }
 }
 
@@ -446,7 +460,6 @@ class ActionCard extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool isFullWidth;
-
   const ActionCard({
     super.key,
     required this.icon,

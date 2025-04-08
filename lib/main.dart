@@ -11,7 +11,6 @@ import 'package:mudhkir_app/pages/dose_schedule.dart';
 import 'package:mudhkir_app/pages/ForgetPassword.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:mudhkir_app/Widgets/AuthWrapper.dart';
-import 'firebase_options.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 
 
