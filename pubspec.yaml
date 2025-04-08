@@ -78,7 +78,6 @@ flutter:
 
 flutter_launcher_icons:
     android: true
-    ios: true
     image_path: "assets/icons/logo-modified.png"
 
   #   - images/a_dot_ham.jpeg
