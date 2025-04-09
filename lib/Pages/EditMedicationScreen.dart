@@ -11,9 +11,6 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 
-
-//TODO: FIX HERE THE WEEKYL
-
 // ==================================================================
 // Time Utilities
 // ==================================================================
@@ -25,11 +22,10 @@ class TimeUtils {
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
     try {
-      String normalizedTime = timeStr
-          .replaceAll('صباحاً', 'AM')
-          .replaceAll('مساءً', 'PM')
-          .trim();
-      final intl.DateFormat arabicAmpmFormat = intl.DateFormat('h:mm a', 'en_US');
+      String normalizedTime =
+      timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
+      final intl.DateFormat arabicAmpmFormat =
+      intl.DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
@@ -37,7 +33,8 @@ class TimeUtils {
       final parts = timeStr.split(':');
       if (parts.length == 2) {
         int hour = int.parse(parts[0]);
-        int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+        int minute =
+        int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
@@ -88,7 +85,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
   }
   Future<File?> _downloadAndSaveImage(String url) async {
     final uri = Uri.tryParse(url);
-    if (url.isEmpty || uri == null || !uri.isAbsolute) {
+    if (widget.imageUrl.isEmpty || uri == null || !uri.isAbsolute) {
       print("Invalid or empty URL for download: $url");
       return null;
     }
@@ -194,7 +191,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
 }
 
 // ==================================================================
-// DoseSchedule Widget
+// DoseSchedule Widget (Calendar & Dose List)
 // ==================================================================
 class DoseSchedule extends StatefulWidget {
   const DoseSchedule({super.key});
@@ -230,21 +227,18 @@ class _DoseScheduleState extends State<DoseSchedule> {
   Future<void> _fetchDoses() async {
     if (!mounted) return;
     setState(() { _isLoading = true; });
-
     final Map<DateTime, List<Map<String, dynamic>>> newDoses = {};
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       setState(() { _isLoading = false; _doses = {}; });
       return;
     }
-
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('medicines')
           .get();
-
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final String medicationName = data['name'] ?? 'دواء غير مسمى';
@@ -255,19 +249,16 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final List<dynamic> timesRaw = data['times'] ?? [];
         final String imageUrl = data['imageUrl'] ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] ?? '';
-
         if (startTimestamp == null) continue;
         final DateTime startDate = startTimestamp.toDate();
         final DateTime? endDateDt = endTimestamp?.toDate();
         final List<String> parts = frequency.split(" ");
         final String frequencyType = parts.length > 1 ? parts[1] : 'يومي';
-
         DateTime currentDate = startDate;
         while (endDateDt == null || !currentDate.isAfter(endDateDt)) {
           final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
           bool shouldAddDose = false;
           List<Map<String, dynamic>> dosesForDay = [];
-
           if (frequencyType == 'يومي') {
             List<TimeOfDay> timesParsed = [];
             if (timesRaw.isNotEmpty && timesRaw.first is Map) {
@@ -282,7 +273,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
                   .whereType<TimeOfDay>()
                   .toList();
             }
-
             for (var time in timesParsed) {
               dosesForDay.add({
                 'medicationName': medicationName,
@@ -295,7 +285,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
               });
             }
             shouldAddDose = dosesForDay.isNotEmpty;
-
           } else if (frequencyType == 'اسبوعي') {
             for (var map in timesRaw.whereType<Map>()) {
               final int? day = map['day'];
@@ -317,18 +306,15 @@ class _DoseScheduleState extends State<DoseSchedule> {
             }
             shouldAddDose = dosesForDay.isNotEmpty;
           }
-
           if (shouldAddDose) {
             newDoses.putIfAbsent(normalizedDate, () => []);
             newDoses[normalizedDate]!.addAll(dosesForDay);
           }
-
           currentDate = currentDate.add(const Duration(days: 1));
           if (endDateDt != null && currentDate.isAfter(endDateDt)) break;
           if (endDateDt == null && currentDate.year > DateTime.now().year + 10) break;
         }
       }
-
       newDoses.forEach((date, meds) {
         meds.sort((a, b) {
           final TimeOfDay timeA = a['timeOfDay'];
@@ -340,7 +326,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
           return a['medicationName'].compareTo(b['medicationName']);
         });
       });
-
       if (mounted) {
         setState(() {
           _doses = newDoses;
@@ -802,7 +787,7 @@ class _DoseTileState extends State<DoseTile> {
 }
 
 // ==================================================================
-// EditMedicationScreen Widget
+// EditMedicationScreen Widget (Updated Daily & Weekly UI)
 // ==================================================================
 class EditMedicationScreen extends StatefulWidget {
   final String docId;
@@ -819,14 +804,22 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   String? _errorMessage;
   DateTime? _selectedStartDate;
   DateTime? _selectedEndDate;
+  // Daily mode: list of dose times.
   List<TimeOfDay> _selectedTimes = [];
+  // For tracking whether each daily time was auto-generated.
+  List<bool> _dailyAutoGenerated = [];
+  // Frequency selection – default set to daily.
   String _selectedFrequency = 'يومي';
+  // For weekly mode only:
   Set<int> _selectedWeekdays = {};
+  Map<int, TimeOfDay> _weeklyTimes = {};
+  Map<int, bool> _weeklyAutoGenerated = {};
   String? _currentImageUrl;
   String? _currentImgbbDeleteHash;
   File? _newImageFile;
   bool _imageRemoved = false;
   User? _user;
+
   @override
   void initState() {
     super.initState();
@@ -843,11 +836,13 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       _loadMedicationData();
     }
   }
+
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
   }
+
   Future<void> _loadMedicationData() async {
     if (_user == null) {
       if (mounted) {
@@ -875,22 +870,33 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         _nameController.text = data['name'] as String? ?? '';
         _selectedStartDate = (data['startDate'] as Timestamp?)?.toDate();
         _selectedEndDate = (data['endDate'] as Timestamp?)?.toDate();
-        _selectedFrequency = data['frequencyType'] as String? ?? 'يومي';
-        // For weekly, expect times to be a list of maps, and for daily, expect a list of strings
-        if (_selectedFrequency == 'اسبوعي') {
-          _selectedTimes = (data['times'] as List<dynamic>? ?? [])
-              .whereType<Map>()
-              .map((m) => TimeUtils.parseTime(m['time'].toString()))
-              .whereType<TimeOfDay>()
-              .toList();
-          _selectedWeekdays = (data['weeklyDays'] as List<dynamic>? ?? [])
-              .whereType<int>()
-              .toSet();
+        // Determine frequency mode:
+        String? storedFrequency = data['frequencyType'] as String?;
+        // If frequencyType is weekly or the "times" field is a list of maps, use weekly UI.
+        if (storedFrequency == 'اسبوعي' ||
+            (data['times'] is List && (data['times'] as List).isNotEmpty && (data['times'][0] is Map))) {
+          _selectedFrequency = 'اسبوعي';
+          _weeklyTimes = {};
+          List<dynamic> timesList = data['times'] as List<dynamic>? ?? [];
+          for (var item in timesList) {
+            if (item is Map) {
+              int? day = item['day'];
+              String? timeStr = item['time']?.toString();
+              if (day != null && timeStr != null) {
+                final time = TimeUtils.parseTime(timeStr);
+                if (time != null) {
+                  _weeklyTimes[day] = time;
+                }
+              }
+            }
+          }
+          _selectedWeekdays = _weeklyTimes.keys.toSet();
+          _weeklyAutoGenerated = { for (var day in _selectedWeekdays) day: false };
         } else {
+          _selectedFrequency = 'يومي';
           var rawTimes = data['times'];
           if (rawTimes is List<dynamic> && rawTimes.isNotEmpty) {
             if (rawTimes.first is Map) {
-              // If stored as maps mistakenly
               _selectedTimes = rawTimes
                   .where((element) => element is Map)
                   .map((m) => TimeUtils.parseTime(m['time'].toString()))
@@ -905,6 +911,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           } else {
             _selectedTimes = [];
           }
+          // Initialize daily auto-generated flags.
+          _dailyAutoGenerated = List<bool>.filled(_selectedTimes.length, false, growable: true);
         }
         _currentImageUrl = data['imageUrl'] as String?;
         _currentImgbbDeleteHash = data['imgbbDeleteHash'] as String?;
@@ -920,6 +928,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       if (mounted) setState(() { _isLoading = false; });
     }
   }
+
   Future<void> _pickDate(BuildContext context, bool isStartDate) async {
     final initialDate = (isStartDate ? _selectedStartDate : _selectedEndDate) ?? DateTime.now();
     final firstDate = DateTime(DateTime.now().year - 5);
@@ -967,47 +976,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       });
     }
   }
-  Future<void> _pickTime(BuildContext context) async {
-    final initialTime = TimeOfDay.now();
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: Colors.blue.shade700,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: child!,
-          ),
-        );
-      },
-    );
-    if (pickedTime != null) {
-      if (!_selectedTimes.any((t) => t.hour == pickedTime.hour && t.minute == pickedTime.minute)) {
-        setState(() {
-          _selectedTimes.add(pickedTime);
-          _selectedTimes.sort((a, b) {
-            if (a.hour != b.hour) return a.hour.compareTo(b.hour);
-            return a.minute.compareTo(b.minute);
-          });
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("هذا الوقت تم اختياره بالفعل.")),
-        );
-      }
-    }
-  }
-  void _removeTime(int index) {
-    setState(() {
-      _selectedTimes.removeAt(index);
-    });
-  }
+
   Future<void> _getImage(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -1029,12 +998,14 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       );
     }
   }
+
   void _removeImage() {
     setState(() {
       _newImageFile = null;
       _imageRemoved = true;
     });
   }
+
   Future<Map<String, String>?> _uploadImageToImgBB(File imageFile) async {
     const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
     if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
@@ -1072,10 +1043,11 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     }
     return null;
   }
+
   Future<void> _deleteOldImgBBImage(String deleteHash) async {
     if (deleteHash.isEmpty) return;
-    const String imgbbApiKey = 'YOUR_IMGBB_API_KEY';
-    if (imgbbApiKey == 'YOUR_IMGBB_API_KEY' || imgbbApiKey.isEmpty) {
+    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+    if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
       print("WARNING: ImgBB API Key not configured securely. Skipping old image deletion.");
       return;
     }
@@ -1091,6 +1063,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       print("Error deleting image from ImgBB ($deleteHash): $e");
     }
   }
+
   Future<void> _saveChanges() async {
     if (_user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1103,12 +1076,12 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء تحديد تاريخ البدء.")));
       return;
     }
-    if (_selectedTimes.isEmpty) {
+    if (_selectedFrequency == 'يومي' && _selectedTimes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء إضافة وقت واحد على الأقل للجرعة.")));
       return;
     }
     if (_selectedFrequency == 'اسبوعي' && _selectedWeekdays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء تحديد يوم واحد على الأقل في الأسبوع.")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء اختيار يوم واحد على الأقل وضبط الوقت له.")));
       return;
     }
     setState(() { _isSaving = true; });
@@ -1131,16 +1104,21 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       finalImageUrl = null;
       finalDeleteHash = null;
     }
-    if (deleteOldImage) {
+    if (deleteOldImage && _currentImgbbDeleteHash != null) {
       await _deleteOldImgBBImage(_currentImgbbDeleteHash!);
     }
     var timesField;
     if (_selectedFrequency == 'اسبوعي') {
-      timesField = _selectedWeekdays.map((day) {
-        return {'day': day, 'time': _selectedTimes.isNotEmpty ? TimeUtils.formatTimeOfDay(context, _selectedTimes.first) : ''};
-      }).toList();
+      timesField = _selectedWeekdays.toList()
+          .map((day) => {
+        'day': day,
+        'time': _weeklyTimes[day] != null ? TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!) : ''
+      })
+          .toList();
     } else {
-      timesField = _selectedTimes.map((time) => TimeUtils.formatTimeOfDay(context, time)).toList();
+      timesField = _selectedTimes
+          .map((time) => TimeUtils.formatTimeOfDay(context, time))
+          .toList();
     }
     final Map<String, dynamic> updatedData = {
       'name': _nameController.text.trim(),
@@ -1172,191 +1150,290 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       setState(() { _isSaving = false; });
     }
   }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new, color: Colors.blue.shade800, size: 24),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Text(
-                      "تعديل الدواء",
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16.0),
-                  child: _buildForm(),
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  Widget _buildForm() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text("اسم الدواء", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _nameController,
-            decoration: InputDecoration(
-              hintText: "مثال: بنادول أدفانس",
-              border: const OutlineInputBorder(),
-              prefixIcon: Icon(Icons.medication_liquid, color: Colors.blue.shade800),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return "الرجاء إدخال اسم الدواء";
-              return null;
-            },
-          ),
-          const SizedBox(height: 24),
-          Text("فترة الاستخدام", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _buildDateButton(context, "تاريخ البدء", true)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildDateButton(context, "الانتهاء (اختياري)", false)),
-            ],
-          ),
-          if (_selectedEndDate != null)
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: TextButton.icon(
-                onPressed: () => setState(() => _selectedEndDate = null),
-                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                label: Text("مسح تاريخ الانتهاء", style: TextStyle(color: Colors.red, fontSize: 12)),
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 30)),
-              ),
-            ),
-          const SizedBox(height: 16),
-          const Divider(height: 24),
-          _buildTimePickerSection(context),
-          const SizedBox(height: 16),
-          const Divider(height: 24),
-          _buildFrequencySection(context),
-          const SizedBox(height: 16),
-          if (_selectedFrequency == 'اسبوعي') ...[
-            _buildWeekdaySelector(context),
-            const SizedBox(height: 16),
-          ],
-          const Divider(height: 24),
-          _buildImageSection(context),
-          const SizedBox(height: 30),
-          ElevatedButton.icon(
-            icon: _isSaving
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            )
-                : const Icon(Icons.save_alt_outlined),
-            label: Text(_isSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"),
-            onPressed: _isSaving ? null : _saveChanges,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-      ),
-    );
-  }
-  Widget _buildDateButton(BuildContext context, String label, bool isStartDate) {
-    final DateTime? dateToShow = isStartDate ? _selectedStartDate : _selectedEndDate;
-    final String buttonText = dateToShow == null ? label : intl.DateFormat('yyyy/MM/dd', 'ar_SA').format(dateToShow);
-    return OutlinedButton.icon(
-      icon: Icon(
-        isStartDate ? Icons.calendar_today_outlined : Icons.event_available_outlined,
-        size: 20,
-        color: dateToShow == null ? Colors.grey.shade600 : Colors.blue.shade800,
-      ),
-      label: Text(buttonText,
-          style: TextStyle(
-            color: dateToShow == null ? Colors.grey.shade600 : Colors.blue.shade800,
-          )),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-        side: BorderSide(color: dateToShow == null && isStartDate ? Colors.red : Colors.grey.shade400, width: 1.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      onPressed: () => _pickDate(context, isStartDate),
-    );
-  }
-  Widget _buildTimePickerSection(BuildContext context) {
+
+  // ----------------------
+  // Daily Time Picker UI (Card-based, similar to weekly UI)
+  // ----------------------
+  Widget _buildDailyTimePickerSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text("أوقات الجرعات:",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-            IconButton(
-              icon: Icon(Icons.add_alarm, color: Colors.blue.shade700),
-              tooltip: "إضافة وقت",
-              onPressed: () => _pickTime(context),
-            ),
-          ],
+        Text(
+          "أوقات الجرعات اليومية:",
+          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+          textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 6),
-        if (_selectedTimes.isEmpty)
+        const SizedBox(height: 10),
+        if (_selectedTimes.isNotEmpty && _selectedTimes[0] != null)
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                for (int i = 1; i < _selectedTimes.length; i++) {
+                  _selectedTimes[i] = _selectedTimes[0];
+                  _dailyAutoGenerated[i] = true;
+                }
+              });
+            },
+            child: const Text("تطبيق نفس الوقت لجميع الجرعات"),
+          ),
+        const SizedBox(height: 10),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _selectedTimes.length,
+          itemBuilder: (context, index) {
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 6.0),
+              elevation: 1.0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              child: ListTile(
+                leading: Icon(Icons.access_time_filled, color: Colors.blue.shade700),
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('${index + 1}. ', style: const TextStyle(fontSize: 16)),
+                    Text(
+                      _selectedTimes[index] == null
+                          ? 'اضغط لاختيار الوقت'
+                          : TimeUtils.formatTimeOfDay(context, _selectedTimes[index]),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: _selectedTimes[index] == null ? FontWeight.normal : FontWeight.bold,
+                        color: _selectedTimes[index] == null ? Colors.grey.shade600 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (_selectedTimes[index] != null && index > 0)
+                      Icon(
+                        _dailyAutoGenerated[index] ? Icons.smart_toy : Icons.person,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                  ],
+                ),
+                trailing: const Icon(Icons.edit_calendar_outlined),
+                onTap: () async {
+                  final TimeOfDay? picked = await showTimePicker(
+                    context: context,
+                    initialTime: _selectedTimes[index] ?? TimeOfDay.now(),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _selectedTimes[index] = picked;
+                      _dailyAutoGenerated[index] = false;
+                    });
+                  }
+                },
+              ),
+            );
+          },
+        ),
+        ElevatedButton.icon(
+          icon: Icon(Icons.add_alarm, color: Colors.white),
+          label: const Text("إضافة جرعة جديدة"),
+          onPressed: () async {
+            final TimeOfDay? picked = await showTimePicker(
+              context: context,
+              initialTime: TimeOfDay.now(),
+            );
+            if (picked != null) {
+              setState(() {
+                _selectedTimes.add(picked);
+                _dailyAutoGenerated.add(false);
+              });
+            }
+          },
+        ),
+        if (_selectedTimes.any((t) => t == null))
           Padding(
-            padding: const EdgeInsets.only(left: 8.0),
-            child: Text("الرجاء إضافة وقت واحد على الأقل",
-                style: TextStyle(fontSize: 12, color: Colors.red)),
-          )
-        else
-          Wrap(
-            spacing: 8.0,
-            runSpacing: 6.0,
-            children: List<Widget>.generate(_selectedTimes.length, (index) {
-              return Chip(
-                label: Text(TimeUtils.formatTimeOfDay(context, _selectedTimes[index])),
-                onDeleted: () => _removeTime(index),
-                deleteIcon: Icon(Icons.cancel_outlined, size: 18, color: Colors.blue.shade700.withAlpha(180)),
-                backgroundColor: Colors.blue.shade100,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                side: BorderSide(color: Colors.blue.shade700.withAlpha(100)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              );
-            }),
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(
+              'الرجاء تحديد جميع أوقات الجرعات المطلوبة.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+            ),
           ),
       ],
     );
   }
+
+  // ----------------------
+  // Weekly Schedule UI (as before)
+  // ----------------------
+  // Helper to return Arabic day name.
+  String _dayName(int day) {
+    switch (day) {
+      case 1:
+        return "الإثنين";
+      case 2:
+        return "الثلاثاء";
+      case 3:
+        return "الأربعاء";
+      case 4:
+        return "الخميس";
+      case 5:
+        return "الجمعة";
+      case 6:
+        return "السبت";
+      case 7:
+        return "الأحد";
+      default:
+        return "";
+    }
+  }
+
+  // Ensure weekly maps exist for selected days.
+  void _initializeWeeklySchedule() {
+    if (_selectedWeekdays.isEmpty && _weeklyTimes.isNotEmpty) {
+      _selectedWeekdays = _weeklyTimes.keys.toSet();
+    }
+    for (int day in _selectedWeekdays) {
+      _weeklyAutoGenerated.putIfAbsent(day, () => false);
+    }
+  }
+
+  Future<void> _selectWeeklyTime(int day) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _weeklyTimes[day] ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _weeklyTimes[day] = picked;
+        _weeklyAutoGenerated[day] = false;
+        List<int> sortedDays = _selectedWeekdays.toList()..sort();
+        if (sortedDays.isNotEmpty && day == sortedDays.first) {
+          for (int otherDay in sortedDays.skip(1)) {
+            if (_weeklyTimes[otherDay] == null) {
+              _weeklyTimes[otherDay] = picked;
+              _weeklyAutoGenerated[otherDay] = true;
+            }
+          }
+        }
+      });
+    }
+  }
+
+  Widget _buildWeeklyScheduleSection() {
+    _initializeWeeklySchedule();
+    List<int> sortedDays = _selectedWeekdays.toList()..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "جدول الجرعات الأسبوعي",
+          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8.0,
+          children: List.generate(7, (index) {
+            int day = index + 1;
+            bool selected = _selectedWeekdays.contains(day);
+            return FilterChip(
+              label: Text(_dayName(day)),
+              selected: selected,
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    if (_selectedWeekdays.length < 6) {
+                      _selectedWeekdays.add(day);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('يمكنك اختيار 6 أيام فقط')),
+                      );
+                    }
+                  } else {
+                    _selectedWeekdays.remove(day);
+                    _weeklyTimes.remove(day);
+                    _weeklyAutoGenerated.remove(day);
+                  }
+                });
+              },
+              selectedColor: Colors.blue.shade300,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.grey.shade200,
+            );
+          }),
+        ),
+        if (_selectedWeekdays.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              "الرجاء اختيار يوم واحد على الأقل",
+              style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            ),
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  List<int> sortedDays = _selectedWeekdays.toList()..sort();
+                  if (sortedDays.isNotEmpty && _weeklyTimes[sortedDays.first] != null) {
+                    setState(() {
+                      for (int day in sortedDays.skip(1)) {
+                        _weeklyTimes[day] = _weeklyTimes[sortedDays.first]!;
+                        _weeklyAutoGenerated[day] = true;
+                      }
+                    });
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("حدد وقت اليوم الأول أولاً")));
+                  }
+                },
+                child: const Text("تطبيق نفس الوقت لجميع الأيام"),
+              ),
+              const SizedBox(height: 10),
+              Column(
+                children: sortedDays.map((day) {
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6.0),
+                    elevation: 1.0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      leading: Text(
+                        _dayName(day),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      title: InkWell(
+                        onTap: () async {
+                          await _selectWeeklyTime(day);
+                        },
+                        child: Text(
+                          _weeklyTimes[day] == null
+                              ? "اضغط لاختيار الوقت"
+                              : TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: _weeklyTimes[day] == null ? Colors.grey.shade600 : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      trailing: Icon(
+                        _weeklyTimes[day] == null
+                            ? Icons.edit_calendar_outlined
+                            : ((_weeklyAutoGenerated[day] ?? false)
+                            ? Icons.smart_toy
+                            : Icons.person),
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
   Widget _buildFrequencySection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1371,7 +1448,19 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                 value: 'يومي',
                 groupValue: _selectedFrequency,
                 onChanged: (value) {
-                  if (value != null) setState(() => _selectedFrequency = value);
+                  if (value != null) setState(() {
+                    _selectedFrequency = value;
+                    // Reset daily schedule if switching to daily.
+                    if (value == 'يومي') {
+                      _selectedTimes = _selectedTimes.isNotEmpty ? _selectedTimes : [];
+                      _dailyAutoGenerated = List<bool>.filled(_selectedTimes.length, false, growable: true);
+                    } else {
+                      // Reset weekly schedule.
+                      _selectedWeekdays = {};
+                      _weeklyTimes = {};
+                      _weeklyAutoGenerated = {};
+                    }
+                  });
                 },
                 activeColor: Colors.blue.shade700,
                 contentPadding: EdgeInsets.zero,
@@ -1384,7 +1473,12 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                 value: 'اسبوعي',
                 groupValue: _selectedFrequency,
                 onChanged: (value) {
-                  if (value != null) setState(() => _selectedFrequency = value);
+                  if (value != null) setState(() {
+                    _selectedFrequency = value;
+                    _selectedWeekdays = {};
+                    _weeklyTimes = {};
+                    _weeklyAutoGenerated = {};
+                  });
                 },
                 activeColor: Colors.blue.shade700,
                 contentPadding: EdgeInsets.zero,
@@ -1396,60 +1490,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       ],
     );
   }
-  Widget _buildWeekdaySelector(BuildContext context) {
-    const Map<int, String> weekdaysArabic = {
-      1: 'الإثنين',
-      2: 'الثلاثاء',
-      3: 'الاربعاء',
-      4: 'الخميس',
-      5: 'الجمعة',
-      6: 'السبت',
-      7: 'الأحد',
-    };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("أيام الأسبوع:",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8.0,
-          runSpacing: 4.0,
-          children: List<Widget>.generate(7, (index) {
-            final day = index + 1;
-            final isSelected = _selectedWeekdays.contains(day);
-            return FilterChip(
-              label: Text(weekdaysArabic[day]!),
-              selected: isSelected,
-              onSelected: (bool selected) {
-                setState(() {
-                  if (selected)
-                    _selectedWeekdays.add(day);
-                  else
-                    _selectedWeekdays.remove(day);
-                });
-              },
-              selectedColor: Colors.blue.shade300,
-              checkmarkColor: Colors.white,
-              labelStyle: TextStyle(fontSize: 14, color: isSelected ? Colors.white : Colors.black87),
-              backgroundColor: Colors.grey.shade200,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300),
-              ),
-            );
-          }),
-        ),
-        if (_selectedFrequency == 'اسبوعي' && _selectedWeekdays.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 6.0, left: 8.0),
-            child: Text("الرجاء تحديد يوم واحد على الأقل",
-                style: TextStyle(fontSize: 12, color: Colors.red)),
-          )
-      ],
-    );
-  }
+
   Widget _buildImageSection(BuildContext context) {
     Widget imageDisplay;
     if (_newImageFile != null) {
@@ -1525,6 +1566,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       ],
     );
   }
+
   Widget _buildImagePlaceholder(BuildContext context) {
     return Container(
       height: 150,
@@ -1543,6 +1585,149 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           Text("لا توجد صورة", style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
         ],
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade50, Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back_ios_new, color: Colors.blue.shade800, size: 24),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Text(
+                      "تعديل الدواء",
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: _buildForm(),
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text("اسم الدواء", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _nameController,
+            decoration: InputDecoration(
+              hintText: "مثال: بنادول أدفانس",
+              border: const OutlineInputBorder(),
+              prefixIcon: Icon(Icons.medication_liquid, color: Colors.blue.shade800),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) return "الرجاء إدخال اسم الدواء";
+              return null;
+            },
+          ),
+          const SizedBox(height: 24),
+          Text("فترة الاستخدام", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _buildDateButton(context, "تاريخ البدء", true)),
+              const SizedBox(width: 12),
+              Expanded(child: _buildDateButton(context, "الانتهاء (اختياري)", false)),
+            ],
+          ),
+          if (_selectedEndDate != null)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _selectedEndDate = null),
+                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                label: Text("مسح تاريخ الانتهاء", style: TextStyle(color: Colors.red, fontSize: 12)),
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 30)),
+              ),
+            ),
+          const SizedBox(height: 16),
+          const Divider(height: 24),
+          _buildFrequencySection(context),
+          const SizedBox(height: 16),
+          _selectedFrequency == 'يومي'
+              ? _buildDailyTimePickerSection(context)
+              : _buildWeeklyScheduleSection(),
+          const SizedBox(height: 16),
+          const Divider(height: 24),
+          _buildImageSection(context),
+          const SizedBox(height: 30),
+          ElevatedButton.icon(
+            icon: _isSaving
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+                : const Icon(Icons.save_alt_outlined),
+            label: Text(_isSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"),
+            onPressed: _isSaving ? null : _saveChanges,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateButton(BuildContext context, String label, bool isStartDate) {
+    final DateTime? dateToShow = isStartDate ? _selectedStartDate : _selectedEndDate;
+    final String buttonText = dateToShow == null ? label : intl.DateFormat('yyyy/MM/dd', 'ar_SA').format(dateToShow);
+    return OutlinedButton.icon(
+      icon: Icon(
+        isStartDate ? Icons.calendar_today_outlined : Icons.event_available_outlined,
+        size: 20,
+        color: dateToShow == null ? Colors.grey.shade600 : Colors.blue.shade800,
+      ),
+      label: Text(buttonText,
+          style: TextStyle(
+            color: dateToShow == null ? Colors.grey.shade600 : Colors.blue.shade800,
+          )),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        side: BorderSide(color: dateToShow == null && isStartDate ? Colors.red : Colors.grey.shade400, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onPressed: () => _pickDate(context, isStartDate),
     );
   }
 }

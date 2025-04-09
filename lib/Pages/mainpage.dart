@@ -183,9 +183,9 @@ class _MainPageState extends State<MainPage> {
         if (frequencyType == 'اسبوعي') {
           // For weekly, find times whose 'day' matches today's weekday.
           for (var entry in timesRaw) {
-            if (entry is Map) {
-              if (entry['day'] == today.weekday) {
-                String timeStr = entry['time'].toString();
+            if (entry is Map<String, dynamic> && entry['day'] == today.weekday) {
+              String? timeStr = entry['time']?.toString();
+              if (timeStr != null) {
                 final parsedTime = _parseTime(timeStr);
                 if (parsedTime != null) {
                   doseTimes.add(parsedTime);
@@ -194,11 +194,13 @@ class _MainPageState extends State<MainPage> {
             }
           }
         } else {
-          // For daily, treat times as List<String>
-          for (String timeStr in List<String>.from(timesRaw)) {
-            final parsedTime = _parseTime(timeStr);
-            if (parsedTime != null) {
-              doseTimes.add(parsedTime);
+          // For daily, treat times as List<String> or List<dynamic>.
+          for (var timeEntry in timesRaw) {
+            if (timeEntry is String) {
+              final parsedTime = _parseTime(timeEntry);
+              if (parsedTime != null) {
+                doseTimes.add(parsedTime);
+              }
             }
           }
         }
