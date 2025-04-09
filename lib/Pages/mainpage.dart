@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Keep for username cache
+import 'package:shared_preferences/shared_preferences.dart'; // For username cache
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // For robust date/time parsing/formatting if needed
+import 'package:intl/intl.dart'; // For robust date/time parsing/formatting
 
-// --- CustomBottomNavigationBar remains the same ---
+// -----------------------
+// Custom Bottom Navigation Bar
+// -----------------------
 class CustomBottomNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemTapped;
@@ -15,7 +17,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    // Standard implementation from your code...
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: BottomNavigationBar(
@@ -25,18 +26,20 @@ class CustomBottomNavigationBar extends StatelessWidget {
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'الإعدادات'),
         ],
         currentIndex: selectedIndex,
-        selectedItemColor: Colors.blue.shade800, // Match theme
+        selectedItemColor: Colors.blue.shade800,
         unselectedItemColor: Colors.grey.shade600,
         onTap: onItemTapped,
-        backgroundColor: Colors.white.withValues(alpha: 0.9), // Slight opacity
-        elevation: 5, // Add some elevation
+        backgroundColor: Colors.white.withOpacity(0.9),
+        elevation: 5,
         type: BottomNavigationBarType.fixed,
       ),
     );
   }
 }
 
-
+// -----------------------
+// MainPage Widget
+// -----------------------
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
   @override
@@ -47,270 +50,229 @@ class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
   String _userName = '';
   String _closestMedName = '';
-  String _closestMedTimeStr = ''; // Store the formatted time string
+  String _closestMedTimeStr = ''; // Formatted time string
   String _closestMedDocId = '';
   bool _isLoadingMed = true; // Loading indicator state
 
   @override
   void initState() {
     super.initState();
-    _loadUserData(); // Combined loading
+    _loadUserData(); // Load username and closest medication concurrently
   }
 
   Future<void> _loadUserData() async {
     await _loadUserName();
-    await _loadClosestMed(); // Fetch meds after getting username (or concurrently)
+    await _loadClosestMed();
   }
 
-  // Load username from Firestore, update cache if needed
+  // Load username from Firestore and cache it in SharedPreferences.
   Future<void> _loadUserName() async {
     User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return; // Should not happen if user logged in
-
+    if (user == null) return;
     try {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
-
       if (userDoc.exists && userDoc.data() != null) {
         final data = userDoc.data() as Map<String, dynamic>;
-        String fetchedName = data['username'] as String? ?? 'مستخدم'; // Provide default
-
+        String fetchedName = data['username'] as String? ?? 'مستخدم';
         SharedPreferences prefs = await SharedPreferences.getInstance();
         String? cachedName = prefs.getString('userName');
-
         if (cachedName == null || cachedName != fetchedName) {
           await prefs.setString('userName', fetchedName);
         }
-
         if (mounted) {
           setState(() {
             _userName = fetchedName;
           });
         }
       } else {
-        // Handle case where user doc doesn't exist?
         if (mounted) setState(() => _userName = 'مستخدم');
       }
-
     } catch (e) {
       print("Error loading username: $e");
-      if (mounted) setState(() => _userName = 'مستخدم'); // Default on error
+      if (mounted) setState(() => _userName = 'مستخدم');
     }
   }
 
-  // --- Time Parsing and Formatting ---
-
-  // Attempt to parse time string, potentially handling different formats.
-  // Returns null if parsing fails.
+  // Parse time string using several strategies
   TimeOfDay? _parseTime(String timeStr) {
     try {
-      // 1. Try parsing formats like "9:00 AM" or "9:00 ص" (using intl)
-      // Adjust locale if needed, 'en_US' handles AM/PM well
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = ampmFormat.parseStrict(timeStr);
       return TimeOfDay.fromDateTime(parsedDt);
-    } catch (e) {
-      // Ignore parsing error and try next format
-    }
-
+    } catch (_) {}
     try {
-      // 2. Try parsing Arabic AM/PM like "9:00 صباحاً"
       String normalizedTime = timeStr
           .replaceAll('صباحاً', 'AM')
           .replaceAll('مساءً', 'PM')
           .trim();
-      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US'); // Still use en_US for AM/PM logic
+      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
-    } catch (e) {
-      // Ignore parsing error and try next format
-    }
-
+    } catch (_) {}
     try {
-      // 3. Try parsing 24-hour format like "14:30"
       final parts = timeStr.split(':');
       if (parts.length == 2) {
         int hour = int.parse(parts[0]);
-        int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')); // Clean minutes just in case
+        int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
       }
-    } catch (e) {
-      // Ignore parsing error
-    }
-
+    } catch (_) {}
     print("Failed to parse time string: $timeStr");
-    return null; // Return null if all parsing attempts fail
+    return null;
   }
 
-  // Format TimeOfDay into a user-friendly Arabic string.
   String _formatTimeOfDay(BuildContext context, TimeOfDay time) {
-    // Use Localizations for proper formatting if available and configured
-    // final localizations = MaterialLocalizations.of(context);
-    // return localizations.formatTimeOfDay(time, alwaysUse24HourFormat: false);
-
-    // Manual Arabic formatting (fallback)
-    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod; // 12-hour format hour (1-12)
+    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final String minute = time.minute.toString().padLeft(2, '0');
     final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
-    // Ensure correct Right-to-Left display if needed, though Text widget handles it.
     return '$hour:$minute $period';
   }
 
-
-  // --- Closest Medication Logic ---
-
-  // Fetch and determine the closest upcoming dose directly from Firestore.
+  // Load the closest upcoming medication dose.
   Future<void> _loadClosestMed() async {
-    if (mounted) {
-      setState(() {
-        _isLoadingMed = true; // Start loading
-      });
-    }
-
+    setState(() {
+      _isLoadingMed = true;
+    });
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      if (mounted) setState(() => _isLoadingMed = false);
+      setState(() {
+        _isLoadingMed = false;
+      });
       return;
     }
-
     List<Map<String, dynamic>> potentialDoses = [];
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final nowMinutes = now.hour * 60 + now.minute; // Minutes past midnight today
+    final nowMinutes = now.hour * 60 + now.minute; // Minutes passed today
 
     try {
       final medsSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('medicines')
-          .get(); // Consider adding '.where('endDate', isGreaterThanOrEqualTo: Timestamp.fromDate(today))' for optimization if feasible
+          .get();
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
 
-        // --- Safely get and validate dates ---
-        final startTimeStamp = data['startDate'] as Timestamp?;
-        final endTimeStamp = data['endDate'] as Timestamp?;
+        // Check start and end dates.
+        final startTimestamp = data['startDate'] as Timestamp?;
+        final endTimestamp = data['endDate'] as Timestamp?;
 
-        if (startTimeStamp == null) continue; // Skip if no start date
+        if (startTimestamp == null) continue;
 
-        final startDate = startTimeStamp.toDate();
-        // Use end date if available, otherwise assume it doesn't end or handle as needed
-        final endDate = endTimeStamp?.toDate();
-
-        // Normalize dates to compare days only
+        final startDate = startTimestamp.toDate();
+        final endDate = endTimestamp?.toDate();
         final startDay = DateTime(startDate.year, startDate.month, startDate.day);
         final endDay = endDate != null ? DateTime(endDate.year, endDate.month, endDate.day) : null;
 
-        // --- Check if medication is active today ---
-        if (today.isBefore(startDay)) continue; // Not started yet
-        if (endDay != null && today.isAfter(endDay)) continue; // Already ended
+        // Skip meds that haven't started or have ended.
+        if (today.isBefore(startDay)) continue;
+        if (endDay != null && today.isAfter(endDay)) continue;
 
+        // Determine frequency type.
+        final frequencyType = data['frequencyType'] as String? ?? 'يومي';
+        List<TimeOfDay> doseTimes = [];
+        final List<dynamic> timesRaw = data['times'] ?? [];
 
-        // --- Process times ---
-        final times = List<String>.from(data['times'] ?? []);
-        if (times.isEmpty) continue; // Skip if no times listed
-
-        for (String timeStr in times) {
-          final parsedTime = _parseTime(timeStr);
-          if (parsedTime != null) {
-            final doseTotalMinutes = parsedTime.hour * 60 + parsedTime.minute;
-
-            // Calculate minutes until *next* occurrence of this time
-            int minutesUntilNextDose = doseTotalMinutes - nowMinutes;
-            if (minutesUntilNextDose < 0) {
-              // If time has passed today, calculate for tomorrow
-              minutesUntilNextDose += 24 * 60; // Add minutes in a day
+        if (frequencyType == 'اسبوعي') {
+          // For weekly, find times whose 'day' matches today's weekday.
+          for (var entry in timesRaw) {
+            if (entry is Map) {
+              if (entry['day'] == today.weekday) {
+                String timeStr = entry['time'].toString();
+                final parsedTime = _parseTime(timeStr);
+                if (parsedTime != null) {
+                  doseTimes.add(parsedTime);
+                }
+              }
             }
-
-            // Store potential dose with its details and time difference
-            potentialDoses.add({
-              'name': data['name'] as String? ?? 'دواء غير مسمى',
-              'doseTime': parsedTime, // Store TimeOfDay object
-              'doseTimeStr': timeStr, // Original string for reference
-              'minutesUntil': minutesUntilNextDose,
-              'docId': doc.id,
-            });
-          } else {
-            print("Skipping unparseable time: $timeStr for med: ${data['name']}");
+          }
+        } else {
+          // For daily, treat times as List<String>
+          for (String timeStr in List<String>.from(timesRaw)) {
+            final parsedTime = _parseTime(timeStr);
+            if (parsedTime != null) {
+              doseTimes.add(parsedTime);
+            }
           }
         }
+
+        if (doseTimes.isEmpty) continue;
+
+        // For each dose time, calculate minutes until next dose.
+        for (TimeOfDay doseTime in doseTimes) {
+          final doseTotalMinutes = doseTime.hour * 60 + doseTime.minute;
+          int minutesUntilNextDose = doseTotalMinutes - nowMinutes;
+          if (minutesUntilNextDose < 0) {
+            minutesUntilNextDose += 24 * 60;
+          }
+          potentialDoses.add({
+            'name': data['name'] as String? ?? 'دواء غير مسمى',
+            'doseTime': doseTime,
+            'doseTimeStr': _formatTimeOfDay(context, doseTime),
+            'minutesUntil': minutesUntilNextDose,
+            'docId': doc.id,
+          });
+        }
       }
 
-      // --- Find the dose with the minimum minutesUntil ---
       if (potentialDoses.isNotEmpty) {
-        potentialDoses.sort((a, b) => (a['minutesUntil'] as int).compareTo(b['minutesUntil'] as int));
+        potentialDoses.sort((a, b) =>
+            (a['minutesUntil'] as int).compareTo(b['minutesUntil'] as int));
         final closest = potentialDoses.first;
-
-        if (mounted) {
-          setState(() {
-            _closestMedName = closest['name'];
-            // Format the TimeOfDay object for display
-            _closestMedTimeStr = _formatTimeOfDay(context, closest['doseTime'] as TimeOfDay);
-            _closestMedDocId = closest['docId'];
-            _isLoadingMed = false;
-          });
-        }
-      } else {
-        // No upcoming doses found
-        if (mounted) {
-          setState(() {
-            _closestMedName = '';
-            _closestMedTimeStr = '';
-            _closestMedDocId = '';
-            _isLoadingMed = false;
-          });
-        }
-      }
-
-    } catch (e) {
-      print("Error loading closest medication: $e");
-      if (mounted) {
         setState(() {
-          _closestMedName = ''; // Clear on error
-          _closestMedTimeStr = 'خطأ في التحميل';
+          _closestMedName = closest['name'];
+          _closestMedTimeStr =
+              _formatTimeOfDay(context, closest['doseTime'] as TimeOfDay);
+          _closestMedDocId = closest['docId'];
+          _isLoadingMed = false;
+        });
+      } else {
+        setState(() {
+          _closestMedName = '';
+          _closestMedTimeStr = '';
           _closestMedDocId = '';
           _isLoadingMed = false;
         });
       }
+    } catch (e) {
+      print("Error loading closest medication: $e");
+      setState(() {
+        _closestMedName = '';
+        _closestMedTimeStr = 'خطأ في التحميل';
+        _closestMedDocId = '';
+        _isLoadingMed = false;
+      });
     }
   }
 
-
   void _onItemTapped(int index) {
-    // Navigation logic remains the same, but ensure _loadClosestMed is called on return
-    if (_selectedIndex == index) return; // Do nothing if tapping the current item
-
+    // Navigation logic: update index and call routes based on index.
+    if (_selectedIndex == index) return;
     String? routeName;
     if (index == 1) routeName = "/personal_data";
     if (index == 2) routeName = "/settings";
 
     if (routeName != null) {
       Navigator.pushNamed(context, routeName).then((_) {
-        // After returning from profile or settings, update selection and reload meds
-        if (mounted) {
-          setState(() {
-            _selectedIndex = index;
-          });
-          _loadClosestMed(); // Reload potential changes
-        }
-      });
-    } else {
-      // For index 0 (Home) or any other index not navigating away
-      if (mounted) {
         setState(() {
           _selectedIndex = index;
         });
-        // Optionally reload meds even when switching to Home if needed
-        // _loadClosestMed();
-      }
+        _loadClosestMed();
+      });
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+      // Optionally reload meds if needed.
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -327,22 +289,22 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
           ),
-          // Main Content
-          SafeArea( // Ensure content is below status bar
-            child: RefreshIndicator( // Add pull-to-refresh
-              onRefresh: _loadClosestMed, // Reload meds on pull
+          // Main Content with Pull-to-Refresh
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: _loadClosestMed,
               child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(), // Enable scroll for RefreshIndicator
+                physics: const AlwaysScrollableScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25), // Adjusted padding
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end, // Align text to the right
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       // Welcome Message
                       Text(
                         _userName.isEmpty ? "مرحباً بك" : "مرحباً بك، $_userName",
                         style: TextStyle(
-                          fontSize: 26, // Slightly smaller
+                          fontSize: 26,
                           fontWeight: FontWeight.bold,
                           color: Colors.blue.shade800,
                         ),
@@ -351,14 +313,13 @@ class _MainPageState extends State<MainPage> {
                       Text(
                         "نتمنى لك يوماً صحياً",
                         style: TextStyle(
-                          fontSize: 18, // Slightly smaller
+                          fontSize: 18,
                           color: Colors.blue.shade600,
                         ),
                         textAlign: TextAlign.right,
                       ),
                       const SizedBox(height: 25),
-
-                      // Upcoming Dose Section Title
+                      // Upcoming Dose Section
                       Text(
                         "الجرعة القادمة",
                         style: TextStyle(
@@ -369,17 +330,15 @@ class _MainPageState extends State<MainPage> {
                         textAlign: TextAlign.right,
                       ),
                       const SizedBox(height: 10),
-
-                      // Upcoming Dose Card
                       Container(
-                        width: double.infinity, // Ensure container takes full width
+                        width: double.infinity,
                         padding: const EdgeInsets.all(15),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(15), // Consistent radius
+                          borderRadius: BorderRadius.circular(15),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.withValues(alpha: 0.2),
+                              color: Colors.grey.withOpacity(0.2),
                               spreadRadius: 1,
                               blurRadius: 5,
                               offset: const Offset(0, 3),
@@ -401,21 +360,19 @@ class _MainPageState extends State<MainPage> {
                             ),
                           ),
                         )
-                            : DoseTile( // Use the DoseTile here
+                            : DoseTile(
                           medicationName: _closestMedName,
-                          nextDose: _closestMedTimeStr, // Use the formatted time string
+                          nextDose: _closestMedTimeStr,
                           docId: _closestMedDocId,
-                          imageUrl: "", // No image for this simple tile
-                          onDelete: () {}, // No delete action here
-                          deletable: false, // Not deletable
+                          imageUrl: "", // No image shown here
+                          onDelete: () {},
+                          deletable: false,
                         ),
                       ),
                       const SizedBox(height: 30),
-
                       // Action Cards Section
-                      _buildActionCards(), // Extracted to a helper method
-
-                      const SizedBox(height: 20), // Bottom padding
+                      _buildActionCards(),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -431,7 +388,6 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  // Helper widget for Action Cards section
   Widget _buildActionCards() {
     return Column(
       children: [
@@ -439,12 +395,10 @@ class _MainPageState extends State<MainPage> {
           children: [
             Expanded(
               child: ActionCard(
-                icon: Icons.add_circle_outline, // Use outline icon
-                label: "إضافة دواء", // Shorter label
+                icon: Icons.add_circle_outline,
+                label: "إضافة دواء",
                 onTap: () {
-                  Navigator.pushNamed(context, '/add_dose')
-                      .then((result) {
-                    // If AddDose returns true (or any value indicating success), reload meds
+                  Navigator.pushNamed(context, '/add_dose').then((result) {
                     if (result != null) {
                       _loadClosestMed();
                     }
@@ -452,14 +406,13 @@ class _MainPageState extends State<MainPage> {
                 },
               ),
             ),
-            const SizedBox(width: 15), // Slightly less space
+            const SizedBox(width: 15),
             Expanded(
               child: ActionCard(
-                icon: Icons.calendar_month_outlined, // Use outline icon
+                icon: Icons.calendar_month_outlined,
                 label: "جدول الأدوية",
                 onTap: () {
                   Navigator.pushNamed(context, '/dose_schedule');
-                  // No need to reload meds after viewing schedule unless it can change data
                 },
               ),
             ),
@@ -467,7 +420,7 @@ class _MainPageState extends State<MainPage> {
         ),
         const SizedBox(height: 15),
         ActionCard(
-          icon: Icons.people_outline, // Use outline icon
+          icon: Icons.people_outline,
           label: "المرافقين",
           isFullWidth: true,
           onTap: () {
@@ -479,34 +432,31 @@ class _MainPageState extends State<MainPage> {
   }
 }
 
-
-// --- DoseTile remains the same (but imageUrl logic simplified) ---
-// --- DoseTile updated to allow name wrapping ---
+// -----------------------
+// DoseTile Widget for Closest Dose
+// -----------------------
 class DoseTile extends StatelessWidget {
   final String medicationName;
-  final String nextDose; // This is the formatted time string
+  final String nextDose; // formatted time string
   final String docId;
-  final String imageUrl; // Although not used in this specific context currently
+  final String imageUrl;
   final VoidCallback onDelete;
   final bool deletable;
-
   const DoseTile({
     super.key,
     required this.medicationName,
     required this.nextDose,
     required this.docId,
-    this.imageUrl = "", // Default to empty
-    required this.onDelete, // Still required, even if not used by this instance
-    this.deletable = true, // Still required
+    required this.imageUrl,
+    required this.onDelete,
+    this.deletable = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Using ListTile directly inside the Container in MainPage
-    // This widget builds the content *for* that container/ListTile slot
     return ListTile(
-      contentPadding: EdgeInsets.zero, // Use padding of the parent Container
-      leading: Container( // Use Container for icon background
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
         width: 50,
         height: 50,
         decoration: BoxDecoration(
@@ -515,36 +465,33 @@ class DoseTile extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Icon(
-          Icons.medication_liquid, // Using a consistent icon
+          Icons.medication_liquid,
           size: 30,
           color: Colors.blue.shade700,
         ),
       ),
       title: Text(
-        medicationName, // Display the full name
+        medicationName,
         style: TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.bold,
           color: Colors.blue.shade900,
         ),
-        // REMOVED: overflow: TextOverflow.ellipsis,
-        // By removing overflow, text will wrap automatically if it's too long
-        // You can optionally set maxLines if you want to limit wrapping
-        // maxLines: 2, // Example: Limit to 2 lines before using ellipsis
       ),
       subtitle: Text(
-        "الوقت: $nextDose", // Add prefix for clarity
-        style: TextStyle(
+        "الوقت: $nextDose",
+        style: const TextStyle(
           fontSize: 15,
           color: Colors.black54,
         ),
       ),
-      // No trailing widget as deletable is false for the main page upcoming dose
     );
   }
 }
 
-// --- ActionCard remains the same ---
+// -----------------------
+// ActionCard Widget
+// -----------------------
 class ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -561,13 +508,13 @@ class ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: isFullWidth ? double.infinity : null,
-      constraints: const BoxConstraints(minHeight: 90), // Min height
+      constraints: const BoxConstraints(minHeight: 90),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15), // Match card radius
+        borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.15), // Softer shadow
+              color: Colors.grey.withOpacity(0.15),
               blurRadius: 8,
               offset: const Offset(0, 4)),
         ],
@@ -577,22 +524,21 @@ class ActionCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(15),
           onTap: onTap,
-          child: Padding( // Add padding inside InkWell
+          child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 15.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 35, color: Colors.blue.shade700), // Smaller icon
+                Icon(icon, size: 35, color: Colors.blue.shade700),
                 const SizedBox(width: 12),
-                // Flexible allows text to wrap if needed, though less likely here
                 Flexible(
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14, // Smaller text
+                      fontSize: 14,
                       color: Colors.blue.shade800,
-                      fontWeight: FontWeight.w600, // Medium bold
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),

@@ -224,12 +224,11 @@ class _DoseScheduleState extends State<DoseSchedule> {
       print("Error: User not logged in for DoseSchedule.");
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          // Avoid popping if already disposed or not part of navigator
           if (Navigator.canPop(context)) {
             Navigator.of(context).pop();
           }
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("الرجاء تسجيل الدخول أولاً"))
+            const SnackBar(content: Text("الرجاء تسجيل الدخول أولاً")),
           );
         }
       });
@@ -245,90 +244,81 @@ class _DoseScheduleState extends State<DoseSchedule> {
     super.dispose();
   }
 
-  // Fetch doses from Firestore
+  // Fetch doses from Firestore; adjust parsing based on the data format created in add_dose.dart.
   Future<void> _fetchDoses() async {
-    if (!mounted) return; // Check if widget is still mounted
-    setState(() { _isLoading = true; });
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
 
     final Map<DateTime, List<Map<String, dynamic>>> newDoses = {};
-
-    // Defensive check: Ensure _user is initialized (should be if logic is correct)
-    if (FirebaseAuth.instance.currentUser == null) {
-      print("Error in _fetchDoses: User became null.");
-      if (mounted) {
-        setState(() { _isLoading = false; _doses = {}; });
-        // Optionally navigate back or show persistent error
-      }
-      return;
-    }
-    // Use the initialized _user variable
     final String userId = _user.uid;
-
 
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(userId) // Use stored user ID
+          .doc(userId)
           .collection('medicines')
           .get();
-
-      if (!mounted) return; // Check again after async gap
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final String medicationName = data['name'] as String? ?? 'دواء غير مسمى';
+        final String dosage = data['dosage'] as String? ?? 'غير محددة';
         final Timestamp? startTimestamp = data['startDate'] as Timestamp?;
         final Timestamp? endTimestamp = data['endDate'] as Timestamp?;
 
+        // If no start date, skip document.
         if (startTimestamp == null) {
           print('Document ${doc.id} missing start date. Skipping.');
           continue;
         }
 
-        final DateTime startDate = startTimestamp.toDate();
-        final DateTime? endDate = endTimestamp?.toDate();
+        // Determine frequency type from the 'frequency' field (e.g. "2 يومي" or "2 اسبوعي")
+        final String frequencyRaw = data['frequency'] as String? ?? '1 يومي';
+        final List<String> frequencyParts = frequencyRaw.split(" ");
+        final String frequencyType = frequencyParts.length > 1 ? frequencyParts[1] : 'يومي';
+
         final List<dynamic> timesRaw = data['times'] ?? [];
-        final List<TimeOfDay> timesParsed = timesRaw
-            .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null) // Use TimeUtils
-            .whereType<TimeOfDay>()
-            .toList();
-
-        if (timesParsed.isEmpty) {
-          print('Document ${doc.id} has no valid times. Skipping.');
-          continue;
-        }
-
-        final String frequencyType = data['frequencyType'] as String? ?? 'يومي';
-        final List<int> weeklyDays = (data['weeklyDays'] as List<dynamic>?)
-            ?.whereType<int>()
-            ?.toList() ?? [];
         final String imageUrl = data['imageUrl'] as String? ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] as String? ?? '';
 
+        final DateTime startDate = startTimestamp.toDate();
+        final DateTime? endDate = endTimestamp?.toDate();
+
         DateTime currentDate = startDate;
-        // Iterate through dates relevant to the medication schedule
+        // Iterate through dates relevant to the medication schedule.
         while (endDate == null || !currentDate.isAfter(endDate)) {
-          // Normalize date to ignore time component for map key
           final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
           bool shouldAddDoseToday = false;
+          List<TimeOfDay> timesParsed = [];
 
-          // Determine if the dose should be added based on frequency
           if (frequencyType == 'يومي') {
-            shouldAddDoseToday = true;
+            // For daily, timesRaw is a list of strings.
+            timesParsed = timesRaw
+                .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null)
+                .whereType<TimeOfDay>()
+                .toList();
+            shouldAddDoseToday = timesParsed.isNotEmpty;
           } else if (frequencyType == 'اسبوعي') {
-            if (weeklyDays.contains(currentDate.weekday)) {
-              shouldAddDoseToday = true;
-            }
+            // For weekly, timesRaw is a list of maps with keys "day" and "time"
+            timesParsed = timesRaw
+                .whereType<Map>()
+                .where((map) => map['day'] == currentDate.weekday)
+                .map((map) => TimeUtils.parseTime(map['time'].toString()))
+                .whereType<TimeOfDay>()
+                .toList();
+            shouldAddDoseToday = timesParsed.isNotEmpty;
           }
-          // Add logic for other frequency types if needed
 
           if (shouldAddDoseToday) {
             newDoses.putIfAbsent(normalizedDate, () => []);
             for (var time in timesParsed) {
               newDoses[normalizedDate]!.add({
                 'medicationName': medicationName,
-                'timeOfDay': time, // Store TimeOfDay for sorting
-                'timeString': TimeUtils.formatTimeOfDay(context, time), // Use TimeUtils
+                'dosage': dosage,
+                'timeOfDay': time, // Store for sorting
+                'timeString': TimeUtils.formatTimeOfDay(context, time),
                 'docId': doc.id,
                 'imageUrl': imageUrl,
                 'imgbbDeleteHash': imgbbDeleteHash,
@@ -337,22 +327,24 @@ class _DoseScheduleState extends State<DoseSchedule> {
           }
 
           currentDate = currentDate.add(const Duration(days: 1));
-          // Safety break for potentially long loops
           if (endDate != null && currentDate.isAfter(endDate)) break;
           if (endDate == null && currentDate.year > DateTime.now().year + 10) {
-            print("Warning: Medication ${doc.id} seems to have no end date, stopping iteration after 10 years.");
+            print("Warning: Medication ${doc.id} seems to have no end date; stopping iteration after 10 years.");
             break;
           }
         }
       }
 
-      // Sort doses within each day by time
+      // Sort doses within each day by time and then by medication name.
       newDoses.forEach((date, meds) {
         meds.sort((a, b) {
           final TimeOfDay timeA = a['timeOfDay'];
           final TimeOfDay timeB = b['timeOfDay'];
-          if (timeA.hour != timeB.hour) return timeA.hour.compareTo(timeB.hour);
-          return timeA.minute.compareTo(timeB.minute);
+          final int cmp = timeA.hour != timeB.hour
+              ? timeA.hour.compareTo(timeB.hour)
+              : timeA.minute.compareTo(timeB.minute);
+          if (cmp != 0) return cmp;
+          return a['medicationName'].compareTo(b['medicationName']);
         });
       });
 
@@ -366,15 +358,18 @@ class _DoseScheduleState extends State<DoseSchedule> {
       print('Error fetching doses: $e');
       print(stackTrace);
       if (mounted) {
-        setState(() { _isLoading = false; _doses = {}; }); // Clear doses on error
+        setState(() {
+          _isLoading = false;
+          _doses = {};
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("حدث خطأ أثناء تحميل جدول الأدوية."))
+          const SnackBar(content: Text("حدث خطأ أثناء تحميل جدول الأدوية.")),
         );
       }
     }
   }
 
-  // Get events for a specific day (used by TableCalendar)
+  // Get events for a specific day (used by TableCalendar).
   List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
     final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
     return _doses[normalizedDay] ?? [];
@@ -382,11 +377,11 @@ class _DoseScheduleState extends State<DoseSchedule> {
 
   @override
   Widget build(BuildContext context) {
-    // Handle case where user wasn't logged in or became logged out
     if (!_isLoading && FirebaseAuth.instance.currentUser == null) {
       return Scaffold(
         body: Center(
-          child: Text("الرجاء تسجيل الدخول لعرض الجدول.", style: TextStyle(color: Colors.red.shade800)),
+          child: Text("الرجاء تسجيل الدخول لعرض الجدول.",
+              style: TextStyle(color: Colors.red.shade800)),
         ),
       );
     }
@@ -403,14 +398,15 @@ class _DoseScheduleState extends State<DoseSchedule> {
         child: SafeArea(
           child: Column(
             children: [
-              // Custom Header
+              // Custom Header.
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new, color: Colors.blue.shade800, size: 24),
+                      icon: Icon(Icons.arrow_back_ios_new,
+                          color: Colors.blue.shade800, size: 24),
                       onPressed: () => Navigator.pop(context),
                     ),
                     Text(
@@ -422,11 +418,11 @@ class _DoseScheduleState extends State<DoseSchedule> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(width: 48), // Balance the row
+                    const SizedBox(width: 48), // Balance the row.
                   ],
                 ),
               ),
-              // Scrollable Content Area
+              // Scrollable Content Area.
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
@@ -436,7 +432,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
                     child: Column(
                       children: [
                         const SizedBox(height: 10),
-                        // Calendar Card
+                        // Calendar Card.
                         Card(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -445,7 +441,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: TableCalendar<Map<String, dynamic>>(
-                              locale: 'ar_SA', // Arabic locale
+                              locale: 'ar_SA', // Arabic locale.
                               focusedDay: _focusedDay,
                               firstDay: DateTime.utc(DateTime.now().year - 2, 1, 1),
                               lastDay: DateTime.utc(DateTime.now().year + 5, 12, 31),
@@ -464,11 +460,14 @@ class _DoseScheduleState extends State<DoseSchedule> {
                                   fontWeight: FontWeight.bold,
                                   color: Colors.blue.shade800,
                                 ),
-                                leftChevronIcon: Icon(Icons.chevron_left, color: Colors.blue.shade600),
-                                rightChevronIcon: Icon(Icons.chevron_right, color: Colors.blue.shade600),
+                                leftChevronIcon: Icon(Icons.chevron_left,
+                                    color: Colors.blue.shade600),
+                                rightChevronIcon: Icon(Icons.chevron_right,
+                                    color: Colors.blue.shade600),
                               ),
                               calendarBuilders: CalendarBuilders(
-                                  markerBuilder: (context, date, events) => const SizedBox.shrink(),
+                                markerBuilder: (context, date, events) =>
+                                const SizedBox.shrink(),
                               ),
                               calendarStyle: CalendarStyle(
                                 outsideDaysVisible: false,
@@ -480,8 +479,9 @@ class _DoseScheduleState extends State<DoseSchedule> {
                                   color: Colors.lightBlueAccent,
                                   shape: BoxShape.circle,
                                 ),
-                                // Ensure weekend style is subtle or match default
-                                weekendTextStyle: TextStyle(color: Colors.red[600]), // Example
+                                weekendTextStyle: TextStyle(
+                                  color: Colors.red[600],
+                                ),
                               ),
                               onFormatChanged: (format) {
                                 if (_calendarFormat != format) {
@@ -489,38 +489,38 @@ class _DoseScheduleState extends State<DoseSchedule> {
                                 }
                               },
                               onPageChanged: (focusedDay) {
-                                // No need to call setState for focusedDay changes triggered by page change
                                 _focusedDay = focusedDay;
                               },
                               onDaySelected: (selectedDay, focusedDay) {
                                 if (!isSameDay(_selectedDay, selectedDay)) {
                                   setState(() {
                                     _selectedDay = selectedDay;
-                                    _focusedDay = focusedDay; // Update focused day as well
+                                    _focusedDay = focusedDay;
                                   });
                                 }
                               },
-                              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                              selectedDayPredicate: (day) =>
+                                  isSameDay(_selectedDay, day),
                             ),
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Dose List Section Title
+                        // Dose List Section Title.
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0, vertical: 8.0),
                           child: Text(
-                            // Use intl DateFormat for localized date string
                             "جرعات يوم: ${DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay)}",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87),
                             textAlign: TextAlign.center,
                           ),
                         ),
-
-                        // Dose List
+                        // Dose List.
                         _buildDoseList(),
-
-                        const SizedBox(height: 20), // Padding at the bottom
+                        const SizedBox(height: 20), // Bottom Padding.
                       ],
                     ),
                   ),
@@ -533,7 +533,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
     );
   }
 
-  // Helper widget to build the list of doses for the selected day
+  // Helper widget to build the list of doses for the selected day.
   Widget _buildDoseList() {
     final events = _getEventsForDay(_selectedDay);
     if (events.isEmpty) {
@@ -542,29 +542,28 @@ class _DoseScheduleState extends State<DoseSchedule> {
         child: Center(
           child: Text(
             "لا توجد جرعات لهذا اليوم",
-            style: TextStyle( fontSize: 16, color: Colors.grey.shade600,),
+            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
           ),
         ),
       );
     } else {
       return ListView.builder(
-        shrinkWrap: true, // Essential inside SingleChildScrollView
-        physics: const NeverScrollableScrollPhysics(), // Disable its own scrolling
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: events.length,
         itemBuilder: (context, index) {
           final dose = events[index];
-          // Ensure all required fields exist before creating DoseTile
-          final String docId = dose['docId'] ?? 'missing_doc_id_${index}';
+          final String docId = dose['docId'] ?? 'missing_doc_id_$index';
           final String timeString = dose['timeString'] ?? '??:??';
 
           return DoseTile(
-            key: ValueKey(docId + timeString), // Unique key for the tile
+            key: ValueKey(docId + timeString),
             medicationName: dose['medicationName'] ?? 'غير مسمى',
             nextDose: timeString,
             docId: docId,
             imageUrl: dose['imageUrl'] ?? '',
             imgbbDeleteHash: dose['imgbbDeleteHash'] ?? '',
-            onDataChanged: _fetchDoses, // Pass the refresh callback
+            onDataChanged: _fetchDoses,
           );
         },
       );
@@ -581,7 +580,7 @@ class DoseTile extends StatefulWidget {
   final String docId;
   final String imageUrl;
   final String imgbbDeleteHash;
-  final VoidCallback onDataChanged; // Callback to refresh list after actions
+  final VoidCallback onDataChanged;
 
   const DoseTile({
     super.key,
@@ -598,9 +597,8 @@ class DoseTile extends StatefulWidget {
 }
 
 class _DoseTileState extends State<DoseTile> {
-  bool _isExpanded = false; // State to track if the tile is expanded
+  bool _isExpanded = false;
 
-  // --- Reusable Confirmation Dialog ---
   Future<bool?> _showConfirmationDialog({
     required BuildContext context,
     required String title,
@@ -617,11 +615,11 @@ class _DoseTileState extends State<DoseTile> {
         actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false), // Cancel
+            onPressed: () => Navigator.of(context).pop(false),
             child: const Text("إلغاء"),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true), // Confirm
+            onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: confirmButtonColor,
               foregroundColor: Colors.white,
@@ -633,9 +631,6 @@ class _DoseTileState extends State<DoseTile> {
     );
   }
 
-  // --- Action Handlers ---
-
-  // Navigate to Edit Screen
   Future<void> _handleEdit(BuildContext context) async {
     final confirmed = await _showConfirmationDialog(
       context: context,
@@ -646,26 +641,23 @@ class _DoseTileState extends State<DoseTile> {
     );
 
     if (confirmed == true && mounted) {
-      print("Navigating to edit screen for docId: ${widget.docId}");
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => EditMedicationScreen(docId: widget.docId),
         ),
       ).then((_) {
-        // After returning from Edit screen, refresh the schedule data
-        print("Returned from Edit screen, refreshing data...");
         widget.onDataChanged();
       });
     }
   }
 
-  // Mark Medication as Finished (Update endDate in Firestore)
   Future<void> _handleFinishMed(BuildContext context) async {
     final confirmed = await _showConfirmationDialog(
       context: context,
       title: "إنهاء الدواء",
-      content: "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى اليوم ولن يظهر في الأيام القادمة.",
+      content:
+      "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى اليوم ولن يظهر في الأيام القادمة.",
       confirmText: "نعم، إنهاء",
       confirmButtonColor: Colors.red.shade700,
     );
@@ -674,8 +666,7 @@ class _DoseTileState extends State<DoseTile> {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("خطأ: المستخدم غير مسجل."))
-        );
+            const SnackBar(content: Text("خطأ: المستخدم غير مسجل.")));
         return;
       }
 
@@ -686,63 +677,53 @@ class _DoseTileState extends State<DoseTile> {
               .doc(user.uid)
               .collection('medicines')
               .doc(widget.docId)
-              .update({'endDate': Timestamp.now()}); // Set end date to now
+              .update({'endDate': Timestamp.now()});
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("تم إنهاء الدواء بنجاح"), backgroundColor: Colors.orange),
             );
-            widget.onDataChanged(); // Refresh the list
+            widget.onDataChanged();
           }
         } catch (e) {
-          print("Error finishing medication (${widget.docId}): $e");
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("فشل إنهاء الدواء: $e"), backgroundColor: Colors.red)
-            );
+                SnackBar(content: Text("فشل إنهاء الدواء: $e"), backgroundColor: Colors.red));
           }
         }
       }
     }
   }
 
-  // Trigger Deletion after Confirmation
   Future<void> _handleDelete(BuildContext context) async {
     final confirmed = await _showConfirmationDialog(
       context: context,
       title: "تأكيد الحذف",
-      content: "هل أنت متأكد من حذف هذا الدواء؟ سيتم حذف صورته أيضاً إذا كانت مرتبطة (لا يمكن التراجع عن هذا الإجراء).",
+      content:
+      "هل أنت متأكد من حذف هذا الدواء؟ سيتم حذف صورته أيضاً إذا كانت مرتبطة (لا يمكن التراجع عن هذا الإجراء).",
       confirmText: "نعم، حذف",
       confirmButtonColor: Colors.red.shade700,
     );
 
     if (confirmed == true) {
-      // Call the actual deletion logic only if confirmed
       await _deleteMedication(context);
     }
   }
 
-  // Actual Deletion Logic (Firestore & ImgBB)
   Future<void> _deleteMedication(BuildContext context) async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("خطأ: المستخدم غير مسجل."))
-      );
+          const SnackBar(content: Text("خطأ: المستخدم غير مسجل.")));
       return;
     }
 
     if (user != null) {
-      // Indicate deletion in progress (optional)
-      // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("جارٍ الحذف...")));
-
       try {
-        // 1. Delete ImgBB image *first* if hash exists (INSECURE KEY HANDLING)
         if (widget.imgbbDeleteHash.isNotEmpty) {
-          await _deleteImgBBImage(widget.imgbbDeleteHash); // Pass only hash
+          await _deleteImgBBImage(widget.imgbbDeleteHash);
         }
 
-        // 2. Delete Firestore document
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -750,33 +731,26 @@ class _DoseTileState extends State<DoseTile> {
             .doc(widget.docId)
             .delete();
 
-        // 3. Show success message and trigger list refresh via callback
-        if (mounted) { // Check if widget is still in the tree
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("تم حذف الدواء بنجاح"), backgroundColor: Colors.green),
           );
-          widget.onDataChanged(); // Refresh the list in the parent widget
+          widget.onDataChanged();
         }
-
       } catch (e) {
-        print("Error deleting medication (${widget.docId}): $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("فشل حذف الدواء: $e"), backgroundColor: Colors.red)
-          );
+              SnackBar(content: Text("فشل حذف الدواء: $e"), backgroundColor: Colors.red));
         }
       }
     }
   }
 
-  // Helper to delete image from ImgBB (INSECURE KEY HANDLING)
   Future<void> _deleteImgBBImage(String deleteHash) async {
-    // CRITICAL SECURITY WARNING: API Key should not be hardcoded.
-    // Replace with a secure method (e.g., call a Cloud Function).
-    const String imgbbApiKey = 'YOUR_IMGBB_API_KEY';
-    if (imgbbApiKey == 'YOUR_IMGBB_API_KEY' || imgbbApiKey.isEmpty) {
+    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+    if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
       print("WARNING: ImgBB API Key not configured securely. Skipping image deletion.");
-      return; // Stop deletion if key isn't configured
+      return;
     }
 
     final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
@@ -786,20 +760,16 @@ class _DoseTileState extends State<DoseTile> {
         print("ImgBB image deleted successfully. Response: ${response.body}");
       } else {
         print("Failed to delete image from ImgBB ($deleteHash). Status: ${response.statusCode}, Body: ${response.body}");
-        // Optionally, inform the user that the document was deleted but the image might remain.
       }
     } catch (e) {
       print("Error deleting image from ImgBB ($deleteHash): $e");
-      // Optionally, inform the user about the image deletion failure.
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    // Main visual content of the tile
     Widget tileContent = ListTile(
-      leading: EnlargeableImage( // Use the EnlargeableImage widget defined above
+      leading: EnlargeableImage(
         imageUrl: widget.imageUrl,
         width: 60,
         height: 60,
@@ -821,33 +791,32 @@ class _DoseTileState extends State<DoseTile> {
           color: Colors.blue.shade600,
         ),
       ),
-      trailing: Icon( // Icon indicates expand/collapse state
+      trailing: Icon(
         _isExpanded ? Icons.expand_less : Icons.expand_more,
         color: Colors.grey.shade500,
       ),
     );
 
-    // Action buttons shown when expanded
     Widget actionButtons = Padding(
       padding: const EdgeInsets.only(top: 0, bottom: 8.0, right: 16.0, left: 16.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildActionButton( // Edit Button
+          _buildActionButton(
             context: context,
             icon: Icons.edit_note,
             label: "تعديل",
             color: Colors.orange.shade700,
             onPressed: () => _handleEdit(context),
           ),
-          _buildActionButton( // Finish Button
+          _buildActionButton(
             context: context,
             icon: Icons.check_circle_outline,
             label: "إنهاء",
-            color: Colors.red.shade700, // Use a distinct color for stop/finish
+            color: Colors.red.shade700,
             onPressed: () => _handleFinishMed(context),
           ),
-          _buildActionButton( // Delete Button
+          _buildActionButton(
             context: context,
             icon: Icons.delete_forever_outlined,
             label: "حذف",
@@ -858,27 +827,24 @@ class _DoseTileState extends State<DoseTile> {
       ),
     );
 
-
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
       elevation: 2,
-      // Use InkWell for tap detection and ripple effect on the whole card
       child: InkWell(
-        borderRadius: BorderRadius.circular(12), // Match card shape
-        onTap: () => setState(() => _isExpanded = !_isExpanded), // Toggle expansion
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _isExpanded = !_isExpanded),
         child: Column(
-          mainAxisSize: MainAxisSize.min, // Fit content height
+          mainAxisSize: MainAxisSize.min,
           children: [
-            tileContent, // Always visible part
-            // Animated transition for showing/hiding action buttons
+            tileContent,
             AnimatedCrossFade(
-              firstChild: Container(), // Empty container when collapsed
-              secondChild: actionButtons, // Action buttons row when expanded
+              firstChild: Container(),
+              secondChild: actionButtons,
               crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-              duration: const Duration(milliseconds: 250), // Animation speed
+              duration: const Duration(milliseconds: 250),
             ),
           ],
         ),
@@ -886,7 +852,6 @@ class _DoseTileState extends State<DoseTile> {
     );
   }
 
-  // Helper to build consistently styled action buttons
   Widget _buildActionButton({
     required BuildContext context,
     required IconData icon,
@@ -900,7 +865,7 @@ class _DoseTileState extends State<DoseTile> {
       onPressed: onPressed,
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap, // Minimize padding
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }

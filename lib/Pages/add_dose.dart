@@ -6,7 +6,192 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
+//
+// --------------------
+// Time Utilities
+// --------------------
+class TimeUtils {
+  static TimeOfDay? parseTime(String timeStr) {
+    try {
+      final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
+      DateTime parsedDt = ampmFormat.parseStrict(timeStr);
+      return TimeOfDay.fromDateTime(parsedDt);
+    } catch (_) {}
+    try {
+      String normalizedTime =
+      timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
+      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US');
+      DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
+      return TimeOfDay.fromDateTime(parsedDt);
+    } catch (_) {}
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length == 2) {
+        int hour = int.parse(parts[0]);
+        int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+        if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+          return TimeOfDay(hour: hour, minute: minute);
+        }
+      }
+    } catch (_) {}
+    print("Failed to parse time string: $timeStr");
+    return null;
+  }
+
+  static String formatTimeOfDay(BuildContext context, TimeOfDay time) {
+    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final String minute = time.minute.toString().padLeft(2, '0');
+    final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
+    return '$hour:$minute $period';
+  }
+}
+
+//
+// --------------------
+// Custom Inline Autocomplete Widget (MedicineAutocomplete)
+// --------------------
+class MedicineAutocomplete extends StatefulWidget {
+  final List<String> suggestions;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final void Function(String) onSelected;
+
+  const MedicineAutocomplete({
+    Key? key,
+    required this.suggestions,
+    required this.controller,
+    required this.focusNode,
+    required this.onSelected,
+  }) : super(key: key);
+
+  @override
+  _MedicineAutocompleteState createState() => _MedicineAutocompleteState();
+}
+
+class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
+  List<String> _filteredSuggestions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_filter);
+    widget.focusNode.addListener(_handleFocusChange);
+    _filter();
+  }
+
+  void _filter() {
+    final text = widget.controller.text.toLowerCase().trim();
+    if (text.length < 2) {
+      setState(() {
+        _filteredSuggestions = [];
+      });
+    } else {
+      setState(() {
+        _filteredSuggestions =
+            widget.suggestions.where((s) => s.toLowerCase().contains(text)).toList();
+      });
+    }
+  }
+
+  void _handleFocusChange() {
+    if (!widget.focusNode.hasFocus) {
+      setState(() {
+        _filteredSuggestions = [];
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_filter);
+    widget.focusNode.removeListener(_handleFocusChange);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final limitedSuggestions = _filteredSuggestions.take(3).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          textAlign: TextAlign.center,
+          decoration: InputDecoration(
+            hintText: 'ابحث عن اسم الدواء...',
+            prefixIcon: Icon(Icons.search, color: Colors.blue.shade800),
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.blue.shade800, width: 1.5),
+            ),
+            contentPadding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          ),
+          validator: (value) =>
+          (value == null || value.trim().isEmpty) ? 'الرجاء إدخال اسم الدواء' : null,
+        ),
+        if (limitedSuggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: limitedSuggestions.length,
+              separatorBuilder: (context, index) =>
+                  Divider(color: Colors.grey.shade300, height: 1),
+              itemBuilder: (context, index) {
+                final suggestion = limitedSuggestions[index];
+                return InkWell(
+                  onTap: () {
+                    widget.onSelected(suggestion);
+                    widget.controller.text = suggestion;
+                    widget.focusNode.unfocus();
+                    setState(() {
+                      _filteredSuggestions = [];
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(suggestion, style: const TextStyle(fontSize: 16)),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+//
+// --------------------
+// AddDose Widget
+// --------------------
 class AddDose extends StatefulWidget {
   const AddDose({super.key});
 
@@ -26,6 +211,7 @@ class _AddDoseState extends State<AddDose> {
   final TextEditingController _dosageController = TextEditingController();
   String _dosageUnit = 'ملغم';
   List<TimeOfDay?> _selectedTimes = [];
+  List<bool> _isAutoGeneratedTimes = [];
   String _frequencyType = 'يومي';
   int _frequencyNumber = 1;
   DateTime? _startDate = DateTime.now();
@@ -39,17 +225,22 @@ class _AddDoseState extends State<AddDose> {
   final List<String> _frequencyTypes = ['يومي', 'اسبوعي'];
   final List<int> _frequencyNumbers = [1, 2, 3, 4, 5, 6];
 
+  // For weekly scheduling:
+  Map<int, TimeOfDay?> _weeklyTimes = {};
+  Map<int, bool> _weeklyAutoGenerated = {};
+  Set<int> _selectedWeekdays = {};
+
   @override
   void initState() {
     super.initState();
     _medicineNamesFuture = _loadMedicineNames();
-    _updateTimeFields();
+    _selectedTimes = List.filled(_frequencyNumber, null, growable: true);
+    _isAutoGeneratedTimes = List.filled(_frequencyNumber, false, growable: true);
   }
 
   Future<List<String>> _loadMedicineNames() async {
     try {
-      final String jsonString =
-      await rootBundle.loadString('assets/Mediciens/trade_names.json');
+      final String jsonString = await rootBundle.loadString('assets/Mediciens/trade_names.json');
       final List<dynamic> jsonList = json.decode(jsonString);
       return List<String>.from(jsonList);
     } catch (e) {
@@ -58,19 +249,60 @@ class _AddDoseState extends State<AddDose> {
     }
   }
 
+  /// Update daily times and auto-generated flags.
   void _updateTimeFields() {
     setState(() {
       _selectedTimes = List.generate(
-        _frequencyNumber,
-            (index) => _selectedTimes.length > index ? _selectedTimes[index] : null,
-      );
+          _frequencyNumber,
+              (index) =>
+          index < _selectedTimes.length ? _selectedTimes[index] : null);
+      _isAutoGeneratedTimes = List.generate(
+          _frequencyNumber,
+              (index) =>
+          index < _isAutoGeneratedTimes.length ? _isAutoGeneratedTimes[index] : false);
+      if (_frequencyType == 'يومي' && _selectedTimes.isNotEmpty && _selectedTimes[0] != null) {
+        _autoFillDosageTimes();
+      }
+    });
+  }
+
+  /// Auto-fill remaining daily dosage times based on the first dose.
+  void _autoFillDosageTimes() {
+    if (_selectedTimes.isNotEmpty && _selectedTimes[0] != null) {
+      final firstDose = _selectedTimes[0]!;
+      DateTime base = DateTime(2000, 1, 1, firstDose.hour, firstDose.minute);
+      int intervalMinutes = (1440 / _frequencyNumber).round();
+      for (int i = 1; i < _frequencyNumber; i++) {
+        DateTime newTime = base.add(Duration(minutes: intervalMinutes * i));
+        TimeOfDay newTimeOfDay = TimeOfDay(hour: newTime.hour, minute: newTime.minute);
+        setState(() {
+          _selectedTimes[i] = newTimeOfDay;
+          _isAutoGeneratedTimes[i] = true;
+        });
+      }
+    }
+  }
+
+  /// Initialize weekly schedule maps for the selected weekdays.
+  void _initializeWeeklySchedule() {
+    setState(() {
+      // Ensure for each selected day, there's an entry.
+      for (int day in _selectedWeekdays) {
+        if (!_weeklyTimes.containsKey(day)) {
+          _weeklyTimes[day] = null;
+          _weeklyAutoGenerated[day] = false;
+        }
+      }
+      // Remove any days not selected.
+      _weeklyTimes.removeWhere((key, value) => !_selectedWeekdays.contains(key));
+      _weeklyAutoGenerated.removeWhere((key, value) => !_selectedWeekdays.contains(key));
     });
   }
 
   Future<void> _selectStartDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _startDate ?? DateTime.now(), // Use current selection or now
+      initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(DateTime.now().year + 5),
     );
@@ -80,8 +312,8 @@ class _AddDoseState extends State<AddDose> {
   Future<void> _selectEndDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _endDate ?? _startDate ?? DateTime.now(), // Use selection or start date or now
-      firstDate: _startDate ?? DateTime.now(), // Cannot be before start date
+      initialDate: _endDate ?? _startDate ?? DateTime.now(),
+      firstDate: _startDate ?? DateTime.now(),
       lastDate: DateTime(DateTime.now().year + 5),
     );
     if (picked != null) setState(() => _endDate = picked);
@@ -90,18 +322,47 @@ class _AddDoseState extends State<AddDose> {
   Future<void> _selectTime(int index) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: _selectedTimes[index] ?? TimeOfDay.now(), // Use current selection or now
+      initialTime: _selectedTimes[index] ?? TimeOfDay.now(),
     );
-    if (picked != null) setState(() => _selectedTimes[index] = picked);
+    if (picked != null) {
+      setState(() {
+        _selectedTimes[index] = picked;
+        _isAutoGeneratedTimes[index] = false;
+        if (index == 0 && _frequencyType == 'يومي') {
+          _autoFillDosageTimes();
+        }
+      });
+    }
+  }
+
+  Future<void> _selectWeeklyTime(int day) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _weeklyTimes[day] ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _weeklyTimes[day] = picked;
+        _weeklyAutoGenerated[day] = false;
+        // If this is the first selected day (sorted by day number), auto-fill for the others.
+        List<int> sortedDays = _selectedWeekdays.toList()..sort();
+        if (sortedDays.isNotEmpty && day == sortedDays.first) {
+          for (int otherDay in sortedDays.skip(1)) {
+            if (_weeklyTimes[otherDay] == null) {
+              _weeklyTimes[otherDay] = picked;
+              _weeklyAutoGenerated[otherDay] = true;
+            }
+          }
+        }
+      });
+    }
   }
 
   Future<void> _pickImage() async {
     try {
-      final pickedFile =
-      await ImagePicker().pickImage(source: ImageSource.camera);
+      final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
       if (pickedFile != null) {
         setState(() => _capturedImage = File(pickedFile.path));
-        // Start upload immediately after picking
         _uploadImageToImgBB(_capturedImage!).catchError((e) {
           print("Error initiating image upload: $e");
           _showBlockingAlert("خطأ", "حدث خطأ أثناء بدء تحميل الصورة");
@@ -122,7 +383,7 @@ class _AddDoseState extends State<AddDose> {
       final response = await http.post(url, body: {'image': base64Image});
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        if (mounted) { // Check if the widget is still in the tree
+        if (mounted) {
           setState(() {
             _uploadedImageUrl = jsonResponse['data']['url'];
           });
@@ -130,7 +391,6 @@ class _AddDoseState extends State<AddDose> {
         print("Image uploaded to ImgBB: $_uploadedImageUrl");
       } else {
         print("ImgBB upload failed: ${response.body}");
-        // Optionally show an error to the user here
         if (mounted) {
           _showBlockingAlert("خطأ تحميل", "فشل تحميل الصورة. رمز الحالة: ${response.statusCode}");
         }
@@ -144,23 +404,20 @@ class _AddDoseState extends State<AddDose> {
   }
 
   void _showBlockingAlert(String title, String message, {VoidCallback? onOk}) {
-    // Ensure context is valid before showing dialog
     if (!mounted) return;
     showDialog(
       context: context,
-      barrierDismissible: onOk == null, // Allow dismissal only if no specific action
+      barrierDismissible: onOk == null,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
             TextButton(
-              child: const Text("حسناً"), // Changed to Arabic "OK"
+              child: const Text("حسناً"),
               onPressed: () {
                 Navigator.of(context).pop();
-                if (onOk != null) {
-                  onOk();
-                }
+                if (onOk != null) onOk();
               },
             )
           ],
@@ -170,40 +427,44 @@ class _AddDoseState extends State<AddDose> {
   }
 
   void _submitForm() async {
-    // Ensure the last form page is valid
-    if (!_formKeyPage3.currentState!.validate()) {
-      return; // Stop if validation fails
-    }
-
+    if (!_formKeyPage3.currentState!.validate()) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _showBlockingAlert("خطأ", "المستخدم غير مسجل الدخول.");
-      return; // Stop if no user
+      return;
     }
-
-    // Check if an image was captured but is still uploading
     if (_capturedImage != null && _uploadedImageUrl == null) {
-      _showBlockingAlert(
-          "انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار لحظات ثم المحاولة مرة أخرى.");
-      return; // Stop and inform user
+      _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار لحظات ثم المحاولة مرة أخرى.");
+      return;
+    }
+    dynamic schedule;
+    if (_frequencyType == 'اسبوعي') {
+      if (_selectedWeekdays.isEmpty || _selectedWeekdays.length > 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('الرجاء تحديد من 1 إلى 6 أيام')),
+        );
+        return;
+      }
+      List<int> sortedDays = _selectedWeekdays.toList()..sort();
+      schedule = sortedDays.map((day) {
+        final time = _weeklyTimes[day];
+        return {
+          'day': day,
+          'time': time != null ? TimeUtils.formatTimeOfDay(context, time) : ''
+        };
+      }).toList();
     }
 
-    // Prepare data for Firestore
-    final newMedicine = <String, dynamic>{ // Explicit type
+    final newMedicine = <String, dynamic>{
       'userId': user.uid,
-      'name': _nameController.text.trim(), // Trim whitespace
-      'dosage': '${_dosageController.text.trim()} $_dosageUnit', // Trim whitespace
+      'name': _nameController.text.trim(),
+      'dosage': '${_dosageController.text.trim()} $_dosageUnit',
       'frequency': '$_frequencyNumber $_frequencyType',
-      'times': _selectedTimes
-          .map((t) => t?.format(context)) // Format TimeOfDay
-          .where((t) => t != null) // Filter out potential nulls if any step failed
-          .toList(),
-      'startDate': _startDate != null
-          ? Timestamp.fromDate(_startDate!) // Store as Timestamp
-          : null,
-      'endDate': _endDate != null
-          ? Timestamp.fromDate(_endDate!) // Store as Timestamp
-          : null,
+      'times': _frequencyType == 'يومي'
+          ? _selectedTimes.map((t) => t?.format(context)).where((t) => t != null).toList()
+          : schedule,
+      'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+      'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
       'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -220,10 +481,7 @@ class _AddDoseState extends State<AddDose> {
           .add(newMedicine);
 
       _showBlockingAlert("نجاح", "تمت إضافة الدواء بنجاح!", onOk: () {
-        // Ensure navigation happens only if the widget is still mounted
-        if (mounted) {
-          Navigator.pop(context, true); // Pop with result true indicates success
-        }
+        if (mounted) Navigator.pop(context, true);
       });
     } catch (e) {
       print("❌ Firestore error: $e");
@@ -231,134 +489,227 @@ class _AddDoseState extends State<AddDose> {
     }
   }
 
+  String _dayName(int day) {
+    switch (day) {
+      case 1:
+        return "الإثنين";
+      case 2:
+        return "الثلاثاء";
+      case 3:
+        return "الأربعاء";
+      case 4:
+        return "الخميس";
+      case 5:
+        return "الجمعة";
+      case 6:
+        return "السبت";
+      case 7:
+        return "الأحد";
+      default:
+        return "";
+    }
+  }
 
-  // Page 1: Medication Name and Image
+  //
+  // --------------------
+  // Weekly Schedule Section (Reworked)
+  // --------------------
+  Widget _buildWeeklyScheduleSection() {
+    // Initialize weekly maps if not already initialized.
+    _initializeWeeklySchedule();
+    // Sort the selected weekdays.
+    List<int> sortedDays = _selectedWeekdays.toList()..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "جدول الجرعات الأسبوعي",
+          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 8),
+        // Day selection chips.
+        Wrap(
+          spacing: 8.0,
+          children: List.generate(7, (index) {
+            int day = index + 1;
+            bool selected = _selectedWeekdays.contains(day);
+            return FilterChip(
+              label: Text(_dayName(day)),
+              selected: selected,
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    // Allow selection only if maximum not reached.
+                    if (_selectedWeekdays.length < 6) {
+                      _selectedWeekdays.add(day);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('يمكنك اختيار 6 أيام فقط')),
+                      );
+                    }
+                  } else {
+                    _selectedWeekdays.remove(day);
+                    _weeklyTimes.remove(day);
+                    _weeklyAutoGenerated.remove(day);
+                  }
+                });
+              },
+              selectedColor: Colors.blue.shade300,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.grey.shade200,
+            );
+          }),
+        ),
+        if (_selectedWeekdays.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              "الرجاء اختيار يوم واحد على الأقل",
+              style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            ),
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  // Auto fill: If the first sorted day has time, copy to others.
+                  if (sortedDays.isNotEmpty && _weeklyTimes[sortedDays.first] != null) {
+                    setState(() {
+                      for (int day in sortedDays.skip(1)) {
+                        _weeklyTimes[day] = _weeklyTimes[sortedDays.first];
+                        _weeklyAutoGenerated[day] = true;
+                      }
+                    });
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("حدد وقت اليوم الأول أولاً")));
+                  }
+                },
+                child: const Text("تطبيق نفس الوقت لجميع الأيام"),
+              ),
+              const SizedBox(height: 10),
+              // Display a time picker for each selected day.
+              Column(
+                children: sortedDays.map((day) {
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6.0),
+                    elevation: 1.0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      leading: Text(
+                        _dayName(day),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      title: InkWell(
+                        onTap: () async {
+                          await _selectWeeklyTime(day);
+                        },
+                        child: Text(
+                          _weeklyTimes[day] == null
+                              ? "اضغط لاختيار الوقت"
+                              : TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: _weeklyTimes[day] == null ? Colors.grey.shade600 : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      trailing: Icon(
+                        _weeklyTimes[day] == null
+                            ? Icons.edit_calendar_outlined
+                            : ((_weeklyAutoGenerated[day] ?? false)
+                            ? Icons.smart_toy
+                            : Icons.person),
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  //
+  // --------------------
+  // Page 1: Medication Name and Image (with inline autocomplete)
+  // --------------------
   Widget _buildMedicationNamePage() {
     final screenWidth = MediaQuery.of(context).size.width;
-    // Use EdgeInsets based on screen width for consistent padding
     final horizontalPadding = screenWidth * 0.06;
-    const verticalPadding = 20.0; // Consistent vertical padding
-
+    const verticalPadding = 20.0;
     return Form(
       key: _formKeyPage1,
       child: Padding(
-        padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding, vertical: verticalPadding),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
         child: Stack(
           children: [
-            // Fixed back button at top-left
             Positioned(
-              top: 15, // Adjust position slightly if needed
-              left: -10, // Adjust position slightly if needed
+              top: 15,
+              left: -10,
               child: IconButton(
                 icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
-            // Center the form content
             Center(
-              child: SingleChildScrollView( // Allows scrolling on smaller screens
+              child: SingleChildScrollView(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center, // Center vertically in the column
-                  crossAxisAlignment: CrossAxisAlignment.center, // Center horizontally
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 50), // Space below back button area
+                    const SizedBox(height: 50),
                     Text(
                       "إضافة دواء جديد",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: screenWidth * 0.07, // Keep text size dynamic
+                        fontSize: screenWidth * 0.07,
                         fontWeight: FontWeight.bold,
                         color: Colors.blue.shade800,
                       ),
                     ),
-                    const SizedBox(height: 25.0), // Reduced space
+                    const SizedBox(height: 25.0),
                     _buildImagePicker(screenWidth),
-                    const SizedBox(height: 25.0), // Reduced space
+                    const SizedBox(height: 25.0),
                     FutureBuilder<List<String>>(
                       future: _medicineNamesFuture,
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(child: CircularProgressIndicator());
                         } else if (snapshot.hasError) {
-                          return Text('خطأ في تحميل أسماء الأدوية: ${snapshot.error}');
+                          return Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              'خطأ في تحميل أسماء الأدوية: ${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          );
                         } else {
                           final medicineNames = snapshot.data ?? [];
-                          return Autocomplete<String>(
-                            optionsBuilder: (TextEditingValue textEditingValue) {
-                              final query = textEditingValue.text.toLowerCase();
-                              if (query.length < 2) {
-                                return const Iterable<String>.empty();
-                              }
-                              return medicineNames.where((String name) =>
-                                  name.toLowerCase().contains(query));
-                            },
-                            onSelected: (String selection) {
+                          return MedicineAutocomplete(
+                            suggestions: medicineNames,
+                            controller: _nameController,
+                            focusNode: FocusNode(),
+                            onSelected: (selection) {
                               _nameController.text = selection;
-                              FocusScope.of(context).unfocus(); // Hide keyboard
-                            },
-                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                              // Sync external controller with internal one
-                              if (_nameController.text != controller.text) {
-                                controller.text = _nameController.text;
-                                // Place cursor at the end
-                                controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
-                              }
-                              controller.addListener(() {
-                                _nameController.text = controller.text;
-                              });
-
-                              return TextFormField(
-                                controller: controller,
-                                focusNode: focusNode,
-                                onEditingComplete: onEditingComplete, // Important for accessibility
-                                textAlign: TextAlign.center,
-                                decoration: InputDecoration(
-                                  labelText: 'اسم الدواء',
-                                  alignLabelWithHint: true,
-                                  icon: Icon(Icons.medication_outlined, color: Colors.blue.shade800), // Changed icon slightly
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                  focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
-                                      borderRadius: BorderRadius.circular(12)
-                                  ),
-                                ),
-                                validator: (value) => (value == null || value.trim().isEmpty)
-                                    ? 'الرجاء إدخال اسم الدواء'
-                                    : null,
-                              );
-                            },
-                            optionsViewBuilder: (context, onSelected, options) {
-                              return Align(
-                                alignment: Alignment.topLeft,
-                                child: Material(
-                                  elevation: 4.0,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(maxHeight: 200, maxWidth: screenWidth - (horizontalPadding * 2)), // Limit dropdown size
-                                    child: ListView.builder(
-                                      padding: EdgeInsets.zero,
-                                      shrinkWrap: true,
-                                      itemCount: options.length,
-                                      itemBuilder: (BuildContext context, int index) {
-                                        final String option = options.elementAt(index);
-                                        return InkWell(
-                                          onTap: () => onSelected(option),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Text(option),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              );
+                              FocusScope.of(context).unfocus();
+                              debugPrint('Selected: $selection');
                             },
                           );
                         }
                       },
                     ),
-                    const SizedBox(height: 30.0), // Reduced space before button
+                    const SizedBox(height: 30.0),
                     ElevatedButton(
                       onPressed: () {
                         if (_formKeyPage1.currentState!.validate()) {
@@ -369,24 +720,18 @@ class _AddDoseState extends State<AddDose> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 55), // Make button slightly taller
-                          backgroundColor: Colors.blue.shade800,
-                          foregroundColor: Colors.white, // Set text color
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15), // Slightly adjusted radius
-                          ),
-                          padding: const EdgeInsets.symmetric( // Use fixed padding
-                            horizontal: 20,
-                            vertical: 15, // Adjusted vertical padding
-                          ),
-                          textStyle: const TextStyle( // Ensure text style consistency if needed
-                            fontSize: 18, // Keep text size reasonable
-                            fontWeight: FontWeight.bold,
-                          )
+                        minimumSize: Size(double.infinity, 55),
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       child: const Text('التالي'),
                     ),
-                    const SizedBox(height: 20), // Add some padding at the bottom if scrolling occurs
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -397,268 +742,20 @@ class _AddDoseState extends State<AddDose> {
     );
   }
 
-
+  //
+  // --------------------
   // Page 2: Dosage and Times
+  // --------------------
   Widget _buildDosageAndTimesPage() {
     final screenWidth = MediaQuery.of(context).size.width;
-    // Use consistent padding
     final horizontalPadding = screenWidth * 0.06;
     const verticalPadding = 20.0;
-
     return Form(
       key: _formKeyPage2,
       child: Padding(
-        padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding, vertical: verticalPadding),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
         child: Stack(
           children: [
-            // Fixed back button
-            Positioned(
-              top: 15,
-              left: -10,
-              child: IconButton(
-                icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
-                onPressed: () => _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                ),
-              ),
-            ),
-            Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch, // Stretch children horizontally
-                  children: [
-                    const SizedBox(height: 50), // Space below back button area
-                    Text(
-                      "الجرعة والأوقات",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.07, // Keep text size dynamic
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
-                      ),
-                    ),
-                    const SizedBox(height: 25.0), // Reduced space
-
-                    // Dosage and unit fields
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center, // Align items vertically
-                      children: [
-                        Icon(Icons.science_outlined, color: Colors.blue.shade800), // Icon before field
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 3, // Give more space to text field
-                          child: TextFormField(
-                            controller: _dosageController,
-                            textAlign: TextAlign.center,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true), // Allow decimals
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')), // Allow numbers and one decimal point
-                            ],
-                            decoration: InputDecoration(
-                              labelText: 'الجرعة',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
-                                  borderRadius: BorderRadius.circular(12)
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'ادخل الجرعة';
-                              }
-                              if (double.tryParse(value.trim()) == null) {
-                                return 'أدخل رقماً صحيحاً';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded( // Use Expanded for dropdown button container for better alignment
-                          flex: 2,
-                          child: DropdownButtonFormField<String>(
-                            value: _dosageUnit,
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), // Adjust padding
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
-                                  borderRadius: BorderRadius.circular(12)
-                              ),
-                            ),
-                            onChanged: (value) => setState(() => _dosageUnit = value!),
-                            items: _dosageUnits.map((unit) => DropdownMenuItem(value: unit, child: Text(unit))).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20.0), // Consistent spacing
-
-                    // Frequency options
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start, // Align based on the top of the elements
-                      children: [
-                        Icon(Icons.repeat, color: Colors.blue.shade800), // Icon for frequency number
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _frequencyNumber,
-                            decoration: InputDecoration(
-                              labelText: 'عدد المرات',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
-                                  borderRadius: BorderRadius.circular(12)
-                              ),
-                            ),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _frequencyNumber = value;
-                                  _updateTimeFields();
-                                });
-                              }
-                            },
-                            items: _frequencyNumbers.map((num) => DropdownMenuItem(value: num, child: Text(num.toString()))).toList(),
-                            validator: (value) => value == null ? 'اختر العدد' : null,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Icon(Icons.calendar_today_outlined, color: Colors.blue.shade800), // Icon for frequency type
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _frequencyType,
-                            decoration: InputDecoration(
-                              labelText: 'النوع',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
-                                  borderRadius: BorderRadius.circular(12)
-                              ),
-                            ),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() => _frequencyType = value);
-                              }
-                            },
-                            items: _frequencyTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-                            validator: (value) => value == null ? 'اختر النوع' : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 25.0), // Space before time list
-
-                    // Time picker list
-                    Text(
-                      "أوقات تناول الجرعة:", // Add a label for clarity
-                      style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    ListView.builder( // Use ListView.builder for dynamic list
-                      shrinkWrap: true, // Important within SingleChildScrollView
-                      physics: const NeverScrollableScrollPhysics(), // Disable ListView's own scrolling
-                      itemCount: _frequencyNumber,
-                      itemBuilder: (context, index) {
-                        return Card( // Wrap each time picker in a Card for better visuals
-                          margin: const EdgeInsets.symmetric(vertical: 6.0),
-                          elevation: 1.0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          child: ListTile(
-                            leading: Icon(Icons.access_time_filled, color: Colors.blue.shade700),
-                            title: Text(
-                              _selectedTimes[index] == null
-                                  ? 'اضغط لاختيار الوقت ${index + 1}'
-                                  : _selectedTimes[index]!.format(context),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: _selectedTimes[index] == null ? FontWeight.normal : FontWeight.bold,
-                                color: _selectedTimes[index] == null ? Colors.grey.shade600 : Colors.black87,
-                              ),
-                            ),
-                            trailing: const Icon(Icons.edit_calendar_outlined),
-                            onTap: () => _selectTime(index),
-                            // Add validation feedback here if needed, though direct validation on ListTile is tricky.
-                            // Usually validation is checked before proceeding.
-                          ),
-                        );
-                      },
-                    ),
-                    // Add a helper text if times are not selected.
-                    if (_selectedTimes.any((t) => t == null))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          'الرجاء تحديد جميع الأوقات المطلوبة.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 13),
-                        ),
-                      ),
-
-                    const SizedBox(height: 30.0), // Space before button
-                    ElevatedButton(
-                      onPressed: () {
-                        bool allTimesSelected = !_selectedTimes.any((t) => t == null);
-                        if (_formKeyPage2.currentState!.validate() && allTimesSelected) {
-                          _pageController.nextPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          );
-                        } else if (!allTimesSelected) {
-                          // Optionally show a snackbar or alert if times are missing
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('الرجاء تحديد جميع أوقات الجرعات'))
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 55),
-                          backgroundColor: Colors.blue.shade800,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                          textStyle: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          )
-                      ),
-                      child: const Text('التالي'),
-                    ),
-                    const SizedBox(height: 20), // Bottom padding
-                  ],
-                ),
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Page 3: Start and End Dates
-  Widget _buildStartDateEndDatePage() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Use consistent padding
-    final horizontalPadding = screenWidth * 0.06;
-    const verticalPadding = 20.0;
-
-    return Form(
-      key: _formKeyPage3,
-      // No specific validation needed here unless start/end dates are mandatory
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding, vertical: verticalPadding),
-        child: Stack(
-          children: [
-            // Fixed back button
             Positioned(
               top: 15,
               left: -10,
@@ -676,20 +773,289 @@ class _AddDoseState extends State<AddDose> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 50), // Space below back button area
+                    const SizedBox(height: 50),
                     Text(
-                      "تاريخ البدء والانتهاء",
+                      "الجرعة والأوقات",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: screenWidth * 0.07, // Keep text size dynamic
+                        fontSize: screenWidth * 0.07,
                         fontWeight: FontWeight.bold,
                         color: Colors.blue.shade800,
                       ),
                     ),
-                    const SizedBox(height: 35.0), // Increased space
+                    const SizedBox(height: 25.0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(Icons.science_outlined, color: Colors.blue.shade800),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextFormField(
+                            controller: _dosageController,
+                            textAlign: TextAlign.center,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: 'الجرعة',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'ادخل الجرعة';
+                              }
+                              if (double.tryParse(value.trim()) == null) {
+                                return 'أدخل رقماً صحيحاً';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            value: _dosageUnit,
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (value != null) setState(() => _dosageUnit = value);
+                            },
+                            items: _dosageUnits
+                                .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20.0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.repeat, color: Colors.blue.shade800),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: _frequencyNumber,
+                            decoration: InputDecoration(
+                              labelText: 'عدد المرات',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _frequencyNumber = value;
+                                  if (_frequencyType == 'يومي') {
+                                    _updateTimeFields();
+                                  } else if (_frequencyType == 'اسبوعي') {
+                                    _initializeWeeklySchedule();
+                                  }
+                                });
+                              }
+                            },
+                            items: _frequencyNumbers
+                                .map((num) => DropdownMenuItem(value: num, child: Text(num.toString())))
+                                .toList(),
+                            validator: (value) => value == null ? 'اختر العدد' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(Icons.calendar_today_outlined, color: Colors.blue.shade800),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _frequencyType,
+                            decoration: InputDecoration(
+                              labelText: 'النوع',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _frequencyType = value;
+                                  if (value == 'اسبوعي') {
+                                    _initializeWeeklySchedule();
+                                  } else {
+                                    _updateTimeFields();
+                                  }
+                                });
+                              }
+                            },
+                            items: _frequencyTypes
+                                .map((type) =>
+                                DropdownMenuItem(value: type, child: Text(type)))
+                                .toList(),
+                            validator: (value) => value == null ? 'اختر النوع' : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 25.0),
+                    _frequencyType == 'يومي'
+                        ? Column(
+                      children: [
+                        Text(
+                          "أوقات تناول الجرعة:",
+                          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _frequencyNumber,
+                          itemBuilder: (context, index) {
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 6.0),
+                              elevation: 1.0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              child: ListTile(
+                                leading: Icon(Icons.access_time_filled, color: Colors.blue.shade700),
+                                title: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('${index + 1}. ', style: const TextStyle(fontSize: 16)),
+                                    Text(
+                                      _selectedTimes[index] == null
+                                          ? 'اضغط لاختيار الوقت'
+                                          : _selectedTimes[index]!.format(context),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: _selectedTimes[index] == null
+                                            ? FontWeight.normal
+                                            : FontWeight.bold,
+                                        color: _selectedTimes[index] == null
+                                            ? Colors.grey.shade600
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    if (_selectedTimes[index] != null)
+                                      Icon(
+                                        _isAutoGeneratedTimes[index] ? Icons.smart_toy : Icons.person,
+                                        size: 16,
+                                        color: Colors.grey,
+                                      ),
+                                  ],
+                                ),
+                                trailing: const Icon(Icons.edit_calendar_outlined),
+                                onTap: () => _selectTime(index),
+                              ),
+                            );
+                          },
+                        ),
+                        if (_selectedTimes.any((t) => t == null))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'الرجاء تحديد جميع الأوقات المطلوبة.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                            ),
+                          ),
+                      ],
+                    )
+                        : _buildWeeklyScheduleSection(),
+                    const SizedBox(height: 30.0),
+                    ElevatedButton(
+                      onPressed: () {
+                        bool allTimesSelected = _frequencyType == 'يومي'
+                            ? !_selectedTimes.any((t) => t == null)
+                            : _weeklyTimes.values.every((t) => t != null);
+                        if (_formKeyPage2.currentState!.validate() && allTimesSelected) {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        } else if (!allTimesSelected) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('الرجاء تحديد جميع أوقات الجرعات')));
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size(double.infinity, 55),
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      child: const Text('التالي'),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
 
-                    // Start Date Picker
-                    Card( // Wrap in Card
+  //
+  // --------------------
+  // Page 3: Start and End Dates
+  // --------------------
+  Widget _buildStartDateEndDatePage() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+    return Form(
+      key: _formKeyPage3,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 15,
+              left: -10,
+              child: IconButton(
+                icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
+                onPressed: () => _pageController.previousPage(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                ),
+              ),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 50),
+                    Text(
+                      "تاريخ البدء والانتهاء",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.07,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 35.0),
+                    Card(
                       margin: const EdgeInsets.symmetric(vertical: 8.0),
                       elevation: 1.0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -710,7 +1076,6 @@ class _AddDoseState extends State<AddDose> {
                         onTap: _selectStartDate,
                       ),
                     ),
-                    // Add validation message display area for start date
                     FormField<DateTime>(
                       initialValue: _startDate,
                       validator: (value) {
@@ -729,15 +1094,11 @@ class _AddDoseState extends State<AddDose> {
                             textAlign: TextAlign.center,
                           ),
                         )
-                            : Container(); // Return empty container if no error
+                            : Container();
                       },
                     ),
-
-
-                    const SizedBox(height: 15.0), // Space between dates
-
-                    // End Date Picker
-                    Card( // Wrap in Card
+                    const SizedBox(height: 15.0),
+                    Card(
                       margin: const EdgeInsets.symmetric(vertical: 8.0),
                       elevation: 1.0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -758,7 +1119,6 @@ class _AddDoseState extends State<AddDose> {
                         onTap: _selectEndDate,
                       ),
                     ),
-                    // Optional: Add validation for end date if needed (e.g., must be after start date)
                     FormField<DateTime>(
                       initialValue: _endDate,
                       validator: (value) {
@@ -780,27 +1140,20 @@ class _AddDoseState extends State<AddDose> {
                             : Container();
                       },
                     ),
-
-
-                    const SizedBox(height: 40.0), // Increased space before final button
+                    const SizedBox(height: 40.0),
                     ElevatedButton(
-                      onPressed: _submitForm, // Calls the submit logic
+                      onPressed: _submitForm,
                       style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 55),
-                          backgroundColor: Colors.green.shade700, // Changed color for final action
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                          textStyle: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          )
+                        minimumSize: Size(double.infinity, 55),
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       child: const Text('إضافة الدواء إلى خزانتي'),
                     ),
-                    const SizedBox(height: 20), // Bottom padding
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -811,70 +1164,76 @@ class _AddDoseState extends State<AddDose> {
     );
   }
 
-
+  //
+  // --------------------
+  // Image Picker Section
+  // --------------------
   Widget _buildImagePicker(double screenWidth) {
-    return Center( // Center the image picker area
+    return Center(
       child: GestureDetector(
         onTap: _pickImage,
         child: Container(
-          height: screenWidth * 0.45, // Slightly larger height
-          width: screenWidth * 0.7,   // Make it wide but not full width
+          height: screenWidth * 0.45,
+          width: screenWidth * 0.7,
           decoration: BoxDecoration(
-            color: Colors.grey.shade200, // Lighter background
+            color: Colors.grey.shade200,
             border: Border.all(color: Colors.blue.shade600, width: 1.5),
-            borderRadius: BorderRadius.circular(15), // More rounded corners
+            borderRadius: BorderRadius.circular(15),
             image: _capturedImage != null
                 ? DecorationImage(
               image: FileImage(_capturedImage!),
-              fit: BoxFit.cover, // Cover the area
+              fit: BoxFit.cover,
             )
                 : null,
           ),
           child: _capturedImage == null
               ? Center(
-              child: Column( // Center icon and text vertically
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.camera_alt_outlined, size: screenWidth * 0.12, color: Colors.blue.shade800),
-                  const SizedBox(height: 8),
-                  Text(
-                    'اضغط لالتقاط صورة للدواء',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Colors.blue.shade800, fontSize: screenWidth * 0.04), // Slightly smaller text
-                  ),
-                ],
-              )
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.camera_alt_outlined,
+                    size: screenWidth * 0.12, color: Colors.blue.shade800),
+                const SizedBox(height: 8),
+                Text(
+                  'اضغط لالتقاط صورة للدواء',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.blue.shade800, fontSize: screenWidth * 0.04),
+                ),
+              ],
+            ),
           )
-          // Show upload progress or status if desired
-              : _uploadedImageUrl == null ? Center(child: CircularProgressIndicator(color: Colors.white,)) : Container(), // Show progress indicator while uploading
-
+              : _uploadedImageUrl == null
+              ? Center(child: CircularProgressIndicator(color: Colors.white))
+              : Container(),
         ),
       ),
     );
   }
 
+  //
+  // --------------------
+  // Main Build Method (PageView)
+  // --------------------
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(), // Unfocus on tap outside
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         body: Stack(
           children: [
-            // Background Gradient
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.blue.shade50, Colors.white, Colors.grey.shade50], // Subtle gradient
+                  colors: [Colors.blue.shade50, Colors.white, Colors.grey.shade50],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
               ),
             ),
-            // PageView
             PageView(
               controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(), // Prevent manual swiping
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildMedicationNamePage(),
                 _buildDosageAndTimesPage(),
@@ -891,7 +1250,7 @@ class _AddDoseState extends State<AddDose> {
   void dispose() {
     _nameController.dispose();
     _dosageController.dispose();
-    _pageController.dispose(); // Dispose PageController
+    _pageController.dispose();
     super.dispose();
   }
 }
