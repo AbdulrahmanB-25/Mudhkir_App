@@ -1,15 +1,32 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+/// Helper function to normalize URLs by removing extra slashes,
+/// while keeping the protocol part intact.
+String normalizeUrl(String url) {
+  // Look for the protocol portion ("http:" or "https:") followed by extra slashes.
+  final RegExp protocolRegex = RegExp(r'^(https?:)\/+');
+  final match = protocolRegex.firstMatch(url);
+  if (match != null) {
+    String scheme = match.group(1)!; // e.g., "https:"
+    // Remove the matched protocol and extra slashes.
+    String remaining = url.substring(match.end);
+    // Replace multiple slashes in the remainder with a single slash.
+    remaining = remaining.replaceAll(RegExp(r'/+'), '/');
+    return '$scheme//$remaining';
+  }
+  return url.replaceAll(RegExp(r'/+'), '/'); // Fallback.
+}
 
 // ==================================================================
 // Time Utilities
@@ -84,24 +101,26 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
     }
   }
   Future<File?> _downloadAndSaveImage(String url) async {
-    final uri = Uri.tryParse(url);
-    if (widget.imageUrl.isEmpty || uri == null || !uri.isAbsolute) {
-      print("Invalid or empty URL for download: $url");
+    // Normalize the URL to remove extra slashes.
+    String normalizedUrl = normalizeUrl(url);
+    final uri = Uri.tryParse(normalizedUrl);
+    if (normalizedUrl.isEmpty || uri == null || !uri.isAbsolute) {
+      print("Invalid or empty URL for download: $normalizedUrl");
       return null;
     }
     try {
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final Directory directory = await getTemporaryDirectory();
-        final String filePath = '${directory.path}/${url.hashCode}.png';
+        final String filePath = '${directory.path}/${normalizedUrl.hashCode}.png';
         File file = File(filePath);
         await file.writeAsBytes(response.bodyBytes);
         return file;
       } else {
-        print("Failed to download image ($url). Status: ${response.statusCode}");
+        print("Failed to download image ($normalizedUrl). Status: ${response.statusCode}");
       }
     } catch (e) {
-      print("Error downloading image ($url): $e");
+      print("Error downloading image ($normalizedUrl): $e");
     }
     return null;
   }
@@ -255,7 +274,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final List<String> parts = frequency.split(" ");
         final String frequencyType = parts.length > 1 ? parts[1] : 'يومي';
         DateTime currentDate = startDate;
-        while (endDateDt == null || !currentDate.isAfter(endDateDt)) {
+        while (true) {
           final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
           bool shouldAddDose = false;
           List<Map<String, dynamic>> dosesForDay = [];
@@ -310,6 +329,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
             newDoses.putIfAbsent(normalizedDate, () => []);
             newDoses[normalizedDate]!.addAll(dosesForDay);
           }
+          // Increment day and break conditions.
           currentDate = currentDate.add(const Duration(days: 1));
           if (endDateDt != null && currentDate.isAfter(endDateDt)) break;
           if (endDateDt == null && currentDate.year > DateTime.now().year + 10) break;
@@ -675,20 +695,49 @@ class _DoseTileState extends State<DoseTile> {
   }
   Future<void> _deleteImgBBImage(String deleteHash) async {
     final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
+
+    // Basic validation
     if (imgbbApiKey.isEmpty) {
-      print("ERROR: ImgBB API Key not configured securely.");
+      print("ERROR: ImgBB API Key not found in .env. Cannot delete image.");
       return;
     }
+    if (deleteHash.isEmpty) {
+      print("WARNING: Attempted to delete ImgBB image with an empty deleteHash.");
+      return; // Don't proceed with an empty hash
+    }
+
+    // Construct the URL: API key in query parameter, delete hash in the path
     final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
+
+    print("Attempting ImgBB deletion via DELETE. Hash: $deleteHash, URL: $url");
+
     try {
-      final response = await http.delete(url);
+      final response = await http.delete(url); // Using DELETE method
+
+      // Check status code FIRST
       if (response.statusCode == 200) {
-        print("ImgBB image deleted successfully. Response: ${response.body}");
+        // Even with 200, check response body for success confirmation if possible
+        try {
+          final responseBody = jsonDecode(response.body);
+          if (responseBody is Map &&
+              ((responseBody.containsKey('success') && responseBody['success'] == true) ||
+                  (responseBody.containsKey('status_code') && responseBody['status_code'] == 200))) {
+            print("ImgBB image ($deleteHash) deleted successfully via DELETE. Response: ${response.body}");
+          } else {
+            // Status 200 but response body indicates potential failure
+            print("ImgBB image ($deleteHash) deletion via DELETE returned status 200 but response suggests failure: ${response.body}");
+          }
+        } catch (e) {
+          // Status 200 but couldn't parse body or unknown format
+          print("ImgBB image ($deleteHash) deletion via DELETE returned status 200 but response body parsing failed or format unknown: ${response.body}. Error: $e");
+        }
       } else {
-        print("Failed to delete image from ImgBB ($deleteHash). Status: ${response.statusCode}, Body: ${response.body}");
+        // Log the failure details clearly
+        print("Failed to delete image from ImgBB ($deleteHash) using DELETE. Status: ${response.statusCode}, Body: ${response.body}");
+        // If this fails with "Invalid API Action", the POST method might be needed.
       }
     } catch (e) {
-      print("Error deleting image from ImgBB ($deleteHash): $e");
+      print("Error occurred during ImgBB image ($deleteHash) DELETE deletion attempt: $e");
     }
   }
   @override
@@ -874,7 +923,9 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         String? storedFrequency = data['frequencyType'] as String?;
         // If frequencyType is weekly or the "times" field is a list of maps, use weekly UI.
         if (storedFrequency == 'اسبوعي' ||
-            (data['times'] is List && (data['times'] as List).isNotEmpty && (data['times'][0] is Map))) {
+            (data['times'] is List &&
+                (data['times'] as List).isNotEmpty &&
+                (data['times'][0] is Map))) {
           _selectedFrequency = 'اسبوعي';
           _weeklyTimes = {};
           List<dynamic> timesList = data['times'] as List<dynamic>? ?? [];
@@ -1006,54 +1057,110 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     });
   }
 
-  Future<Map<String, String>?> _uploadImageToImgBB(File imageFile) async {
+  /// Uploads an image file to ImgBB and returns the image URL and delete hash.
+  Future<Map<String, String>?> _uploadImageToImgBB(BuildContext context, File imageFile) async {
     final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
+
+    // Validate API Key
     if (imgbbApiKey.isEmpty) {
-      print("ERROR: ImgBB API Key not configured securely.");
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في إعدادات رفع الصور.")));
+      print("ERROR: ImgBB API Key not found in .env. Cannot upload image.");
+      // Use mounted check if this is inside a StatefulWidget's State class
+      // if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("خطأ في إعدادات رفع الصور.")),
+      );
+      // }
       return null;
     }
+
+    // Prepare the upload request
     final url = Uri.parse('https://api.imgbb.com/1/upload?key=$imgbbApiKey');
+    print("Attempting ImgBB upload to: $url");
+
     try {
       var request = http.MultipartRequest('POST', url);
-      request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
-      var response = await request.send();
+      // Attach the file to the request
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'image', // API expects the file field name to be 'image'
+          imageFile.path,
+          // You might want to specify filename and content type if needed by API
+          // filename: imageFile.path.split('/').last,
+          // contentType: MediaType('image', 'jpeg'), // Or png, etc.
+        ),
+      );
+
+      // Send the request and get the streamed response
+      var streamedResponse = await request.send();
+
+      // Get the full response body
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Check the status code
       if (response.statusCode == 200) {
-        final responseData = await response.stream.bytesToString();
-        final RegExp imageUrlRegExp = RegExp(r'"url":"(.*?)"');
-        final RegExp deleteUrlRegExp = RegExp(r'"delete_url":"(.*?)"');
-        final imageUrlMatch = imageUrlRegExp.firstMatch(responseData);
-        final deleteUrlMatch = deleteUrlRegExp.firstMatch(responseData);
-        if (imageUrlMatch?.group(1) != null && deleteUrlMatch?.group(1) != null) {
-          final deleteUrl = deleteUrlMatch!.group(1)!;
-          final deleteHash = deleteUrl.split('/').last;
-          return {
-            'imageUrl': imageUrlMatch!.group(1)!,
-            'imgbbDeleteHash': deleteHash
-          };
-        } else {
-          print("Failed to parse ImgBB response: $responseData");
+        print("ImgBB upload successful (Status 200). Parsing response...");
+        // Parse the JSON response body robustly
+        try {
+          final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+
+          // Check if the response indicates success and contains data
+          if (jsonResponse['success'] == true && jsonResponse.containsKey('data')) {
+            final Map<String, dynamic> data = jsonResponse['data'];
+            final String? imageUrl = data['url']; // URL of the displayed image
+            final String? deleteUrl = data['delete_url']; // URL to delete the image
+
+            if (imageUrl != null && deleteUrl != null) {
+              // Extract the delete hash from the delete_url
+              final deleteHash = deleteUrl.split('/').last;
+              print("ImgBB parsing successful. ImageURL: $imageUrl, DeleteHash: $deleteHash");
+              return {
+                'imageUrl': imageUrl,
+                'imgbbDeleteHash': deleteHash,
+              };
+            } else {
+              print("Failed to parse ImgBB response: 'url' or 'delete_url' missing in data. Body: ${response.body}");
+              return null;
+            }
+          } else {
+            print("Failed to parse ImgBB response: 'success' not true or 'data' missing. Body: ${response.body}");
+            return null;
+          }
+        } catch (e) {
+          print("Error decoding ImgBB JSON response: $e. Body: ${response.body}");
           return null;
         }
       } else {
-        print("ImgBB upload failed. Status: ${response.statusCode}, Reason: ${await response.stream.bytesToString()}");
+        // Log upload failure
+        print("ImgBB upload failed. Status: ${response.statusCode}, Reason: ${response.body}");
+        // Optionally show specific error to user based on status code/body
+        // if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("فشل رفع الصورة. الرمز: ${response.statusCode}")),
+        );
+        // }
+        return null;
       }
     } catch (e) {
+      // Handle network errors or other exceptions during upload
       print("Error uploading to ImgBB: $e");
+      // if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("حدث خطأ في الشبكة أثناء رفع الصورة.")),
+      );
+      // }
+      return null;
     }
-    return null;
   }
 
   Future<void> _deleteOldImgBBImage(String deleteHash) async {
     final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
     if (imgbbApiKey.isEmpty) {
-      print("ERROR: ImgBB API Key not configured securely.");
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في إعدادات رفع الصور.")));
-      return null;
+      print("WARNING: ImgBB API Key not configured securely. Skipping old image deletion.");
+      return;
     }
-    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
+    final url = Uri.parse('https://api.imgbb.com/1/delete?key=$imgbbApiKey&delete_hash=$deleteHash');
     try {
-      final response = await http.delete(url);
+      final response = await http.get(url); // Changed from http.delete(url)
       if (response.statusCode == 200) {
         print("Old ImgBB image deleted successfully. Response: ${response.body}");
       } else {
@@ -1089,7 +1196,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     String? finalDeleteHash = _currentImgbbDeleteHash;
     bool deleteOldImage = false;
     if (_newImageFile != null) {
-      final uploadResult = await _uploadImageToImgBB(_newImageFile!);
+      final uploadResult = await _uploadImageToImgBB(context, _newImageFile!);
       if (uploadResult != null) {
         finalImageUrl = uploadResult['imageUrl'];
         finalDeleteHash = uploadResult['imgbbDeleteHash'];
@@ -1260,7 +1367,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   // ----------------------
   // Weekly Schedule UI (as before)
   // ----------------------
-  // Helper to return Arabic day name.
+  // Helper to return Arabic name for weekday.
   String _dayName(int day) {
     switch (day) {
       case 1:
@@ -1450,8 +1557,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                 onChanged: (value) {
                   if (value != null) setState(() {
                     _selectedFrequency = value;
-                    // Reset daily schedule if switching to daily.
                     if (value == 'يومي') {
+                      // Reset daily schedule.
                       _selectedTimes = _selectedTimes.isNotEmpty ? _selectedTimes : [];
                       _dailyAutoGenerated = List<bool>.filled(_selectedTimes.length, false, growable: true);
                     } else {

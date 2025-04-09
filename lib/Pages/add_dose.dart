@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-//
+
+
+
 // --------------------
 // Time Utilities
 // --------------------
@@ -844,38 +846,38 @@ class _AddDoseState extends State<AddDose> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.repeat, color: Colors.blue.shade800),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _frequencyNumber,
-                            decoration: InputDecoration(
-                              labelText: 'عدد المرات',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
-                                borderRadius: BorderRadius.circular(12),
+                        // Only show frequency number if the frequency type is daily.
+                        if (_frequencyType == 'يومي') ...[
+                          Icon(Icons.repeat, color: Colors.blue.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _frequencyNumber,
+                              decoration: InputDecoration(
+                                labelText: 'عدد المرات',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                            ),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _frequencyNumber = value;
-                                  if (_frequencyType == 'يومي') {
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _frequencyNumber = value;
                                     _updateTimeFields();
-                                  } else if (_frequencyType == 'اسبوعي') {
-                                    _initializeWeeklySchedule();
-                                  }
-                                });
-                              }
-                            },
-                            items: _frequencyNumbers
-                                .map((num) => DropdownMenuItem(value: num, child: Text(num.toString())))
-                                .toList(),
-                            validator: (value) => value == null ? 'اختر العدد' : null,
+                                  });
+                                }
+                              },
+                              items: _frequencyNumbers
+                                  .map((num) => DropdownMenuItem(value: num, child: Text(num.toString())))
+                                  .toList(),
+                              validator: (value) => value == null ? 'اختر العدد' : null,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
+                          const SizedBox(width: 10),
+                        ],
+                        // This widget (and its spacing) always shows, regardless of frequency type.
                         Icon(Icons.calendar_today_outlined, color: Colors.blue.shade800),
                         const SizedBox(width: 8),
                         Expanded(
