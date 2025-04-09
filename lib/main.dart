@@ -12,12 +12,15 @@ import 'package:mudhkir_app/pages/ForgetPassword.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:mudhkir_app/Widgets/AuthWrapper.dart'; // Assuming AuthWrapper is in Widgets folder
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 // Import the intl package localization data initialization function
 import 'package:intl/date_symbol_data_local.dart'; // <-- ADD THIS IMPORT
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // Ensures widgets are ready
+  await dotenv.load(fileName: ".env");
   await Firebase.initializeApp(); // Initializes Firebase
 
   // Activate Firebase App Check (Keep this if you use it)

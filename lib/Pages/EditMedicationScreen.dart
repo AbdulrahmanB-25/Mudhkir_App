@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -674,9 +674,9 @@ class _DoseTileState extends State<DoseTile> {
     }
   }
   Future<void> _deleteImgBBImage(String deleteHash) async {
-    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
-    if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
-      print("WARNING: ImgBB API Key not configured securely. Skipping image deletion.");
+    final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
+    if (imgbbApiKey.isEmpty) {
+      print("ERROR: ImgBB API Key not configured securely.");
       return;
     }
     final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
@@ -1007,8 +1007,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   }
 
   Future<Map<String, String>?> _uploadImageToImgBB(File imageFile) async {
-    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
-    if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
+    final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
+    if (imgbbApiKey.isEmpty) {
       print("ERROR: ImgBB API Key not configured securely.");
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في إعدادات رفع الصور.")));
       return null;
@@ -1045,11 +1045,11 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   }
 
   Future<void> _deleteOldImgBBImage(String deleteHash) async {
-    if (deleteHash.isEmpty) return;
-    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
-    if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
-      print("WARNING: ImgBB API Key not configured securely. Skipping old image deletion.");
-      return;
+    final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
+    if (imgbbApiKey.isEmpty) {
+      print("ERROR: ImgBB API Key not configured securely.");
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في إعدادات رفع الصور.")));
+      return null;
     }
     final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
     try {
