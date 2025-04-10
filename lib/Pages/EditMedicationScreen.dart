@@ -1232,7 +1232,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       'startDate': Timestamp.fromDate(_selectedStartDate!),
       'endDate': _selectedEndDate != null ? Timestamp.fromDate(_selectedEndDate!) : null,
       'times': timesField,
-      'frequencyType': _selectedFrequency,
+      'frequency': '${_selectedTimes.length} $_selectedFrequency', // Ensure consistency
+      'frequencyType': _selectedFrequency, // Update frequencyType
       'weeklyDays': _selectedFrequency == 'اسبوعي' ? _selectedWeekdays.toList() : FieldValue.delete(),
       'imageUrl': finalImageUrl,
       'imgbbDeleteHash': finalDeleteHash,
@@ -1838,3 +1839,4 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
+

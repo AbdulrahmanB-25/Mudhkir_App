@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart'; // For time parsing and date formatting
 
+
 // --- Import your Edit screen ---
 import 'package:mudhkir_app/pages/EditMedicationScreen.dart'; // <-- ADJUST PATH AS NEEDED
 
@@ -279,6 +280,14 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final List<String> frequencyParts = frequencyRaw.split(" ");
         final String frequencyType = frequencyParts.length > 1 ? frequencyParts[1] : 'يومي';
 
+        // Ensure consistency between frequencyType and frequency field
+        if (frequencyType != data['frequencyType']) {
+          print("Warning: Inconsistent frequencyType for ${doc.id}. Using frequency field.");
+        }
+
+        // Use frequencyType from frequency field for logic
+        final String resolvedFrequencyType = frequencyType;
+
         final List<dynamic> timesRaw = data['times'] ?? [];
         final String imageUrl = data['imageUrl'] as String? ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] as String? ?? '';
@@ -293,14 +302,14 @@ class _DoseScheduleState extends State<DoseSchedule> {
           bool shouldAddDoseToday = false;
           List<TimeOfDay> timesParsed = [];
 
-          if (frequencyType == 'يومي') {
+          if (resolvedFrequencyType == 'يومي') {
             // For daily, timesRaw is a list of strings.
             timesParsed = timesRaw
                 .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null)
                 .whereType<TimeOfDay>()
                 .toList();
             shouldAddDoseToday = timesParsed.isNotEmpty;
-          } else if (frequencyType == 'اسبوعي') {
+          } else if (resolvedFrequencyType == 'اسبوعي') {
             // For weekly, timesRaw is a list of maps with keys "day" and "time"
             timesParsed = timesRaw
                 .whereType<Map>()
@@ -871,3 +880,4 @@ class _DoseTileState extends State<DoseTile> {
   }
 }
 // --- End DoseTile Widget ---
+

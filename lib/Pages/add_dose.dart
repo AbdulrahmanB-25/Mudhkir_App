@@ -74,6 +74,7 @@ class MedicineAutocomplete extends StatefulWidget {
 
 class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
   List<String> _filteredSuggestions = [];
+  final ScrollController _scrollController = ScrollController(); // Add ScrollController
 
   @override
   void initState() {
@@ -85,14 +86,16 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
 
   void _filter() {
     final text = widget.controller.text.toLowerCase().trim();
-    if (text.length < 2) {
+    if (text.isEmpty) {
       setState(() {
         _filteredSuggestions = [];
       });
     } else {
       setState(() {
-        _filteredSuggestions =
-            widget.suggestions.where((s) => s.toLowerCase().contains(text)).toList();
+        _filteredSuggestions = widget.suggestions
+            .where((s) => s.toLowerCase().contains(text))
+            .take(3) // Limit to 3 suggestions
+            .toList();
       });
     }
   }
@@ -109,12 +112,12 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
   void dispose() {
     widget.controller.removeListener(_filter);
     widget.focusNode.removeListener(_handleFocusChange);
+    _scrollController.dispose(); // Dispose of the ScrollController
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final limitedSuggestions = _filteredSuggestions.take(3).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -125,6 +128,17 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
           decoration: InputDecoration(
             hintText: 'ابحث عن اسم الدواء...',
             prefixIcon: Icon(Icons.search, color: Colors.blue.shade800),
+            suffixIcon: widget.controller.text.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.clear, color: Colors.red.shade700),
+                    onPressed: () {
+                      widget.controller.clear();
+                      setState(() {
+                        _filteredSuggestions = [];
+                      });
+                    },
+                  )
+                : null,
             filled: true,
             fillColor: Colors.grey.shade100,
             border: OutlineInputBorder(
@@ -140,12 +154,12 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
               borderSide: BorderSide(color: Colors.blue.shade800, width: 1.5),
             ),
             contentPadding:
-            const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           ),
           validator: (value) =>
-          (value == null || value.trim().isEmpty) ? 'الرجاء إدخال اسم الدواء' : null,
+              (value == null || value.trim().isEmpty) ? 'الرجاء إدخال اسم الدواء' : null,
         ),
-        if (limitedSuggestions.isNotEmpty)
+        if (_filteredSuggestions.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
             decoration: BoxDecoration(
@@ -160,29 +174,33 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
                 ),
               ],
             ),
-            child: ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: limitedSuggestions.length,
-              separatorBuilder: (context, index) =>
-                  Divider(color: Colors.grey.shade300, height: 1),
-              itemBuilder: (context, index) {
-                final suggestion = limitedSuggestions[index];
-                return InkWell(
-                  onTap: () {
-                    widget.onSelected(suggestion);
-                    widget.controller.text = suggestion;
-                    widget.focusNode.unfocus();
-                    setState(() {
-                      _filteredSuggestions = [];
-                    });
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(suggestion, style: const TextStyle(fontSize: 16)),
-                  ),
-                );
-              },
+            height: _filteredSuggestions.length * 60.0, // Fixed height based on item count
+            child: Scrollbar(
+              controller: _scrollController, // Attach the ScrollController
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _scrollController, // Attach the ScrollController
+                shrinkWrap: true,
+                physics: const ClampingScrollPhysics(),
+                itemCount: _filteredSuggestions.length,
+                itemBuilder: (context, index) {
+                  final suggestion = _filteredSuggestions[index];
+                  return InkWell(
+                    onTap: () {
+                      widget.onSelected(suggestion);
+                      widget.controller.text = suggestion;
+                      widget.focusNode.unfocus();
+                      setState(() {
+                        _filteredSuggestions = [];
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(suggestion, style: const TextStyle(fontSize: 16)),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
       ],
@@ -1256,3 +1274,6 @@ class _AddDoseState extends State<AddDose> {
     super.dispose();
   }
 }
+
+
+
