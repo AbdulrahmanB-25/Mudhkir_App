@@ -7,9 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-
-
-
+import 'package:mudhkir_app/main.dart'; // Import the notification utility
 
 // --------------------
 // Time Utilities
@@ -494,11 +492,39 @@ class _AddDoseState extends State<AddDose> {
     }
 
     try {
-      await FirebaseFirestore.instance
+      final docRef = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('medicines')
           .add(newMedicine);
+
+      // Debug log to confirm dose addition
+      print("New medication added with ID: ${docRef.id}");
+
+      // Schedule notifications for the new dose
+      int notificationId = docRef.id.hashCode; // Use doc ID hash as notification ID
+      if (_frequencyType == 'يومي') {
+        for (var time in _selectedTimes) {
+          if (time != null) {
+            final scheduledTime = DateTime(
+              _startDate!.year,
+              _startDate!.month,
+              _startDate!.day,
+              time.hour,
+              time.minute,
+            );
+            if (scheduledTime.isAfter(DateTime.now())) {
+              await scheduleNotification(
+                id: notificationId++,
+                title: 'تذكير الدواء',
+                body: 'حان وقت تناول ${_nameController.text.trim()}',
+                scheduledTime: scheduledTime,
+              );
+            }
+          }
+        }
+      }
+      // Handle weekly frequency if needed
 
       _showBlockingAlert("نجاح", "تمت إضافة الدواء بنجاح!", onOk: () {
         if (mounted) Navigator.pop(context, true);
@@ -1274,6 +1300,4 @@ class _AddDoseState extends State<AddDose> {
     super.dispose();
   }
 }
-
-
 

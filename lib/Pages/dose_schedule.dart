@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mudhkir_app/main.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -332,6 +333,23 @@ class _DoseScheduleState extends State<DoseSchedule> {
                 'imageUrl': imageUrl,
                 'imgbbDeleteHash': imgbbDeleteHash,
               });
+
+              // Schedule notifications for each dose
+              final scheduledTime = DateTime(
+                currentDate.year,
+                currentDate.month,
+                currentDate.day,
+                time.hour,
+                time.minute,
+              );
+              if (scheduledTime.isAfter(DateTime.now())) {
+                await scheduleNotification(
+                  id: doc.id.hashCode + time.hashCode, // Unique ID for each notification
+                  title: 'تذكير الدواء',
+                  body: 'حان وقت تناول $medicationName',
+                  scheduledTime: scheduledTime,
+                );
+              }
             }
           }
 
@@ -880,4 +898,5 @@ class _DoseTileState extends State<DoseTile> {
   }
 }
 // --- End DoseTile Widget ---
+
 

@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:mudhkir_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // For username cache
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart'; // For robust date/time parsing/formatting
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 // -----------------------
 // Custom Bottom Navigation Bar
@@ -58,11 +61,59 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
     _loadUserData(); // Load username and closest medication concurrently
+    _setupFCM();
+  }
+
+  void _setupFCM() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null) {
+        flutterLocalNotificationsPlugin.show(
+          message.notification.hashCode,
+          message.notification!.title,
+          message.notification!.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'medication_channel',
+              'Medication Reminders',
+              channelDescription: 'This channel is used for medication reminders.',
+              importance: Importance.high,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+          ),
+        );
+      }
+    });
+
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      if (message.data['action'] == 'taken') {
+        _markDoseAsTaken(message.data['docId']);
+      } else if (message.data['action'] == 'reschedule') {
+        _promptReschedule(message.data['docId']);
+      }
+    });
+  }
+
+  Future<void> _markDoseAsTaken(String docId) async {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .collection('medicines')
+        .doc(docId)
+        .update({'status': 'taken'});
+    _loadClosestMed();
+  }
+
+  Future<void> _promptReschedule(String docId) async {
+    // Logic to reschedule dose
+    // Suggest optimal time and update Firestore
   }
 
   Future<void> _loadUserData() async {
     await _loadUserName();
-    await _loadClosestMed();
+    if (mounted) {
+      await _loadClosestMed();
+    }
   }
 
   // Load username from Firestore and cache it in SharedPreferences.
@@ -135,14 +186,18 @@ class _MainPageState extends State<MainPage> {
 
   // Load the closest upcoming medication dose.
   Future<void> _loadClosestMed() async {
+    if (!mounted) return; // Ensure the widget is still in the tree
     setState(() {
       _isLoadingMed = true;
     });
+
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      setState(() {
-        _isLoadingMed = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingMed = false;
+        });
+      }
       return;
     }
     List<Map<String, dynamic>> potentialDoses = [];
@@ -224,34 +279,48 @@ class _MainPageState extends State<MainPage> {
         }
       }
 
-      if (potentialDoses.isNotEmpty) {
-        potentialDoses.sort((a, b) =>
-            (a['minutesUntil'] as int).compareTo(b['minutesUntil'] as int));
-        final closest = potentialDoses.first;
+      if (mounted) {
         setState(() {
-          _closestMedName = closest['name'];
-          _closestMedTimeStr =
-              _formatTimeOfDay(context, closest['doseTime'] as TimeOfDay);
-          _closestMedDocId = closest['docId'];
-          _isLoadingMed = false;
-        });
-      } else {
-        setState(() {
-          _closestMedName = '';
-          _closestMedTimeStr = '';
-          _closestMedDocId = '';
+          if (potentialDoses.isNotEmpty) {
+            final closest = potentialDoses.first;
+            _closestMedName = closest['name'];
+            _closestMedTimeStr =
+                _formatTimeOfDay(context, closest['doseTime'] as TimeOfDay);
+            _closestMedDocId = closest['docId'];
+          } else {
+            _closestMedName = '';
+            _closestMedTimeStr = '';
+            _closestMedDocId = '';
+          }
           _isLoadingMed = false;
         });
       }
     } catch (e) {
-      print("Error loading closest medication: $e");
-      setState(() {
-        _closestMedName = '';
-        _closestMedTimeStr = 'خطأ في التحميل';
-        _closestMedDocId = '';
-        _isLoadingMed = false;
-      });
+      if (mounted) {
+        setState(() {
+          _closestMedName = '';
+          _closestMedTimeStr = 'خطأ في التحميل';
+          _closestMedDocId = '';
+          _isLoadingMed = false;
+        });
+      }
     }
+  }
+
+  void _sendTestNotification() async {
+    final now = DateTime.now();
+    final testTime = now.add(const Duration(seconds: 10)); // Schedule 10 seconds from now
+
+    await scheduleNotification(
+      id: 9999, // Unique ID for the test notification
+      title: "تذكير تجريبي",
+      body: "هذا إشعار تجريبي لتذكير الدواء.",
+      scheduledTime: testTime,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("تم جدولة الإشعار التجريبي بنجاح")),
+    );
   }
 
   void _onItemTapped(int index) {
@@ -375,6 +444,17 @@ class _MainPageState extends State<MainPage> {
                       // Action Cards Section
                       _buildActionCards(),
                       const SizedBox(height: 20),
+                      // Test Button
+                      ElevatedButton(
+                        onPressed: _sendTestNotification, // Call the test notification function
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text("إرسال إشعار تجريبي"),
+                      ),
                     ],
                   ),
                 ),
@@ -552,3 +632,4 @@ class ActionCard extends StatelessWidget {
     );
   }
 }
+

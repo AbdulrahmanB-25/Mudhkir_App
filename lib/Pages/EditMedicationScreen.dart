@@ -10,6 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:mudhkir_app/main.dart';
+
+import 'EditMedicationScreen.dart' as add_dose; // Import the notification utility
 
 /// Helper function to normalize URLs by removing extra slashes,
 /// while keeping the protocol part intact.
@@ -1245,6 +1248,30 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           .collection('medicines')
           .doc(widget.docId)
           .update(updatedData);
+
+      // Reschedule notifications for the updated dose
+      int notificationId = widget.docId.hashCode; // Use doc ID hash as notification ID
+      if (_selectedFrequency == 'يومي') {
+        for (var time in _selectedTimes) {
+          final scheduledTime = DateTime(
+            _selectedStartDate!.year,
+            _selectedStartDate!.month,
+            _selectedStartDate!.day,
+            time.hour,
+            time.minute,
+          );
+          if (scheduledTime.isAfter(DateTime.now())) {
+            await scheduleNotification(
+              id: notificationId++,
+              title: 'تذكير الدواء',
+              body: 'حان وقت تناول ${_nameController.text.trim()}',
+              scheduledTime: scheduledTime,
+            );
+          }
+        }
+      }
+      // Handle weekly frequency if needed
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("تم حفظ التغييرات بنجاح"), backgroundColor: Colors.green),
       );
@@ -1255,7 +1282,57 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         SnackBar(content: Text("فشل حفظ التغييرات: $e"), backgroundColor: Colors.red),
       );
     } finally {
-      setState(() { _isSaving = false; });
+      setState(() {
+        _isSaving = false;
+      });
+    }
+  }
+
+  Future<void> rescheduleAllNotifications() async {
+    // Fetch all medications from Firestore and reschedule notifications
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final medsSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('medicines')
+        .get();
+
+    await flutterLocalNotificationsPlugin.cancelAll(); // Clear existing notifications
+
+    int notificationId = 0; // Unique ID for each notification
+    final now = DateTime.now();
+
+    for (var doc in medsSnapshot.docs) {
+      final data = doc.data();
+      final String medicationName = data['name'] ?? 'دواء غير مسمى';
+      final List<dynamic> timesRaw = data['times'] ?? [];
+      final String frequencyType = data['frequencyType'] ?? 'يومي';
+
+      if (frequencyType == 'يومي') {
+        for (var timeStr in timesRaw) {
+          final time = add_dose.TimeUtils.parseTime(timeStr.toString());
+          if (time != null) {
+            final scheduledTime = DateTime(
+              now.year,
+              now.month,
+              now.day,
+              time.hour,
+              time.minute,
+            );
+            if (scheduledTime.isAfter(now)) {
+              await scheduleNotification(
+                id: notificationId++,
+                title: 'تذكير الدواء',
+                body: 'حان وقت تناول $medicationName',
+                scheduledTime: scheduledTime,
+              );
+            }
+          }
+        }
+      }
+      // Handle weekly frequency if needed
     }
   }
 
@@ -1839,4 +1916,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
+
+
+
 
