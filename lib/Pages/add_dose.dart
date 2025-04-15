@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:mudhkir_app/main.dart'; // Import the notification utility
 
 // --------------------
@@ -378,6 +379,15 @@ class _AddDoseState extends State<AddDose> {
 
   Future<void> _pickImage() async {
     try {
+      // Request camera permission before accessing the camera
+      final cameraPermission = await Permission.camera.request();
+      if (cameraPermission.isDenied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("يجب السماح بالوصول إلى الكاميرا لالتقاط صورة"))
+        );
+        return;
+      }
+      
       final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
       if (pickedFile != null) {
         setState(() => _capturedImage = File(pickedFile.path));
@@ -444,7 +454,7 @@ class _AddDoseState extends State<AddDose> {
     );
   }
 
-  void _submitForm() async {
+  Future<void> _submitForm() async {
     if (!_formKeyPage3.currentState!.validate()) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -455,7 +465,10 @@ class _AddDoseState extends State<AddDose> {
       _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار لحظات ثم المحاولة مرة أخرى.");
       return;
     }
+
     dynamic schedule;
+    List<Map<String, dynamic>> doseSchedule = [];
+
     if (_frequencyType == 'اسبوعي') {
       if (_selectedWeekdays.isEmpty || _selectedWeekdays.length > 6) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -473,6 +486,37 @@ class _AddDoseState extends State<AddDose> {
       }).toList();
     }
 
+    // Create initial missedDoses array
+    List<Map<String, dynamic>> initialMissedDoses = [];
+    DateTime now = DateTime.now();
+
+    if (_frequencyType == 'يومي') {
+      for (var time in _selectedTimes) {
+        if (time != null) {
+          DateTime doseTime = DateTime(
+            now.year, now.month, now.day, time.hour, time.minute
+          );
+          initialMissedDoses.add({
+            'scheduled': Timestamp.fromDate(doseTime),
+            'status': 'pending'
+          });
+        }
+      }
+    } else if (_frequencyType == 'اسبوعي') {
+      for (var day in _selectedWeekdays) {
+        if (_weeklyTimes[day] != null) {
+          TimeOfDay time = _weeklyTimes[day]!;
+          DateTime doseTime = DateTime(
+            now.year, now.month, now.day, time.hour, time.minute
+          );
+          initialMissedDoses.add({
+            'scheduled': Timestamp.fromDate(doseTime),
+            'status': 'pending'
+          });
+        }
+      }
+    }
+
     final newMedicine = <String, dynamic>{
       'userId': user.uid,
       'name': _nameController.text.trim(),
@@ -484,6 +528,8 @@ class _AddDoseState extends State<AddDose> {
       'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
       'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
       'createdAt': FieldValue.serverTimestamp(),
+      'missedDoses': initialMissedDoses,
+      'lastUpdated': Timestamp.now(),
     };
 
     if (_uploadedImageUrl != null) {
@@ -514,11 +560,13 @@ class _AddDoseState extends State<AddDose> {
               time.minute,
             );
             if (scheduledTime.isAfter(DateTime.now())) {
+              print("Scheduling notification for docId: ${docRef.id}"); // ADDED LOG
               await scheduleNotification(
                 id: notificationId++,
                 title: 'تذكير الدواء',
                 body: 'حان وقت تناول ${_nameController.text.trim()}',
                 scheduledTime: scheduledTime,
+                docId: docRef.id, // Pass the actual document ID as payload
               );
             }
           }

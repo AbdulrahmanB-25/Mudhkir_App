@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:mudhkir_app/main.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
 
 import 'EditMedicationScreen.dart' as add_dose; // Import the notification utility
 
@@ -856,6 +859,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   String? _errorMessage;
   DateTime? _selectedStartDate;
   DateTime? _selectedEndDate;
+  DocumentSnapshot? medicationDoc; // Add this field to store the medication document
   // Daily mode: list of dose times.
   List<TimeOfDay> _selectedTimes = [];
   // For tracking whether each daily time was auto-generated.
@@ -918,6 +922,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           .get();
       if (!mounted) return;
       if (docSnapshot.exists) {
+        medicationDoc = docSnapshot; // Populate the medicationDoc field
         final data = docSnapshot.data()!;
         _nameController.text = data['name'] as String? ?? '';
         _selectedStartDate = (data['startDate'] as Timestamp?)?.toDate();
@@ -1033,6 +1038,17 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 
   Future<void> _getImage(ImageSource source) async {
     try {
+      // Request camera permission if camera is being used
+      if (source == ImageSource.camera) {
+        final cameraPermission = await Permission.camera.request();
+        if (cameraPermission.isDenied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("يجب السماح بالوصول إلى الكاميرا لالتقاط صورة"))
+          );
+          return;
+        }
+      }
+
       final XFile? image = await _picker.pickImage(
         source: source,
         imageQuality: 80,
@@ -1195,52 +1211,35 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       return;
     }
     setState(() { _isSaving = true; });
-    String? finalImageUrl = _currentImageUrl;
-    String? finalDeleteHash = _currentImgbbDeleteHash;
-    bool deleteOldImage = false;
-    if (_newImageFile != null) {
-      final uploadResult = await _uploadImageToImgBB(context, _newImageFile!);
-      if (uploadResult != null) {
-        finalImageUrl = uploadResult['imageUrl'];
-        finalDeleteHash = uploadResult['imgbbDeleteHash'];
-        deleteOldImage = _currentImgbbDeleteHash != null && _currentImgbbDeleteHash!.isNotEmpty;
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("فشل رفع الصورة الجديدة. لم يتم حفظ التغييرات.")));
-        setState(() { _isSaving = false; });
-        return;
-      }
-    } else if (_imageRemoved) {
-      deleteOldImage = _currentImgbbDeleteHash != null && _currentImgbbDeleteHash!.isNotEmpty;
-      finalImageUrl = null;
-      finalDeleteHash = null;
-    }
-    if (deleteOldImage && _currentImgbbDeleteHash != null) {
-      await _deleteOldImgBBImage(_currentImgbbDeleteHash!);
-    }
-    var timesField;
-    if (_selectedFrequency == 'اسبوعي') {
-      timesField = _selectedWeekdays.toList()
-          .map((day) => {
-        'day': day,
-        'time': _weeklyTimes[day] != null ? TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!) : ''
-      })
-          .toList();
-    } else {
-      timesField = _selectedTimes
-          .map((time) => TimeUtils.formatTimeOfDay(context, time))
-          .toList();
-    }
+
+    // Preserve existing alarm times unless explicitly updated
+    final existingTimes = (medicationDoc?.data() as Map<String, dynamic>?)?['times'] ?? [];
+    var timesField = _selectedFrequency == 'اسبوعي'
+        ? _selectedWeekdays.toList().map((day) {
+            return {
+              'day': day,
+              'time': _weeklyTimes[day] != null
+                  ? TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!)
+                  : ''
+            };
+          }).toList()
+        : (_selectedTimes.isNotEmpty
+            ? _selectedTimes.map((time) => TimeUtils.formatTimeOfDay(context, time)).toList()
+            : existingTimes); // Use existing times if no changes
+
     final Map<String, dynamic> updatedData = {
       'name': _nameController.text.trim(),
       'startDate': Timestamp.fromDate(_selectedStartDate!),
       'endDate': _selectedEndDate != null ? Timestamp.fromDate(_selectedEndDate!) : null,
       'times': timesField,
-      'frequency': '${_selectedTimes.length} $_selectedFrequency', // Ensure consistency
-      'frequencyType': _selectedFrequency, // Update frequencyType
+      'frequency': '${_selectedTimes.length} $_selectedFrequency',
+      'frequencyType': _selectedFrequency,
       'weeklyDays': _selectedFrequency == 'اسبوعي' ? _selectedWeekdays.toList() : FieldValue.delete(),
-      'imageUrl': finalImageUrl,
-      'imgbbDeleteHash': finalDeleteHash,
+      'imageUrl': _currentImageUrl,
+      'imgbbDeleteHash': _currentImgbbDeleteHash,
+      'missedTime': FieldValue.delete(), // Reset missedTime if modified
     };
+
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -1249,28 +1248,10 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           .doc(widget.docId)
           .update(updatedData);
 
-      // Reschedule notifications for the updated dose
-      int notificationId = widget.docId.hashCode; // Use doc ID hash as notification ID
-      if (_selectedFrequency == 'يومي') {
-        for (var time in _selectedTimes) {
-          final scheduledTime = DateTime(
-            _selectedStartDate!.year,
-            _selectedStartDate!.month,
-            _selectedStartDate!.day,
-            time.hour,
-            time.minute,
-          );
-          if (scheduledTime.isAfter(DateTime.now())) {
-            await scheduleNotification(
-              id: notificationId++,
-              title: 'تذكير الدواء',
-              body: 'حان وقت تناول ${_nameController.text.trim()}',
-              scheduledTime: scheduledTime,
-            );
-          }
-        }
+      // Reschedule notifications only for updated times
+      if (_selectedTimes.isNotEmpty || _selectedWeekdays.isNotEmpty) {
+        await _rescheduleNotifications(timesField);
       }
-      // Handle weekly frequency if needed
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("تم حفظ التغييرات بنجاح"), backgroundColor: Colors.green),
@@ -1285,6 +1266,45 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       setState(() {
         _isSaving = false;
       });
+    }
+  }
+
+Future<void> _rescheduleNotifications(List<dynamic> timesField) async {
+    await flutterLocalNotificationsPlugin.cancel(widget.docId.hashCode); // Cancel existing notifications
+    final now = DateTime.now();
+    int notificationId = widget.docId.hashCode;
+
+    for (var timeStr in timesField) {
+      final time = TimeUtils.parseTime(timeStr.toString());
+      if (time != null) {
+        final scheduledTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          time.hour,
+          time.minute,
+        );
+        if (scheduledTime.isAfter(now)) {
+          await flutterLocalNotificationsPlugin.zonedSchedule(
+            notificationId++,
+            'تذكير الدواء',
+            'حان وقت تناول ${_nameController.text.trim()}',
+            tz.TZDateTime.from(scheduledTime, tz.local),
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'medication_channel',
+                'Medication Reminders',
+                channelDescription: 'This channel is used for medication reminders.',
+                importance: Importance.high,
+                priority: Priority.high,
+                icon: '@mipmap/ic_launcher',
+              ),
+            ),
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+            matchDateTimeComponents: DateTimeComponents.time,
+          );
+        }
+      }
     }
   }
 
@@ -1326,7 +1346,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                 id: notificationId++,
                 title: 'تذكير الدواء',
                 body: 'حان وقت تناول $medicationName',
-                scheduledTime: scheduledTime,
+                scheduledTime: scheduledTime, docId: '',
               );
             }
           }
@@ -1765,7 +1785,11 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.image_not_supported_outlined, color: Colors.grey.shade600, size: 50),
+          Icon(
+            Icons.image_not_supported_outlined,
+            color: Colors.grey.shade600, 
+            size: 50, // Changed from widget.width * 0.5 to fixed size 50
+          ),
           const SizedBox(height: 8),
           Text("لا توجد صورة", style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
         ],
@@ -1779,7 +1803,11 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
+            colors: [
+              Colors.blue.shade50,
+              Colors.white.withOpacity(0.8),
+              Colors.blue.shade100,
+            ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -1916,7 +1944,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
-
 
 
 

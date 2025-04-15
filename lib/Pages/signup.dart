@@ -129,15 +129,70 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
+          // Background gradient matching login/welcome pages
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue.shade100, Colors.white],
+                colors: [
+                  Colors.blue.shade50,
+                  Colors.white.withOpacity(0.8),
+                  Colors.blue.shade100,
+                ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
             ),
           ),
+          
+          // Decorative pill shapes in background matching login page
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.12,
+            left: MediaQuery.of(context).size.width * 0.05,
+            child: Opacity(
+              opacity: 0.2,
+              child: Transform.rotate(
+                angle: 0.3,
+                child: Container(
+                  height: 70,
+                  width: 140,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade800,
+                    borderRadius: BorderRadius.circular(35),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.22,
+            right: MediaQuery.of(context).size.width * 0.1,
+            child: Opacity(
+              opacity: 0.15,
+              child: Transform.rotate(
+                angle: -0.5,
+                child: Container(
+                  height: 60,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade800,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          
+          // Back Button
+          Positioned(
+            top: 40,
+            left: 16,
+            child: IconButton(
+              icon: Icon(Icons.arrow_back_ios, color: Colors.blue.shade800),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          
+          // Main Content
           Center(
             child: SingleChildScrollView(
               child: Padding(
@@ -145,71 +200,334 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Animated Logo/Icon - Smaller size
                     ScaleTransition(
                       scale: _animation,
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.blue.shade50,
-                        child: Icon(Icons.person_add,
-                            size: 60, color: Colors.blue.shade800),
+                      child: Container(
+                        width: 90, // Reduced from 120
+                        height: 90, // Reduced from 120
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.shade200.withOpacity(0.5),
+                              blurRadius: 15, // Reduced from 20
+                              spreadRadius: 3, // Reduced from 5
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.person_add_rounded,
+                          size: 45, // Reduced from 60
+                          color: Colors.blue.shade800
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20), // Reduced from 30
+                    
+                    // Title
                     Text(
                       "إنشاء حساب",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800),
+                        fontSize: 28, // Reduced from 32
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                        letterSpacing: 1.5,
+                        shadows: [
+                          Shadow(
+                            color: Colors.blue.shade100,
+                            offset: Offset(0, 2),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    _buildTextField(_nameController, "الاسم", Icons.person, _nameError),
-                    _buildTextField(_emailController, "البريد الإلكتروني", Icons.email, _emailError),
-                    _buildPasswordField(),
-                    _buildConfirmPasswordField(),
-                    if (_signupError.isNotEmpty)
+                    const SizedBox(height: 15), // Reduced from 30
+                    
+                    // Name field with card styling
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.blue.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(3.0), // Reduced from 4.0
+                        child: TextField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            labelText: "الاسم",
+                            labelStyle: TextStyle(color: Colors.blue.shade600),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: Icon(Icons.person, color: Colors.blue.shade800),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_isSubmitted && _nameError.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        child: Text(
+                          _nameError,
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    const SizedBox(height: 10), // Reduced from 16
+                    
+                    // Email field with card styling
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.blue.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(3.0), // Reduced from 4.0
+                        child: TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          textDirection: TextDirection.ltr, // Email is always LTR
+                          decoration: InputDecoration(
+                            labelText: "البريد الإلكتروني",
+                            labelStyle: TextStyle(color: Colors.blue.shade600),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: Icon(Icons.email, color: Colors.blue.shade800),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_isSubmitted && _emailError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        child: Text(
+                          _emailError,
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    const SizedBox(height: 10), // Reduced from 16
+                    
+                    // Password field with card styling
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.blue.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(3.0), // Reduced from 4.0
+                        child: TextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: "كلمة المرور",
+                            labelStyle: TextStyle(color: Colors.blue.shade600),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: Icon(Icons.lock, color: Colors.blue.shade800),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                color: Colors.blue.shade700,
+                                size: 20, // Reduced from 22
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_isSubmitted && _passwordError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        child: Text(
+                          _passwordError,
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    const SizedBox(height: 10), // Reduced from 16
+                    
+                    // Confirm Password field with card styling
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.blue.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(3.0), // Reduced from 4.0
+                        child: TextField(
+                          controller: _confirmPasswordController,
+                          obscureText: _obscureConfirmPassword,
+                          decoration: InputDecoration(
+                            labelText: "تأكيد كلمة المرور",
+                            labelStyle: TextStyle(color: Colors.blue.shade600),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: Icon(Icons.lock_outline, color: Colors.blue.shade800),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                                color: Colors.blue.shade700,
+                                size: 20, // Reduced from 22
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscureConfirmPassword = !_obscureConfirmPassword;
+                                });
+                              },
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_isSubmitted && _confirmPasswordError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        child: Text(
+                          _confirmPasswordError,
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    const SizedBox(height: 15), // Reduced from 20
+                    
+                    // Error message display
+                    if (_signupError.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10), // Reduced from 16
+                        padding: const EdgeInsets.all(8), // Reduced from 12
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
                         child: Text(
                           _signupError,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ElevatedButton(
-                      onPressed: _registerUser,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade800,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30)),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        minimumSize: const Size(double.infinity, 50),
-                      ),
-                      child: const Text("إنشاء حساب",
                           style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w600)),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("لديك حساب؟ ",
-                            style: TextStyle(color: Colors.blue.shade800)),
-                        GestureDetector(
-                          onTap: () => Navigator.pushNamed(context, '/login'),
-                          child: Text("تسجيل الدخول",
-                              style: TextStyle(
-                                  color: Colors.blue.shade800,
-                                  fontWeight: FontWeight.bold)),
+                            color: Colors.red.shade700, 
+                            fontSize: 13, // Reduced from 14
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ],
+                      ),
+                    
+                    // Signup Button with gradient and elevation
+                    Container(
+                      margin: const EdgeInsets.only(top: 8), // Reduced from 10
+                      height: 50, // Reduced from 55
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(25), // Reduced from 28
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.shade200.withOpacity(0.5),
+                            blurRadius: 8, // Reduced from 10
+                            offset: Offset(0, 3), // Reduced from Offset(0, 4)
+                          ),
+                        ],
+                        gradient: LinearGradient(
+                          colors: [Colors.blue.shade700, Colors.blue.shade900],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _registerUser,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25), // Reduced from 28
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12), // Reduced from 15
+                          elevation: 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.person_add, size: 20), // Reduced from 22
+                            SizedBox(width: 10),
+                            Text(
+                              "إنشاء حساب",
+                              style: TextStyle(
+                                fontSize: 16, // Reduced from 18
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    
+                    // Login redirect section
+                    Container(
+                      margin: const EdgeInsets.only(top: 20, bottom: 15), // Reduced from top: 30, bottom: 20
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15), // Reduced from vertical: 15, horizontal: 20
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.blue.shade100),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "لديك حساب؟",
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontSize: 14, // Reduced from 15
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pushNamed(context, '/login'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.blue.shade800,
+                              padding: EdgeInsets.symmetric(horizontal: 8), // Reduced from 10
+                            ),
+                            child: Text(
+                              "تسجيل الدخول",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14, // Reduced from 15
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -217,114 +535,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTextField(TextEditingController controller, String label,
-      IconData icon, String error) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: label,
-            filled: true,
-            fillColor: Colors.blue.shade50,
-            prefixIcon: Icon(icon, color: Colors.blue.shade800),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        if (_isSubmitted && error.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Text(error, style: const TextStyle(color: Colors.red)),
-          ),
-        const SizedBox(height: 15),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _passwordController,
-          obscureText: _obscurePassword,
-          decoration: InputDecoration(
-            labelText: "كلمة المرور",
-            filled: true,
-            fillColor: Colors.blue.shade50,
-            prefixIcon: Icon(Icons.lock, color: Colors.blue.shade800),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.blue.shade800,
-              ),
-              onPressed: () {
-                setState(() => _obscurePassword = !_obscurePassword);
-              },
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        if (_isSubmitted && _passwordError.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Text(_passwordError,
-                style: const TextStyle(color: Colors.red)),
-          ),
-        const SizedBox(height: 15),
-      ],
-    );
-  }
-
-  Widget _buildConfirmPasswordField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _confirmPasswordController,
-          obscureText: _obscureConfirmPassword,
-          decoration: InputDecoration(
-            labelText: "تأكيد كلمة المرور",
-            filled: true,
-            fillColor: Colors.blue.shade50,
-            prefixIcon:
-            Icon(Icons.lock_outline, color: Colors.blue.shade800),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscureConfirmPassword
-                    ? Icons.visibility_off
-                    : Icons.visibility,
-                color: Colors.blue.shade800,
-              ),
-              onPressed: () {
-                setState(
-                        () => _obscureConfirmPassword = !_obscureConfirmPassword);
-              },
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        if (_isSubmitted && _confirmPasswordError.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Text(_confirmPasswordError,
-                style: const TextStyle(color: Colors.red)),
-          ),
-        const SizedBox(height: 15),
-      ],
     );
   }
 

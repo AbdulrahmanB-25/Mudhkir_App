@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mudhkir_app/main.dart'; // Import notification utilities
 
-/// You can import your custom bottom navigation widget here if it is in a separate file.
-
-/// For demonstration, here is a simple CustomBottomNavigationBar implementation.
 class CustomBottomNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemTapped;
@@ -19,7 +18,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        color: Colors.white.withValues(alpha:0.8),
+        color: Colors.white.withOpacity(0.8),
         child: BottomNavigationBar(
           items: const [
             BottomNavigationBarItem(
@@ -56,8 +55,60 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // For the bottom navigation bar, we track the selected index.
-  int _selectedIndex = 2; // Set index 2 to show that we're on the "Settings" page.
+  int _selectedIndex = 2; // Index for the bottom navigation bar
+  bool _vibrationEnabled = true;
+  bool _soundEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlarmSettings();
+  }
+
+  Future<void> _saveAlarmSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('vibrationEnabled', _vibrationEnabled);
+    await prefs.setBool('soundEnabled', _soundEnabled);
+
+    print("Settings saved. Vibration: $_vibrationEnabled, Sound: $_soundEnabled");
+    
+    // Reschedule notifications with new settings
+    print("Rescheduling notifications with updated settings...");
+    await rescheduleAllNotifications();
+    print("Notifications rescheduled successfully");
+  }
+
+  Future<void> _loadAlarmSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _vibrationEnabled = prefs.getBool('vibrationEnabled') ?? true;
+      _soundEnabled = prefs.getBool('soundEnabled') ?? true;
+    });
+    print("Settings loaded. Vibration: $_vibrationEnabled, Sound: $_soundEnabled");
+  }
+
+  Future<void> _sendTestNotification() async {
+    final now = DateTime.now();
+    final testTime = now.add(const Duration(seconds: 5)); // Schedule 5 seconds from now
+
+    await scheduleNotification(
+      id: 9999, // Unique ID for the test notification
+      title: "تذكير تجريبي",
+      body: "هذا إشعار تجريبي لتذكير الدواء.",
+      scheduledTime: testTime,
+      docId: '', // No specific docId for the test
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("تم جدولة الإشعار التجريبي، ستظهر خلال 5 ثوان"),
+        backgroundColor: Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(10),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,20 +133,6 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// 🔔 Notifications Toggle
-              SettingTile(
-                icon: Icons.notifications,
-                title: "الإشعارات",
-                subtitle: "تشغيل أو إيقاف إشعارات الجرعات",
-                trailing: Switch(
-                  value: true, // Replace with your state variable if needed.
-                  onChanged: (bool value) {
-                    // Handle toggle logic.
-                  },
-                  activeColor: Colors.blue.shade800,
-                ),
-              ),
-              const SizedBox(height: 10),
               /// 🌐 Language Settings
               SettingTile(
                 icon: Icons.language,
@@ -124,6 +161,65 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   // Handle support contact navigation.
                 },
+              ),
+              const SizedBox(height: 20),
+              /// 🔔 Notification Settings Section
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                child: Text(
+                  "إعدادات التنبيهات",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              /// 🔊 Sound Settings
+              SettingTile(
+                icon: Icons.volume_up,
+                title: "تشغيل الصوت",
+                subtitle: "تشغيل أو إيقاف صوت التنبيه",
+                trailing: Switch(
+                  value: _soundEnabled,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _soundEnabled = value;
+                    });
+                    _saveAlarmSettings();
+                  },
+                  activeColor: Colors.blue.shade800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              /// 📳 Vibration Settings
+              SettingTile(
+                icon: Icons.vibration,
+                title: "تشغيل الاهتزاز",
+                subtitle: "تشغيل أو إيقاف الاهتزاز مع التنبيه",
+                trailing: Switch(
+                  value: _vibrationEnabled,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _vibrationEnabled = value;
+                    });
+                    _saveAlarmSettings();
+                  },
+                  activeColor: Colors.blue.shade800,
+                ),
+              ),
+              const SizedBox(height: 20),
+              /// 🧪 Test Notification Button
+              ElevatedButton.icon(
+                onPressed: _sendTestNotification,
+                icon: const Icon(Icons.notifications_active),
+                label: const Text("اختبار الإشعارات"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ],
           ),

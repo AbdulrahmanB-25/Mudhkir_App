@@ -20,21 +20,36 @@ class CustomBottomNavigationBar extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: BottomNavigationBar(
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'الملف الشخصي'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'الإعدادات'),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade100.withOpacity(0.3),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
         ],
-        currentIndex: selectedIndex,
-        selectedItemColor: Colors.blue.shade800,
-        unselectedItemColor: Colors.grey.shade600,
-        onTap: onItemTapped,
-        backgroundColor: Colors.white.withOpacity(0.9),
-        elevation: 5,
-        type: BottomNavigationBarType.fixed,
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: BottomNavigationBar(
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'الرئيسية'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'الملف الشخصي'),
+            BottomNavigationBarItem(icon: Icon(Icons.settings_rounded), label: 'الإعدادات'),
+          ],
+          currentIndex: selectedIndex,
+          selectedItemColor: Colors.blue.shade800,
+          unselectedItemColor: Colors.grey.shade500,
+          onTap: onItemTapped,
+          backgroundColor: Colors.white.withOpacity(0.95),
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          showUnselectedLabels: true,
+        ),
       ),
     );
   }
@@ -49,19 +64,38 @@ class MainPage extends StatefulWidget {
   _MainPageState createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   String _userName = '';
   String _closestMedName = '';
   String _closestMedTimeStr = ''; // Formatted time string
   String _closestMedDocId = '';
   bool _isLoadingMed = true; // Loading indicator state
+  late AnimationController _animationController;
+  late Animation<double> _fadeInAnimation;
 
   @override
   void initState() {
     super.initState();
+    // Set up animations
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeInAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeIn,
+    );
+    _animationController.forward();
+    
     _loadUserData(); // Load username and closest medication concurrently
     _setupFCM();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   void _setupFCM() {
@@ -274,7 +308,7 @@ class _MainPageState extends State<MainPage> {
             'doseTime': doseTime,
             'doseTimeStr': _formatTimeOfDay(context, doseTime),
             'minutesUntil': minutesUntilNextDose,
-            'docId': doc.id,
+            'docId': doc.id, // Pass docId here
           });
         }
       }
@@ -307,7 +341,7 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  void _sendTestNotification() async {
+  Future<void> _sendTestNotification(BuildContext context) async {
     final now = DateTime.now();
     final testTime = now.add(const Duration(seconds: 10)); // Schedule 10 seconds from now
 
@@ -316,10 +350,17 @@ class _MainPageState extends State<MainPage> {
       title: "تذكير تجريبي",
       body: "هذا إشعار تجريبي لتذكير الدواء.",
       scheduledTime: testTime,
+      docId: '9999_test_medication', // Use a real ID format for testing navigation
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("تم جدولة الإشعار التجريبي بنجاح")),
+      SnackBar(
+        content: const Text("تم جدولة الإشعار التجريبي بنجاح، سيظهر خلال 10 ثوان"),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(10),
+      ),
     );
   }
 
@@ -350,112 +391,233 @@ class _MainPageState extends State<MainPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient
+          // Background Gradient - matching login/signup pages
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue.shade100, Colors.white],
+                colors: [
+                  Colors.blue.shade50,
+                  Colors.white.withOpacity(0.8),
+                  Colors.blue.shade100,
+                ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
             ),
           ),
+          
+          // Decorative pill shape in background (subtle)
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.12,
+            left: MediaQuery.of(context).size.width * 0.05,
+            child: Opacity(
+              opacity: 0.1,
+              child: Transform.rotate(
+                angle: 0.3,
+                child: Container(
+                  height: 70,
+                  width: 140,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade800,
+                    borderRadius: BorderRadius.circular(35),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          
           // Main Content with Pull-to-Refresh
           SafeArea(
             child: RefreshIndicator(
               onRefresh: _loadClosestMed,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Welcome Message
-                      Text(
-                        _userName.isEmpty ? "مرحباً بك" : "مرحباً بك، $_userName",
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800,
+              color: Colors.blue.shade700,
+              child: FadeTransition(
+                opacity: _fadeInAnimation,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 25),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // Welcome Message
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.shade200.withOpacity(0.2),
+                                blurRadius: 10,
+                                spreadRadius: 0,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      _userName.isEmpty ? "مرحباً بك" : "مرحباً بك، $_userName",
+                                      style: TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade800,
+                                      ),
+                                      textAlign: TextAlign.right,
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      "نتمنى لك يوماً صحياً",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.blue.shade600,
+                                      ),
+                                      textAlign: TextAlign.right,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                                child: Icon(
+                                  Icons.medication_rounded,
+                                  size: 32,
+                                  color: Colors.blue.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        textAlign: TextAlign.right,
-                      ),
-                      Text(
-                        "نتمنى لك يوماً صحياً",
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.blue.shade600,
+                        const SizedBox(height: 25),
+                        
+                        // Upcoming Dose Section
+                        Text(
+                          "الجرعة القادمة",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.right,
                         ),
-                        textAlign: TextAlign.right,
-                      ),
-                      const SizedBox(height: 25),
-                      // Upcoming Dose Section
-                      Text(
-                        "الجرعة القادمة",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.shade100.withOpacity(0.3),
+                                spreadRadius: 0,
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: _isLoadingMed
+                              ? Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(20.0),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: Colors.blue.shade600,
+                                    ),
+                                  ),
+                                )
+                              : _closestMedName.isEmpty
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              Icons.medication_liquid_outlined,
+                                              size: 50,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              "لا توجد جرعات قادمة",
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : DoseTile(
+                                      medicationName: _closestMedName,
+                                      nextDose: _closestMedTimeStr,
+                                      docId: _closestMedDocId,
+                                      imageUrl: "", // No image shown here
+                                      onDelete: () {},
+                                      deletable: false,
+                                    ),
                         ),
-                        textAlign: TextAlign.right,
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.2),
-                              spreadRadius: 1,
-                              blurRadius: 5,
-                              offset: const Offset(0, 3),
+                        const SizedBox(height: 30),
+                        
+                        // Action Cards Section
+                        _buildActionCards(),
+                        
+                        const SizedBox(height: 20),
+                        // Test Button - styled to match theme
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.shade100.withOpacity(0.4),
+                                blurRadius: 8,
+                                spreadRadius: 0,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                            gradient: LinearGradient(
+                              colors: [Colors.blue.shade700, Colors.blue.shade800],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                          ],
-                        ),
-                        child: _isLoadingMed
-                            ? const Center(child: CircularProgressIndicator())
-                            : _closestMedName.isEmpty
-                            ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10.0),
-                            child: Text(
-                              "لا توجد جرعات قادمة",
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: () => _sendTestNotification(context),
+                            icon: const Icon(Icons.notifications_active, size: 20),
+                            label: const Text(
+                              "إرسال إشعار تجريبي",
                               style: TextStyle(
                                 fontSize: 16,
-                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: Colors.transparent,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                           ),
-                        )
-                            : DoseTile(
-                          medicationName: _closestMedName,
-                          nextDose: _closestMedTimeStr,
-                          docId: _closestMedDocId,
-                          imageUrl: "", // No image shown here
-                          onDelete: () {},
-                          deletable: false,
                         ),
-                      ),
-                      const SizedBox(height: 30),
-                      // Action Cards Section
-                      _buildActionCards(),
-                      const SizedBox(height: 20),
-                      // Test Button
-                      ElevatedButton(
-                        onPressed: _sendTestNotification, // Call the test notification function
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: const Text("إرسال إشعار تجريبي"),
-                      ),
-                    ],
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -479,6 +641,7 @@ class _MainPageState extends State<MainPage> {
               child: ActionCard(
                 icon: Icons.add_circle_outline,
                 label: "إضافة دواء",
+                color: Colors.green.shade700,
                 onTap: () {
                   Navigator.pushNamed(context, '/add_dose').then((result) {
                     if (result != null) {
@@ -493,6 +656,7 @@ class _MainPageState extends State<MainPage> {
               child: ActionCard(
                 icon: Icons.calendar_month_outlined,
                 label: "جدول الأدوية",
+                color: Colors.blue.shade700,
                 onTap: () {
                   Navigator.pushNamed(context, '/dose_schedule');
                 },
@@ -504,6 +668,7 @@ class _MainPageState extends State<MainPage> {
         ActionCard(
           icon: Icons.people_outline,
           label: "المرافقين",
+          color: Colors.orange.shade700,
           isFullWidth: true,
           onTap: () {
             Navigator.pushNamed(context, '/companions');
@@ -536,35 +701,65 @@ class DoseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          Icons.medication_liquid,
-          size: 30,
-          color: Colors.blue.shade700,
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.blue.shade100, width: 1),
+        borderRadius: BorderRadius.circular(12),
       ),
-      title: Text(
-        medicationName,
-        style: TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.bold,
-          color: Colors.blue.shade900,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        leading: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.shade100.withOpacity(0.3),
+                blurRadius: 4,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.medication_liquid,
+            size: 32,
+            color: Colors.blue.shade700,
+          ),
         ),
-      ),
-      subtitle: Text(
-        "الوقت: $nextDose",
-        style: const TextStyle(
-          fontSize: 15,
-          color: Colors.black54,
+        title: Text(
+          medicationName,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue.shade900,
+          ),
+        ),
+        subtitle: Row(
+          children: [
+            Icon(
+              Icons.access_time_rounded,
+              size: 16,
+              color: Colors.blue.shade600,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              nextDose,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.blue.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        trailing: Icon(
+          Icons.notifications_active_rounded,
+          color: Colors.orange.shade600,
+          size: 24,
         ),
       ),
     );
@@ -577,53 +772,84 @@ class DoseTile extends StatelessWidget {
 class ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback onTap;
   final bool isFullWidth;
+  
   const ActionCard({
     super.key,
     required this.icon,
     required this.label,
     required this.onTap,
+    required this.color,
     this.isFullWidth = false,
   });
+  
   @override
   Widget build(BuildContext context) {
     return Container(
       width: isFullWidth ? double.infinity : null,
-      constraints: const BoxConstraints(minHeight: 90),
+      height: 100,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.grey.withOpacity(0.15),
-              blurRadius: 8,
-              offset: const Offset(0, 4)),
+            color: Colors.blue.shade100.withOpacity(0.3),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Material(
-        color: Colors.transparent,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 15.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: isFullWidth 
+                  ? MainAxisAlignment.start 
+                  : MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 35, color: Colors.blue.shade700),
-                const SizedBox(width: 12),
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon, 
+                    size: 26, 
+                    color: color,
+                  ),
+                ),
+                const SizedBox(width: 15),
                 Flexible(
                   child: Text(
                     label,
-                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue.shade800,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
                     ),
                   ),
                 ),
+                if (isFullWidth)
+                  const Spacer(),
+                if (isFullWidth)
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                    color: color,
+                  ),
               ],
             ),
           ),
