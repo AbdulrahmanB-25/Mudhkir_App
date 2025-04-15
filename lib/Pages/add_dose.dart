@@ -572,7 +572,6 @@ class _AddDoseState extends State<AddDose> {
           }
         }
       }
-      // Handle weekly frequency if needed
 
       _showBlockingAlert("نجاح", "تمت إضافة الدواء بنجاح!", onOk: () {
         if (mounted) Navigator.pop(context, true);

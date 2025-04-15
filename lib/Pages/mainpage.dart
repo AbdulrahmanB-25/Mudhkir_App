@@ -345,12 +345,27 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     final now = DateTime.now();
     final testTime = now.add(const Duration(seconds: 10)); // Schedule 10 seconds from now
 
+    // Get a random medication ID for testing
+    final medicationId = await _getRandomMedicationId();
+    if (medicationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("لم يتم العثور على أدوية لاختبار الإشعارات"),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(10),
+        ),
+      );
+      return;
+    }
+
     await scheduleNotification(
       id: 9999, // Unique ID for the test notification
       title: "تذكير تجريبي",
       body: "هذا إشعار تجريبي لتذكير الدواء.",
       scheduledTime: testTime,
-      docId: '9999_test_medication', // Use a real ID format for testing navigation
+      docId: medicationId, // Use a real ID format for testing navigation
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -362,6 +377,82 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         margin: const EdgeInsets.all(10),
       ),
     );
+  }
+
+  Future<String?> _getRandomMedicationId() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .limit(1)  // Just get one document
+          .get();
+      
+      if (snapshot.docs.isNotEmpty) {
+        return snapshot.docs.first.id;
+      } else {
+        // No medications found
+        return null;
+      }
+    } catch (e) {
+      print('Error getting medication ID: $e');
+      return null;
+    }
+  }
+
+  Future<void> _testMedicationDetailNavigation(BuildContext context) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+    
+    try {
+      // Get a medication ID to use for testing
+      final medicationId = await _getRandomMedicationId();
+      
+      // Close loading dialog
+      Navigator.pop(context);
+      
+      if (medicationId != null) {
+        // Navigate to the medication detail page with the retrieved ID
+        Navigator.pushNamed(
+          context,
+          '/medication_detail',
+          arguments: {'docId': medicationId},
+        );
+      } else {
+        // No medications found, show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("لم يتم العثور على أدوية لاختبار الصفحة"),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(10),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if error occurs
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("حدث خطأ: $e"),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(10),
+        ),
+      );
+    }
   }
 
   void _onItemTapped(int index) {
@@ -615,6 +706,49 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                             ),
                           ),
                         ),
+                        const SizedBox(height: 15),
+                        
+                        // NEW: Test Button for Medication Detail Page
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.purple.shade100.withOpacity(0.4),
+                                blurRadius: 8,
+                                spreadRadius: 0,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                            gradient: LinearGradient(
+                              colors: [Colors.purple.shade500, Colors.purple.shade700],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: () => _testMedicationDetailNavigation(context),
+                            icon: const Icon(Icons.medication, size: 20),
+                            label: const Text(
+                              "اختبار صفحة تفاصيل الدواء",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: Colors.transparent,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                        ),
+                        
                         const SizedBox(height: 20),
                       ],
                     ),

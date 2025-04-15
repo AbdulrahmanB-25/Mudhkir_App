@@ -34,7 +34,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // Local notifications plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
+    FlutterLocalNotificationsPlugin();
 
 // --- Background Message Handler (FCM) ---
 @pragma('vm:entry-point') // Ensures tree shaking doesn't remove this
@@ -42,6 +42,52 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(); // Required for background isolate
   print("Handling a background FCM message: ${message.messageId}");
   // Add logic here if you use FCM data messages to trigger actions/notifications
+}
+
+// For storing notification redirection data
+Future<void> _storeNotificationRedirectData(String medicationId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('pending_notification_docId', medicationId);
+  await prefs.setInt('notification_timestamp', DateTime.now().millisecondsSinceEpoch);
+  print("[Notification Redirect] Stored redirection data for medicationId: $medicationId");
+}
+
+// For checking if we need to redirect
+Future<Map<String, dynamic>?> _checkNotificationRedirect() async {
+  final prefs = await SharedPreferences.getInstance();
+  final medicationId = prefs.getString('pending_notification_docId');
+  final timestamp = prefs.getInt('notification_timestamp');
+
+  if (medicationId == null || timestamp == null) {
+    return null; // No redirection needed
+  }
+
+  // Check if timestamp is within valid window (e.g., 45 minutes instead of 15)
+  final notificationTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+  final now = DateTime.now();
+  final difference = now.difference(notificationTime);
+
+  if (difference.inMinutes > 45) { // Changed from 15 to 45 minutes
+    // Expired - clear the data
+    await prefs.remove('pending_notification_docId');
+    await prefs.remove('notification_timestamp');
+    print("[Notification Redirect] Redirection expired (${difference.inMinutes} minutes old)");
+    return null;
+  }
+
+  // Valid redirection data
+  return {
+    'docId': medicationId,
+    'timestamp': notificationTime,
+  };
+}
+
+// For clearing the redirection data
+Future<void> _clearNotificationRedirectData() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('pending_notification_docId');
+  await prefs.remove('notification_timestamp');
+  print("[Notification Redirect] Cleared redirection data");
 }
 
 // --- Schedule Local Notification Function ---
@@ -98,14 +144,14 @@ Future<void> scheduleNotification({
       ledColor: Colors.red,
       ledOnMs: 1000,
       ledOffMs: 500,
-      ongoing: true,
-      autoCancel: false,
+      autoCancel: true, // IMPORTANT: This ensures notification is dismissed on tap
+      ongoing: false,   // CHANGED: Changed from true to allow auto-cancellation
       timeoutAfter: 120000, // 2 minutes
       fullScreenIntent: true,
       category: AndroidNotificationCategory.alarm,
     );
 
-    // Configure iOS/macOS Notification Details (Basic)
+    // Configure iOS/macOS Notification Details
     const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
@@ -141,6 +187,37 @@ Future<void> scheduleNotification({
     print('[ScheduleNotification] Error scheduling notification $id: $e');
     print('[ScheduleNotification] Stacktrace: $stacktrace');
   }
+}
+
+// Change how notification listeners are set up
+void _setupNotificationListeners() {
+  flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails().then((details) {
+    if (details != null && details.didNotificationLaunchApp && details.notificationResponse != null) {
+      // App was launched by tapping on notification - this is already handled
+      final payload = details.notificationResponse?.payload;
+      if (payload != null && payload.isNotEmpty && payload != "no_doc_id") {
+        print("[Notification Launch] App launched by tapping notification with payload: $payload");
+      }
+    }
+  });
+
+  // Update the notification display callback implementation
+  // Note: iOS foreground notification handling is now different in v19+
+  flutterLocalNotificationsPlugin
+      .initialize(
+        InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          iOS: DarwinInitializationSettings(),
+        ),
+        onDidReceiveNotificationResponse: (NotificationResponse details) {
+          // Handle notification tap
+          final payload = details.payload;
+          if (payload != null && payload.isNotEmpty) {
+            print("[Notification Tap] User tapped notification with payload: $payload");
+            _storeNotificationRedirectData(payload);
+          }
+        },
+      );
 }
 
 // --- Reschedule All Notifications Function ---
@@ -307,6 +384,10 @@ class MyApp extends StatelessWidget {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Arabic locale data for date formatting
+  await initializeDateFormatting('ar_SA', null);
+  print("[Localization] Initialized Arabic (Saudi Arabia) locale data");
+
   // Load .env (optional)
   await dotenv.load(fileName: ".env").catchError((e) {
     print("Could not load .env file (this might be normal): $e");
@@ -345,90 +426,87 @@ void main() async {
 
   // Local Notifications Initialization
   const AndroidInitializationSettings androidSettings =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+      
+  // The DarwinInitializationSettings constructor has changed in v19
   const DarwinInitializationSettings darwinSettings = DarwinInitializationSettings(
-    requestAlertPermission: false, requestBadgePermission: false, requestSoundPermission: false,
+    requestAlertPermission: false, 
+    requestBadgePermission: false, 
+    requestSoundPermission: false,
   );
+  
   const InitializationSettings initSettings = InitializationSettings(
-    android: androidSettings, iOS: darwinSettings, macOS: darwinSettings,
+    android: androidSettings, 
+    iOS: darwinSettings, 
+    macOS: darwinSettings,
   );
 
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
-    // Callback when notification is tapped (App IS RUNNING)
     onDidReceiveNotificationResponse: (NotificationResponse response) async {
+      // Handle notification tap
       final String? payload = response.payload;
-      print("[Notification Tap - Running] Tapped! Payload: ${payload ?? 'NULL'}");
-
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        print("[Notification Tap - Running] Cannot navigate: User not logged in.");
-        return;
-      }
-      if (payload == null || payload.isEmpty) {
-        print("[Notification Tap - Running] Cannot navigate: Payload is null or empty.");
-        return;
-      }
-      if (payload.startsWith("no_doc_id_")) {
-        print("[Notification Tap - Running] Fallback/Test payload detected - no navigation.");
-        return;
-      }
-
-      print("[Notification Tap - Running] Attempting navigation to MedicationDetailPage with docId: $payload");
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (navigatorKey.currentState != null) {
-          try {
-            navigatorKey.currentState!.pushNamed(
-              '/medication_detail', arguments: {'docId': payload},
-            );
-            print("[Notification Tap - Running] Navigation successful.");
-          } catch (e) {
-            print("[Notification Tap - Running] ERROR during navigation: $e");
+      if (payload != null && payload.isNotEmpty) {
+        print("[Notification Tap] Notification tapped with payload: $payload");
+        
+        // Store the medication ID for navigation
+        await _storeNotificationRedirectData(payload);
+        
+        // Cancel the notification immediately to ensure it's removed
+        try {
+          // Fix the nullable int error by checking if id is not null
+          if (response.id != null) {
+            await flutterLocalNotificationsPlugin.cancel(response.id!);
+            print("[Notification] Cancelled notification ID: ${response.id}");
           }
-        } else {
-          print("[Notification Tap - Running] ERROR: NavigatorKey.currentState is NULL.");
+        } catch (e) {
+          print("[Notification] Error cancelling notification: $e");
         }
-      });
+        
+        // Handle immediate navigation if app is already running
+        if (navigatorKey.currentState != null && FirebaseAuth.instance.currentUser != null) {
+          navigatorKey.currentState!.pushNamed(
+            '/medication_detail',
+            arguments: {'docId': payload},
+          );
+          print("[Navigation] Navigated to medication detail with docId: $payload");
+        }
+      }
     },
   );
 
-  // Check if App was Launched by Notification (App WAS TERMINATED)
-  final NotificationAppLaunchDetails? appLaunchDetails = await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-  if (appLaunchDetails != null && appLaunchDetails.didNotificationLaunchApp) {
-    final String? payload = appLaunchDetails.notificationResponse?.payload;
-    print("[Notification Launch] App launched via notification.");
-    print("[Notification Launch] Payload: ${payload ?? 'NULL'}");
+  // Add check for pending notification redirects on normal app launch
+  final redirectData = await _checkNotificationRedirect();
+  if (redirectData != null) {
+    final String docId = redirectData['docId'];
+    final DateTime timestamp = redirectData['timestamp'];
+    print("[Auto-Redirect] Found pending redirection to medication: $docId (from ${timestamp.toString()})");
 
-    if (payload != null && payload.isNotEmpty && !payload.startsWith("no_doc_id_")) {
-      print("[Notification Launch] Valid payload found: $payload. Will navigate after init.");
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        print("[Notification Launch] Post frame callback executing...");
-        final currentUser = FirebaseAuth.instance.currentUser;
-        final navigatorState = navigatorKey.currentState;
-        if (currentUser != null && navigatorState != null) {
-          print("[Notification Launch] User logged in and navigator ready. Navigating...");
-          try {
-            navigatorState.pushNamed(
-              '/medication_detail', arguments: {'docId': payload},
-            );
-            print("[Notification Launch] Navigation successful.");
-          } catch (e) {
-            print("[Notification Launch] ERROR during navigation: $e");
-          }
-        } else {
-          print('[Notification Launch] Navigation skipped: User=${currentUser?.uid ?? 'NULL'}, Navigator State=${navigatorState == null ? 'NULL' : 'Ready'}');
+    // We'll handle the actual navigation in the app's first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Wait a brief moment for app to initialize
+      await Future.delayed(Duration(milliseconds: 800));
+
+      if (navigatorKey.currentState != null && FirebaseAuth.instance.currentUser != null) {
+        print("[Auto-Redirect] Performing auto-navigation to medication details");
+        try {
+          // Clear the redirect data before navigating
+          await _clearNotificationRedirectData();
+
+          navigatorKey.currentState!.pushNamed(
+            '/medication_detail',
+            arguments: {'docId': docId},
+          );
+        } catch (e) {
+          print("[Auto-Redirect] Error during auto-navigation: $e");
         }
-      });
-    } else {
-      print('[Notification Launch] No navigation needed - Payload invalid or fallback/test.');
-    }
+      } else {
+        print("[Auto-Redirect] Cannot auto-navigate: NavigatorKey or User not available");
+      }
+    });
   } else {
-    print("[Notification Launch] App was not launched via notification tap.");
+    print("[Auto-Redirect] No pending redirections found");
   }
-
-  // Initialize date formatting
-  await initializeDateFormatting('ar_SA', null);
-  print("[Localization] Arabic date formatting initialized.");
 
   // Run the app
   print("[Startup] Running the app...");

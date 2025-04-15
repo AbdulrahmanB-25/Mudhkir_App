@@ -575,7 +575,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
                                       // Apply a subtle bottom border for days with events
-                                      border: events.isNotEmpty 
+                                      border: events.isNotEmpty
                                           ? Border(
                                               bottom: BorderSide(
                                                 color: Colors.orange.shade300,
@@ -584,7 +584,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
                                             )
                                           : null,
                                       // Optional: Add a very subtle background for days with events
-                                      color: events.isNotEmpty 
+                                      color: events.isNotEmpty
                                           ? Colors.orange.shade50.withOpacity(0.3)
                                           : null,
                                       borderRadius: BorderRadius.circular(8),
@@ -932,7 +932,7 @@ class _DoseTileState extends State<DoseTile> {
           _isLoadingStatus = false;
         });
         widget.onDataChanged(); // Refresh the main list if needed (e.g., if filtering by status)
-        
+
         // If status changed to 'taken', reschedule the notification for tomorrow
         if (newStatus == 'taken') {
           // Cancel today's notification and schedule for tomorrow
@@ -944,7 +944,7 @@ class _DoseTileState extends State<DoseTile> {
             doseTime.hour,
             doseTime.minute,
           );
-          
+
           // FIX: Ensure proper docId is passed for the medication
           print("Rescheduling notification with docId: ${widget.docId}"); // ADDED LOG
           await scheduleNotification(
@@ -1351,12 +1351,3 @@ class _DoseTileState extends State<DoseTile> {
   }
 }
 // --- End DoseTile Widget ---
-
-
-
-
-
-
-
-
-
