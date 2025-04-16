@@ -7,6 +7,7 @@ import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
 class PersonalDataPage extends StatefulWidget {
   const PersonalDataPage({super.key});
 
+ //TODO : ACCOUNT EDITING AND EMAIL CHANGE MAKE IT IN SETTINGS
   @override
   _PersonalDataPageState createState() => _PersonalDataPageState();
 }
