@@ -73,6 +73,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   bool _isLoadingMed = true; // Loading indicator state
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
+  bool _isAuthenticated = false; // Track if user is authenticated
 
   @override
   void initState() {
@@ -87,9 +88,28 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       curve: Curves.easeIn,
     );
     _animationController.forward();
-    
-    _loadUserData(); // Load username and closest medication concurrently
-    _setupFCM();
+
+    // Check authentication status first
+    _checkAuthStatus();
+  }
+
+  // New method to check authentication status
+  Future<void> _checkAuthStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    setState(() {
+      _isAuthenticated = user != null;
+    });
+
+    if (_isAuthenticated) {
+      _loadUserData(); // Only load user data if authenticated
+    } else {
+      // If not authenticated, redirect to welcome page
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacementNamed('/welcome');
+      });
+    }
+
+    _setupFCM(); // Still set up FCM for all users
   }
 
   @override
@@ -153,7 +173,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   // Load username from Firestore and cache it in SharedPreferences.
   Future<void> _loadUserName() async {
     User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() => _userName = 'زائر'); // Set to "Guest" in Arabic
+      return;
+    }
     try {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -382,15 +405,15 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   Future<String?> _getRandomMedicationId() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
-    
+
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('medicines')
-          .limit(1)  // Just get one document
+          .limit(1) // Just get one document
           .get();
-      
+
       if (snapshot.docs.isNotEmpty) {
         return snapshot.docs.first.id;
       } else {
@@ -412,14 +435,14 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         child: CircularProgressIndicator(),
       ),
     );
-    
+
     try {
       // Get a medication ID to use for testing
       final medicationId = await _getRandomMedicationId();
-      
+
       // Close loading dialog
       Navigator.pop(context);
-      
+
       if (medicationId != null) {
         // Navigate to the medication detail page with the retrieved ID
         Navigator.pushNamed(
@@ -442,7 +465,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     } catch (e) {
       // Close loading dialog if error occurs
       Navigator.pop(context);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("حدث خطأ: $e"),
@@ -458,6 +481,40 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   void _onItemTapped(int index) {
     // Navigation logic: update index and call routes based on index.
     if (_selectedIndex == index) return;
+
+    // Check if user is authenticated before allowing navigation to certain pages
+    if (!_isAuthenticated) {
+      // Show dialog prompting user to login
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('تنبيه', textAlign: TextAlign.right),
+            content: const Text(
+              'يجب تسجيل الدخول للوصول إلى هذه الصفحة',
+              textAlign: TextAlign.right,
+            ),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('إلغاء'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ElevatedButton(
+                child: const Text('تسجيل الدخول'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     String? routeName;
     if (index == 1) routeName = "/personal_data";
     if (index == 2) routeName = "/settings";
@@ -467,13 +524,14 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         setState(() {
           _selectedIndex = index;
         });
-        _loadClosestMed();
+        if (_isAuthenticated) {
+          _loadClosestMed();
+        }
       });
     } else {
       setState(() {
         _selectedIndex = index;
       });
-      // Optionally reload meds if needed.
     }
   }
 
@@ -496,7 +554,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               ),
             ),
           ),
-          
+
           // Decorative pill shape in background (subtle)
           Positioned(
             top: MediaQuery.of(context).size.height * 0.12,
@@ -516,11 +574,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               ),
             ),
           ),
-          
+
           // Main Content with Pull-to-Refresh
           SafeArea(
             child: RefreshIndicator(
-              onRefresh: _loadClosestMed,
+              onRefresh: _isAuthenticated ? _loadClosestMed : () async {}, // Only refresh if authenticated
               color: Colors.blue.shade700,
               child: FadeTransition(
                 opacity: _fadeInAnimation,
@@ -531,7 +589,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Welcome Message
+                        // Welcome Message - Show different message for guests
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -553,7 +611,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      _userName.isEmpty ? "مرحباً بك" : "مرحباً بك، $_userName",
+                                      _isAuthenticated
+                                          ? (_userName.isEmpty ? "مرحباً بك" : "مرحباً بك، $_userName")
+                                          : "مرحباً بك، $_userName",
                                       style: TextStyle(
                                         fontSize: 26,
                                         fontWeight: FontWeight.bold,
@@ -563,10 +623,14 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                     ),
                                     const SizedBox(height: 5),
                                     Text(
-                                      "نتمنى لك يوماً صحياً",
+                                      _isAuthenticated
+                                          ? "نتمنى لك يوماً صحياً"
+                                          : "سجل الدخول للوصول إلى جميع الميزات",
                                       style: TextStyle(
                                         fontSize: 18,
-                                        color: Colors.blue.shade600,
+                                        color: _isAuthenticated
+                                            ? Colors.blue.shade600
+                                            : Colors.orange.shade700,
                                       ),
                                       textAlign: TextAlign.right,
                                     ),
@@ -582,7 +646,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                   borderRadius: BorderRadius.circular(30),
                                 ),
                                 child: Icon(
-                                  Icons.medication_rounded,
+                                  _isAuthenticated
+                                      ? Icons.medication_rounded
+                                      : Icons.person_outline,
                                   size: 32,
                                   color: Colors.blue.shade800,
                                 ),
@@ -591,165 +657,209 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                           ),
                         ),
                         const SizedBox(height: 25),
-                        
-                        // Upcoming Dose Section
-                        Text(
-                          "الجرعة القادمة",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                          textAlign: TextAlign.right,
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.shade100.withOpacity(0.3),
-                                spreadRadius: 0,
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
+
+                        // Show login button for unauthenticated users
+                        if (!_isAuthenticated)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 25),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.shade100.withOpacity(0.4),
+                                  blurRadius: 8,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                              gradient: LinearGradient(
+                                colors: [Colors.blue.shade700, Colors.blue.shade900],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ],
+                            ),
+                            child: ElevatedButton.icon(
+                              onPressed: () => Navigator.pushNamed(context, '/login'),
+                              icon: const Icon(Icons.login, size: 20),
+                              label: const Text(
+                                "تسجيل الدخول",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
                           ),
-                          child: _isLoadingMed
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(20.0),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 3,
-                                      color: Colors.blue.shade600,
-                                    ),
-                                  ),
-                                )
-                              : _closestMedName.isEmpty
-                                  ? Center(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 20.0),
-                                        child: Column(
-                                          children: [
-                                            Icon(
-                                              Icons.medication_liquid_outlined,
-                                              size: 50,
-                                              color: Colors.grey.shade400,
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(
-                                              "لا توجد جرعات قادمة",
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+
+                        // Upcoming Dose Section - only show if authenticated
+                        if (_isAuthenticated) ...[
+                          Text(
+                            "الجرعة القادمة",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(15),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.shade100.withOpacity(0.3),
+                                  spreadRadius: 0,
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: _isLoadingMed
+                                ? Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(20.0),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        color: Colors.blue.shade600,
                                       ),
-                                    )
-                                  : DoseTile(
-                                      medicationName: _closestMedName,
-                                      nextDose: _closestMedTimeStr,
-                                      docId: _closestMedDocId,
-                                      imageUrl: "", // No image shown here
-                                      onDelete: () {},
-                                      deletable: false,
                                     ),
-                        ),
-                        const SizedBox(height: 30),
-                        
-                        // Action Cards Section
+                                  )
+                                : _closestMedName.isEmpty
+                                    ? Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                          child: Column(
+                                            children: [
+                                              Icon(
+                                                Icons.medication_liquid_outlined,
+                                                size: 50,
+                                                color: Colors.grey.shade400,
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text(
+                                                "لا توجد جرعات قادمة",
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                    : DoseTile(
+                                        medicationName: _closestMedName,
+                                        nextDose: _closestMedTimeStr,
+                                        docId: _closestMedDocId,
+                                        imageUrl: "", // No image shown here
+                                        onDelete: () {},
+                                        deletable: false,
+                                      ),
+                          ),
+                          const SizedBox(height: 30),
+                        ],
+
+                        // Action Cards Section - Modify to check authentication
                         _buildActionCards(),
-                        
+
                         const SizedBox(height: 20),
-                        // Test Button - styled to match theme
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.shade100.withOpacity(0.4),
-                                blurRadius: 8,
-                                spreadRadius: 0,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                            gradient: LinearGradient(
-                              colors: [Colors.blue.shade700, Colors.blue.shade800],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: () => _sendTestNotification(context),
-                            icon: const Icon(Icons.notifications_active, size: 20),
-                            label: const Text(
-                              "إرسال إشعار تجريبي",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                        // Test buttons - only show if authenticated
+                        if (_isAuthenticated) ...[
+                          Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.shade100.withOpacity(0.4),
+                                  blurRadius: 8,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                              gradient: LinearGradient(
+                                colors: [Colors.blue.shade700, Colors.blue.shade800],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              backgroundColor: Colors.transparent,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                            child: ElevatedButton.icon(
+                              onPressed: () => _sendTestNotification(context),
+                              icon: const Icon(Icons.notifications_active, size: 20),
+                              label: const Text(
+                                "إرسال إشعار تجريبي",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-                        
-                        // NEW: Test Button for Medication Detail Page
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.purple.shade100.withOpacity(0.4),
-                                blurRadius: 8,
-                                spreadRadius: 0,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                            gradient: LinearGradient(
-                              colors: [Colors.purple.shade500, Colors.purple.shade700],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: () => _testMedicationDetailNavigation(context),
-                            icon: const Icon(Icons.medication, size: 20),
-                            label: const Text(
-                              "اختبار صفحة تفاصيل الدواء",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              backgroundColor: Colors.transparent,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        
-                        const SizedBox(height: 20),
+                          const SizedBox(height: 15),
+                          Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.purple.shade100.withOpacity(0.4),
+                                  blurRadius: 8,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                              gradient: LinearGradient(
+                                colors: [Colors.purple.shade500, Colors.purple.shade700],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: ElevatedButton.icon(
+                              onPressed: () => _testMedicationDetailNavigation(context),
+                              icon: const Icon(Icons.medication, size: 20),
+                              label: const Text(
+                                "اختبار صفحة تفاصيل الدواء",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ],
                     ),
                   ),
@@ -777,11 +887,16 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                 label: "إضافة دواء",
                 color: Colors.green.shade700,
                 onTap: () {
-                  Navigator.pushNamed(context, '/add_dose').then((result) {
-                    if (result != null) {
-                      _loadClosestMed();
-                    }
-                  });
+                  if (_isAuthenticated) {
+                    Navigator.pushNamed(context, '/add_dose').then((result) {
+                      if (result != null) {
+                        _loadClosestMed();
+                      }
+                    });
+                  } else {
+                    // Show login dialog
+                    _showLoginRequiredDialog("إضافة دواء");
+                  }
                 },
               ),
             ),
@@ -792,7 +907,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                 label: "جدول الأدوية",
                 color: Colors.blue.shade700,
                 onTap: () {
-                  Navigator.pushNamed(context, '/dose_schedule');
+                  if (_isAuthenticated) {
+                    Navigator.pushNamed(context, '/dose_schedule');
+                  } else {
+                    _showLoginRequiredDialog("جدول الأدوية");
+                  }
                 },
               ),
             ),
@@ -805,10 +924,47 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           color: Colors.orange.shade700,
           isFullWidth: true,
           onTap: () {
-            Navigator.pushNamed(context, '/companions');
+            if (_isAuthenticated) {
+              Navigator.pushNamed(context, '/companions');
+            } else {
+              _showLoginRequiredDialog("المرافقين");
+            }
           },
         ),
       ],
+    );
+  }
+
+  // New helper method to show login dialog
+  void _showLoginRequiredDialog(String featureName) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('تسجيل الدخول مطلوب', textAlign: TextAlign.right),
+          content: Text(
+            'يجب تسجيل الدخول للوصول إلى "$featureName"',
+            textAlign: TextAlign.right,
+          ),
+          actions: [
+            TextButton(
+              child: Text('إلغاء'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade700,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('تسجيل الدخول'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacementNamed(context, '/login'); // Changed to pushReplacementNamed
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -909,7 +1065,7 @@ class ActionCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final bool isFullWidth;
-  
+
   const ActionCard({
     super.key,
     required this.icon,
@@ -918,7 +1074,7 @@ class ActionCard extends StatelessWidget {
     required this.color,
     this.isFullWidth = false,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -948,8 +1104,8 @@ class ActionCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
-              mainAxisAlignment: isFullWidth 
-                  ? MainAxisAlignment.start 
+              mainAxisAlignment: isFullWidth
+                  ? MainAxisAlignment.start
                   : MainAxisAlignment.center,
               children: [
                 Container(
@@ -960,8 +1116,8 @@ class ActionCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    icon, 
-                    size: 26, 
+                    icon,
+                    size: 26,
                     color: color,
                   ),
                 ),

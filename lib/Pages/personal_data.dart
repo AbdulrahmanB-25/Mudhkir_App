@@ -239,28 +239,19 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
         child: SafeArea(
           child: Column(
             children: [
-              // Custom Header
+              // Custom Header - Removed back button and centered title
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new, 
-                          color: Colors.blue.shade800, size: 24),
-                      onPressed: () => Navigator.pushReplacementNamed(context, '/mainpage'),
+                child: Center(
+                  child: Text(
+                    "الملف الشخصي",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade800,
                     ),
-                    Text(
-                      "الملف الشخصي",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(width: 48), // Balance the row
-                  ],
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
               
@@ -453,7 +444,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
                                     
                                     const SizedBox(height: 15),
                                     
-                                    // Logout Button
+                                    // Logout Button - Updated to navigate to welcome page
                                     _buildActionButton(
                                       icon: Icons.logout,
                                       label: "تسجيل الخروج",
@@ -461,7 +452,11 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
                                       onPressed: () async {
                                         await FirebaseAuth.instance.signOut();
                                         if (mounted) {
-                                          Navigator.pushReplacementNamed(context, "/login");
+                                          // Navigate to welcome page and clear navigation history
+                                          Navigator.of(context).pushNamedAndRemoveUntil(
+                                            '/welcome', 
+                                            (route) => false
+                                          );
                                         }
                                       },
                                     ),
@@ -566,3 +561,4 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
     );
   }
 }
+

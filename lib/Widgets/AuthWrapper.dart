@@ -16,11 +16,23 @@ class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
   bool _isAuthenticated = false;
   String? _redirectDocId;
+  bool _allowMainPageAccess = false; // Changed default to false
 
   @override
   void initState() {
     super.initState();
     _checkAuth();
+    // Removing this call since we don't want to allow unauthenticated access
+    // _checkMainPageAccessSettings();
+  }
+
+  // Keeping this method in case it's used elsewhere, but we won't call it
+  Future<void> _checkMainPageAccessSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // Changed default to false to prevent bypassing authentication
+      _allowMainPageAccess = prefs.getBool('allowMainPageAccess') ?? false;
+    });
   }
 
   Future<void> _checkAuth() async {
@@ -121,6 +133,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
 
+    // Modified to only return MainPage if the user is authenticated
     return _isAuthenticated ? const MainPage() : const Welcome();
   }
 }

@@ -21,13 +21,6 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
     );
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
-
-    // Redirect to main page if user is already logged in
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      if (user != null) {
-        Navigator.pushReplacementNamed(context, '/mainpage');
-      }
-    });
   }
 
   @override
@@ -156,7 +149,10 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  SizedBox(height: 40),
+                  SizedBox(height: 60),
+                  
+                  // Removed "Enter as Guest" button
+                  
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: ElevatedButton(
