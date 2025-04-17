@@ -12,6 +12,7 @@ import 'dart:ui' as ui;
 // Import your Edit screen
 import 'package:mudhkir_app/pages/EditMedicationScreen.dart';
 import '../main.dart';
+import 'mainpage.dart';
 
 // --- Theme constants ---
 const Color kPrimaryColor = Color(0xFF2E86C1); // Hospital blue (primary)
@@ -1055,22 +1056,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
 
         if (newStatus == 'taken') {
           final notificationId = widget.docId.hashCode + doseTime.hour * 100 + doseTime.minute;
-          DateTime tomorrowTime = DateTime(
-            DateTime.now().year,
-            DateTime.now().month,
-            DateTime.now().day + 1,
-            doseTime.hour,
-            doseTime.minute,
-          );
-
-          print("Rescheduling notification with docId: ${widget.docId}");
-          await scheduleNotification(
-            id: notificationId,
-            title: 'تذكير الدواء',
-            body: 'حان وقت تناول ${widget.medicationName}',
-            scheduledTime: tomorrowTime,
-            docId: widget.docId,
-          );
+          debugPrint("Rescheduling notification skipped (notification system removed).");
         }
       }
 

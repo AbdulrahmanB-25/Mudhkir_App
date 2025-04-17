@@ -15,7 +15,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:mudhkir_app/main.dart'; // Import the notification utility
 
 // Import the screens if you're reusing components
-import '../services/AlarmNotificationHelper.dart';
 import 'add_dose.dart'; // Import TimeUtils
 
 // Constants for theming
@@ -613,72 +612,9 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           .collection('medicines')
           .doc(widget.docId)
           .update(updatedMedicine);
-      if (_originalNotificationIds.isNotEmpty) {
-        for (int id in _originalNotificationIds) {
-          await AlarmNotificationHelper.cancelNotification(id);
-        }
-      }
-      List<int> newNotificationIds = [];
-      int baseNotificationId = widget.docId.hashCode.abs() % 2147483647;
-      int notificationCounter = 0;
-      if (_frequencyType == 'يومي') {
-        for (var time in _selectedTimes) {
-          if (time != null) {
-            // Build the first dose DateTime using _startDate and the selected time.
-            DateTime firstDoseTime = DateTime(
-              _startDate!.year,
-              _startDate!.month,
-              _startDate!.day,
-              time.hour,
-              time.minute,
-            );
-            // If the computed first dose time is already past, shift it to tomorrow.
-            if (firstDoseTime.isBefore(DateTime.now())) {
-              firstDoseTime = firstDoseTime.add(const Duration(days: 1));
-            }
-            final notificationId = baseNotificationId + notificationCounter++;
-            newNotificationIds.add(notificationId);
-            await AlarmNotificationHelper.scheduleDailyRepeatingNotification(
-              id: notificationId,
-              title: 'تذكير الدواء',
-              body: 'حان وقت تناول ${_nameController.text.trim()}',
-              timeOfDay: time,
-              payload: widget.docId,
-              startDate: firstDoseTime, // Use adjusted firstDoseTime
-              endDate: _endDate,
-            );
-          }
-        }
-      } else {
-        for (int day in _selectedWeekdays) {
-          final time = _weeklyTimes[day];
-          if (time != null) {
-            final notificationId = baseNotificationId + notificationCounter++;
-            newNotificationIds.add(notificationId);
-            await AlarmNotificationHelper.scheduleWeeklyRepeatingNotification(
-              id: notificationId,
-              title: 'تذكير الدواء',
-              body: 'حان وقت تناول ${_nameController.text.trim()}',
-              weekday: day,
-              timeOfDay: time,
-              payload: widget.docId,
-              startDate: _startDate ?? DateTime.now(),
-              endDate: _endDate,
-            );
-          }
-        }
-      }
-
-      if (newNotificationIds.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('medicines')
-            .doc(widget.docId)
-            .update({'notificationIds': newNotificationIds});
-      }
+      debugPrint("Notification rescheduling skipped (notification system removed).");
       if (mounted) {
-        _showBlockingAlert("نجاح", "تم تحديث الدواء وجدولة التذكيرات بنجاح!", onOk: () {
+        _showBlockingAlert("نجاح", "تم تحديث الدواء بنجاح!", onOk: () {
           if (mounted) Navigator.pop(context, true);
         });
       }

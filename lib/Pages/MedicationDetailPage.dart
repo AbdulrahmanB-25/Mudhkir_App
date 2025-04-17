@@ -2,105 +2,183 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
+// Import SharedPreferences keys from main.dart (adjust path if needed)
+import '../main.dart';
+
+// Assuming constants are defined elsewhere or replace with actual values
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const double kSpacing = 16.0; // Define spacing if not imported
+const double kBorderRadius = 16.0; // Define border radius if not imported
 
 class MedicationDetailPage extends StatefulWidget {
   final String docId;
-  const MedicationDetailPage({Key? key, required this.docId}) : super(key: key);
+  final bool openedFromNotification;
+  final bool needsConfirmation;
+  final String? confirmationTimeIso; // UTC ISO8601 String
+  final String? confirmationKey;
+
+  const MedicationDetailPage({
+    super.key,
+    required this.docId,
+    this.openedFromNotification = false,
+    this.needsConfirmation = false,
+    this.confirmationTimeIso,
+    this.confirmationKey,
+  });
 
   @override
   _MedicationDetailPageState createState() => _MedicationDetailPageState();
 }
 
 class _MedicationDetailPageState extends State<MedicationDetailPage> {
-  DocumentSnapshot? medicationDoc;
-  bool isLoading = true;
-  bool isProcessingAction = false; // Track when action button operations are in progress
-  String errorMessage = '';
-  TimeOfDay? selectedDoseTime; // Store the currently selected dose time
+  Map<String, dynamic>? _medData;
+  bool _isLoading = true;
+  String _errorMessage = '';
+  bool _isProcessingConfirmation = false; // To disable buttons during action
+
+  // Store the specific time being confirmed (in local timezone)
+  tz.TZDateTime? _confirmationTimeLocal;
 
   @override
   void initState() {
     super.initState();
-    _loadMedication();
+    if (widget.needsConfirmation && widget.confirmationTimeIso != null) {
+      try {
+        // Parse the UTC ISO string and convert it to local TZDateTime
+        final utcTime = DateTime.parse(widget.confirmationTimeIso!);
+        _confirmationTimeLocal = tz.TZDateTime.from(utcTime, tz.local);
+      } catch (e) {
+        print("[DetailPage] Error parsing confirmation time ISO '${widget.confirmationTimeIso}': $e");
+        _errorMessage = "خطأ في تحديد وقت التأكيد."; // Set error message
+      }
+    }
+    _loadMedicationData();
   }
 
-  Future<void> _loadMedication() async {
+  Future<void> _loadMedicationData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
     User? user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'مستخدم غير مسجل.';
+        });
+      }
+      return;
+    }
+
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(widget.docId)
+          .get();
+
+      if (mounted) {
+        if (doc.exists) {
+          setState(() {
+            _medData = doc.data() as Map<String, dynamic>?;
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'لم يتم العثور على بيانات الدواء.';
+          });
+        }
+      }
+    } catch (e) {
+      print("[DetailPage] Error loading medication details for ${widget.docId}: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'خطأ في تحميل البيانات.';
+        });
+      }
+    }
+  }
+
+  // --- Confirmation Actions ---
+
+  Future<void> _handleConfirmation(bool taken) async {
+    if (!mounted || !widget.needsConfirmation || _isProcessingConfirmation) return;
+
+    setState(() => _isProcessingConfirmation = true); // Disable buttons
+
+    print("[DetailPage Confirmation] User action: ${taken ? 'Confirmed' : 'Skipped'} for key ${widget.confirmationKey}");
+
+    User? user = FirebaseAuth.instance.currentUser;
+    // 1. Log the action to Firestore dose_history (optional but recommended)
+    if (user != null && _confirmationTimeLocal != null) {
       try {
-        var doc = await FirebaseFirestore.instance
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('medicines')
             .doc(widget.docId)
-            .get();
-
-        if (!mounted) return;
-
-        if (doc.exists) {
-          setState(() {
-            medicationDoc = doc;
-            isLoading = false;
-
-            // Try to determine current dose time
-            final data = doc.data() as Map<String, dynamic>;
-            final List<dynamic> times = data['times'] ?? [];
-
-            if (times.isNotEmpty) {
-              // Get the current time for comparison
-              final now = TimeOfDay.now();
-              final nowMinutes = now.hour * 60 + now.minute;
-
-              // Find the closest time (past or future)
-              TimeOfDay? closestTime;
-              int? minDifference;
-
-              for (var timeEntry in times) {
-                String timeStr;
-                if (timeEntry is Map) {
-                  timeStr = timeEntry['time']?.toString() ?? '';
-                } else {
-                  timeStr = timeEntry.toString();
-                }
-
-                final time = _parseTime(timeStr);
-                if (time != null) {
-                  final timeMinutes = time.hour * 60 + time.minute;
-                  final diff = (timeMinutes - nowMinutes).abs();
-
-                  if (minDifference == null || diff < minDifference) {
-                    minDifference = diff;
-                    closestTime = time;
-                  }
-                }
-              }
-
-              selectedDoseTime = closestTime;
-            }
-          });
-        } else {
-          setState(() {
-            isLoading = false;
-            errorMessage = "لم يتم العثور على بيانات هذا الدواء";
-          });
-        }
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          isLoading = false;
-          errorMessage = "حدث خطأ أثناء تحميل البيانات: $e";
+            .collection('dose_history')
+            .add({
+          'timestamp': Timestamp.now(), // Time action was taken by user
+          'scheduledTime': Timestamp.fromDate(_confirmationTimeLocal!.toUtc()), // The intended scheduled time (UTC)
+          'status': taken ? 'taken' : 'skipped',
+          'confirmedVia': 'app_confirmation_prompt', // Identifier
         });
+        print("[DetailPage Confirmation] Logged dose history status: ${taken ? 'taken' : 'skipped'}");
+      } catch (e) {
+        print("[DetailPage Confirmation] ERROR logging dose history: $e");
+        // Continue even if logging fails? Or show error?
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("خطأ في تسجيل حالة الجرعة.", textAlign: TextAlign.right),
+              backgroundColor: kErrorColor));
+        }
+        setState(() => _isProcessingConfirmation = false); // Re-enable buttons on error
+        return; // Stop further processing on logging error?
       }
     } else {
-      if (!mounted) return;
-      setState(() {
-        isLoading = false;
-        errorMessage = "المستخدم غير مسجل الدخول";
-      });
+      print("[DetailPage Confirmation] Cannot log history: User or confirmation time missing.");
     }
+
+    // 2. Clear the SharedPreferences flag for *this specific dose*
+    //    This prevents the confirmation prompt from showing again for the same past dose.
+    if (widget.confirmationKey != null && widget.confirmationKey!.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(widget.confirmationKey!);
+        print("[DetailPage Confirmation] Removed confirmation flag: ${widget.confirmationKey}");
+      } catch (e) {
+        print("[DetailPage Confirmation] ERROR removing SharedPreferences key '${widget.confirmationKey}': $e");
+        // If removing the key fails, the prompt might reappear, which is problematic.
+        // Maybe show a persistent error?
+      }
+    } else {
+      print("[DetailPage Confirmation] Warning: Confirmation key was null or empty, cannot clear flag.");
+      // This might indicate a logic error in how the key was passed.
+    }
+
+    // 3. Pop the screen and signal that rescheduling is needed (returning true)
+    //    The `then` block in `MainPage._checkAndShowConfirmationIfNeeded` will handle rescheduling.
+    if (mounted) {
+      print("[DetailPage Confirmation] Popping screen with result: true");
+      Navigator.pop(context, true); // Pop with 'true' to indicate action was taken
+    }
+    // No need to set _isProcessingConfirmation = false here as the widget will be disposed.
   }
 
-  // Parse time string to TimeOfDay object
+  // --- Helper Methods ---
+
+  /// Parses a time string into a TimeOfDay object.
   TimeOfDay? _parseTime(String timeStr) {
     try {
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
@@ -108,8 +186,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
     try {
-      String normalizedTime = timeStr
-          .replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
+      String normalizedTime = timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
       final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
@@ -127,773 +204,351 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
     return null;
   }
 
-  // Format TimeOfDay to string in Arabic format
+  String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return "غير محدد";
+    try {
+      final date = timestamp.toDate();
+      // Use 'ar_SA' locale for Arabic date format
+      return DateFormat.yMMMd('ar_SA').format(date);
+    } catch (e) {
+      print("[DetailPage] Error formatting date: $e");
+      return "تاريخ غير صالح";
+    }
+  }
+
   String _formatTimeOfDay(TimeOfDay time) {
+    // Copied from MainPage for consistency
     final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final String minute = time.minute.toString().padLeft(2, '0');
     final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
     return '$hour:$minute $period';
   }
 
-  String _formatDate(Timestamp? timestamp) {
-    if (timestamp == null) return "غير محدد";
-    final date = timestamp.toDate();
-    return DateFormat('yyyy/MM/dd', 'ar_SA').format(date);
-  }
-
-  // Method to mark the dose as taken
-  Future<void> _confirmDoseTaken() async {
-    if (isProcessingAction) return; // Prevent multiple submissions
-
-    setState(() {
-      isProcessingAction = true;
-    });
-
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("المستخدم غير مسجل الدخول"),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
-      setState(() {
-        isProcessingAction = false;
-      });
-      return;
-    }
-
-    try {
-      final now = DateTime.now();
-      final Timestamp takenTimestamp = Timestamp.fromDate(now);
-
-      // Get the current date in normalized form
-      final today = DateTime(now.year, now.month, now.day);
-
-      // Reference to the document
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('medicines')
-          .doc(widget.docId);
-
-      // Get the existing document to update
-      final docSnapshot = await docRef.get();
-      if (!docSnapshot.exists) {
-        throw Exception("Document not found");
-      }
-
-      final data = docSnapshot.data()!;
-      List<Map<String, dynamic>> missedDoses = [];
-
-      // Convert existing missedDoses to proper List<Map>
-      if (data.containsKey('missedDoses')) {
-        final existingDoses = data['missedDoses'];
-        if (existingDoses is List) {
-          for (var dose in existingDoses) {
-            if (dose is Map) {
-              missedDoses.add(Map<String, dynamic>.from(dose));
-            }
-          }
-        }
-      }
-
-      // Create a new dose entry
-      final doseEntry = {
-        'scheduled': takenTimestamp,  // Using current time as scheduled time
-        'status': 'taken',
-        'takenAt': takenTimestamp,
-        'originalSchedule': selectedDoseTime != null ? _formatTimeOfDay(selectedDoseTime!) : null,
-      };
-
-      // Add the new entry
-      missedDoses.add(doseEntry);
-
-      // Update the document
-      await docRef.update({
-        'missedDoses': missedDoses,
-        'lastTaken': takenTimestamp,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("تم تأكيد أخذ الجرعة بنجاح"),
-            backgroundColor: Colors.green.shade700,
-          ),
-        );
-
-        // Optional: Navigate back or reload
-        // Navigator.pop(context, true); // Uncomment to go back
-        _loadMedication(); // Reload the current page
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("حدث خطأ: $e"),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          isProcessingAction = false;
-        });
-      }
-    }
-  }
-
-  // NEW: Fetch all medication times to find available time slots
-  Future<List<TimeOfDay>> _getAllMedicationTimes() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return [];
-
-    List<TimeOfDay> allTimes = [];
-
-    try {
-      // Get all medications for this user
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('medicines')
-          .get();
-
-      // Process each medication
-      for (var doc in querySnapshot.docs) {
-        // Skip the current medication to avoid duplicate consideration
-        if (doc.id == widget.docId) continue;
-
-        final data = doc.data();
-        final List<dynamic> times = data['times'] ?? [];
-        final String frequencyType = data['frequencyType'] ?? 'يومي';
-
-        // Get current day if needed for weekly medications
-        final now = DateTime.now();
-        final today = now.weekday;
-
-        for (var timeEntry in times) {
-          // Handle both formats (daily string times or weekly map times)
-          if (frequencyType == 'يومي' || timeEntry is String) {
-            String timeStr = timeEntry.toString();
-            final time = _parseTime(timeStr);
-            if (time != null) {
-              allTimes.add(time);
-            }
-          } else if (frequencyType == 'اسبوعي' && timeEntry is Map) {
-            // For weekly medications, only consider today's times
-            if (timeEntry['day'] == today) {
-              String timeStr = timeEntry['time']?.toString() ?? '';
-              final time = _parseTime(timeStr);
-              if (time != null) {
-                allTimes.add(time);
-              }
-            }
-          }
-        }
-      }
-
-      // Sort all times chronologically
-      allTimes.sort((a, b) {
-        final aMins = a.hour * 60 + a.minute;
-        final bMins = b.hour * 60 + b.minute;
-        return aMins.compareTo(bMins);
-      });
-
-      return allTimes;
-
-    } catch (e) {
-      print("Error fetching medication times: $e");
-      return [];
-    }
-  }
-
-  // NEW: Generate suggested times based on other medications
-  Future<List<TimeOfDay>> _generateTimeSuggestions() async {
-    // Get all existing medication times
-    final allMedicationTimes = await _getAllMedicationTimes();
-
-    // Current time for reference (to avoid past times)
-    final now = DateTime.now();
-    final nowTime = TimeOfDay.fromDateTime(now);
-    final nowMinutes = nowTime.hour * 60 + nowTime.minute;
-
-    // Get gaps in the schedule to suggest new times
-    List<TimeOfDay> suggestions = [];
-
-    // Try to generate suggestions at different times of day
-    List<TimeOfDay> candidateTimes = [];
-
-    // Add times from throughout the day (every 1.5 hours from 8 AM to 10 PM)
-    for (int hour = 8; hour <= 22; hour += 2) {
-      // Morning
-      if (hour <= 12) {
-        candidateTimes.add(TimeOfDay(hour: hour, minute: 0));
-      }
-      // Afternoon/evening
-      else if (hour < 20) {
-        candidateTimes.add(TimeOfDay(hour: hour, minute: 0));
-      }
-      // Night
-      else {
-        candidateTimes.add(TimeOfDay(hour: hour, minute: 0));
-      }
-    }
-
-    // Add meal-based times (common for medications)
-    candidateTimes.add(TimeOfDay(hour: 7, minute: 30)); // Breakfast
-    candidateTimes.add(TimeOfDay(hour: 12, minute: 30)); // Lunch
-    candidateTimes.add(TimeOfDay(hour: 18, minute: 30)); // Dinner
-    candidateTimes.add(TimeOfDay(hour: 22, minute: 0)); // Before bed
-
-    // Now check each candidate time against existing times
-    for (var candidate in candidateTimes) {
-      final candidateMinutes = candidate.hour * 60 + candidate.minute;
-
-      // Skip times in the past
-      if (candidateMinutes < nowMinutes) continue;
-
-      bool isValid = true;
-
-      // Check against all existing medication times
-      for (var existingTime in allMedicationTimes) {
-        final existingMinutes = existingTime.hour * 60 + existingTime.minute;
-
-        // Check if candidate is too close to existing time (less than 1 hour)
-        final difference = (candidateMinutes - existingMinutes).abs();
-        if (difference < 60) {
-          isValid = false;
-          break;
-        }
-      }
-
-      if (isValid) {
-        suggestions.add(candidate);
-
-        // Stop once we have 3 suggestions
-        if (suggestions.length >= 3) {
-          break;
-        }
-      }
-    }
-
-    // If we don't have enough suggestions, add some default options
-    if (suggestions.isEmpty) {
-      // If no existing medications, suggest standard times
-      suggestions.add(TimeOfDay(hour: 9, minute: 0)); // Morning
-      suggestions.add(TimeOfDay(hour: 14, minute: 0)); // Afternoon
-      suggestions.add(TimeOfDay(hour: 21, minute: 0)); // Evening
-    } else if (suggestions.length < 3) {
-      // Try to add more diverse suggestions
-      if (!suggestions.any((t) => t.hour < 12)) {
-        suggestions.add(TimeOfDay(hour: 9, minute: 0)); // Morning
-      }
-      if (!suggestions.any((t) => t.hour >= 12 && t.hour < 18)) {
-        suggestions.add(TimeOfDay(hour: 14, minute: 0)); // Afternoon
-      }
-      if (!suggestions.any((t) => t.hour >= 18)) {
-        suggestions.add(TimeOfDay(hour: 21, minute: 0)); // Evening
-      }
-
-      // Ensure we have exactly 3 suggestions
-      suggestions = suggestions.take(3).toList();
-    }
-
-    // Sort suggestions chronologically
-    suggestions.sort((a, b) {
-      final aMins = a.hour * 60 + a.minute;
-      final bMins = b.hour * 60 + b.minute;
-      return aMins.compareTo(bMins);
-    });
-
-    return suggestions;
-  }
-
-  // NEW: Modified reschedule method with suggestions
-  Future<void> _reschedule() async {
-    if (isProcessingAction) return; // Prevent multiple submissions
-
-    setState(() {
-      isProcessingAction = true;
-    });
-
-    try {
-      // Generate time suggestions
-      final suggestions = await _generateTimeSuggestions();
-
-      if (!mounted) return;
-
-      // Show the suggestions dialog
-      final result = await showDialog<TimeOfDay?>(
-        context: context,
-        builder: (context) => _buildSuggestionDialog(suggestions),
-      );
-
-      if (result != null) {
-        // User selected a time, proceed with updating
-        await _updateMedicationTime(result);
-      }
-    } catch (e) {
-      print("Error generating suggestions: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("حدث خطأ أثناء إعادة الجدولة: $e"),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          isProcessingAction = false;
-        });
-      }
-    }
-  }
-
-  // NEW: Dialog to show time suggestions
-  Widget _buildSuggestionDialog(List<TimeOfDay> suggestions) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              "أوقات مقترحة للجرعة",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "بناءً على جدول أدويتك الأخرى",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-
-            // Suggested times
-            ...suggestions.map((time) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(time),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade600,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(
-                  _formatTimeOfDay(time),
-                  style: const TextStyle(fontSize: 18),
-                ),
-              ),
-            )),
-
-            const SizedBox(height: 10),
-            const Divider(),
-            const SizedBox(height: 10),
-
-            // Custom time option
-            OutlinedButton.icon(
-              onPressed: () async {
-                // Show default time picker
-                final TimeOfDay? picked = await showTimePicker(
-                  context: context,
-                  initialTime: selectedDoseTime ?? TimeOfDay.now(),
-                  builder: (context, child) {
-                    return Theme(
-                      data: ThemeData.light().copyWith(
-                        colorScheme: ColorScheme.light(
-                          primary: Colors.orange.shade700,
-                        ),
-                      ),
-                      child: child!,
-                    );
-                  },
-                );
-                if (picked != null) {
-                  Navigator.of(context).pop(picked);
-                }
-              },
-              icon: const Icon(Icons.access_time),
-              label: const Text("اختيار وقت مخصص", style: TextStyle(fontSize: 16)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.orange.shade700,
-                side: BorderSide(color: Colors.orange.shade700),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text("إلغاء", style: TextStyle(color: Colors.grey.shade700)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // NEW: Update medication with the newly selected time
-  Future<void> _updateMedicationTime(TimeOfDay newTime) async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("المستخدم غير مسجل الدخول"),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
-      return;
-    }
-
-    try {
-      final formattedTime = _formatTimeOfDay(newTime);
-
-      // Reference to the document
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('medicines')
-          .doc(widget.docId);
-
-      // Get the document to update
-      final docSnapshot = await docRef.get();
-      if (!docSnapshot.exists) {
-        throw Exception("Document not found");
-      }
-
-      final data = docSnapshot.data()!;
-      List<dynamic> times = List.from(data['times'] ?? []);
-      final String frequencyType = data['frequencyType'] ?? 'يومي';
-
-      // Update times based on frequency type
-      if (frequencyType == 'يومي') {
-        // For daily medications with simple time list
-        if (times.isNotEmpty && times[0] is String) {
-          // Find closest match to our current time and replace it
-          int matchIndex = -1;
-          TimeOfDay? previousSelectedTime = selectedDoseTime;
-
-          if (previousSelectedTime != null) {
-            for (int i = 0; i < times.length; i++) {
-              final timeStr = times[i].toString();
-              final time = _parseTime(timeStr);
-              if (time != null &&
-                  time.hour == previousSelectedTime.hour &&
-                  time.minute == previousSelectedTime.minute) {
-                matchIndex = i;
-                break;
-              }
-            }
-          }
-
-          if (matchIndex >= 0) {
-            times[matchIndex] = formattedTime;
-          } else if (times.isNotEmpty) {
-            // If no match found, update the first time
-            times[0] = formattedTime;
-          }
-        }
-      } else if (frequencyType == 'اسبوعي') {
-        // For weekly medications with day-specific times
-        final now = DateTime.now();
-        int today = now.weekday;
-        bool updated = false;
-
-        for (int i = 0; i < times.length; i++) {
-          if (times[i] is Map && times[i]['day'] == today) {
-            times[i]['time'] = formattedTime;
-            updated = true;
-            break;
-          }
-        }
-
-        if (!updated && times.isNotEmpty) {
-          // If no match for today, update the first entry
-          if (times[0] is Map) {
-            times[0]['time'] = formattedTime;
-          }
-        }
-      }
-
-      // Update rescheduling record
-      List<Map<String, dynamic>> reschedulingHistory = [];
-      if (data.containsKey('reschedulingHistory') && data['reschedulingHistory'] is List) {
-        for (var entry in data['reschedulingHistory']) {
-          if (entry is Map) {
-            reschedulingHistory.add(Map<String, dynamic>.from(entry));
-          }
-        }
-      }
-
-      reschedulingHistory.add({
-        'previousTime': selectedDoseTime != null ? _formatTimeOfDay(selectedDoseTime!) : null,
-        'newTime': formattedTime,
-        'rescheduledAt': Timestamp.now(),
-      });
-
-      // Update the document
-      await docRef.update({
-        'times': times,
-        'reschedulingHistory': reschedulingHistory,
-        'lastRescheduled': Timestamp.now(),
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("تم إعادة جدولة الجرعة إلى $formattedTime بنجاح"),
-            backgroundColor: Colors.blue.shade700,
-          ),
-        );
-
-        // Reload the page to show updated information
-        _loadMedication();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("حدث خطأ أثناء إعادة الجدولة: $e"),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
-      }
-    }
-  }
-
-  // Check if the dose is significantly late (more than 3 hours)
-  bool _isDoseSignificantlyLate() {
-    if (selectedDoseTime == null) return false;
-
-    final now = TimeOfDay.now();
-    final nowMinutes = now.hour * 60 + now.minute;
-    final doseMinutes = selectedDoseTime!.hour * 60 + selectedDoseTime!.minute;
-
-    // If dose time is earlier today and more than 3 hours ago
-    return doseMinutes < nowMinutes && (nowMinutes - doseMinutes) > 180;
-  }
+  // --- Build Method ---
 
   @override
   Widget build(BuildContext context) {
+    String appBarTitle = "تفاصيل الدواء";
+    if (widget.needsConfirmation) {
+      appBarTitle = "تأكيد جرعة الدواء";
+    } else if (widget.openedFromNotification) {
+      appBarTitle = "تذكير بجرعة الدواء";
+    }
+
+    // Format confirmation time for display
+    String confirmationTimeFormatted = '';
+    if (_confirmationTimeLocal != null) {
+      try {
+        // Example format: "9:30 صباحاً (الخميس)" - Adjust as needed
+        confirmationTimeFormatted = DateFormat('h:mm a (EEEE)', 'ar_SA').format(_confirmationTimeLocal!);
+      } catch (e) {
+        print("[DetailPage] Error formatting confirmation time for display: $e");
+        confirmationTimeFormatted = "وقت غير صالح";
+      }
+    }
+
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      // Use a slightly different AppBar style for confirmation
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          "تفاصيل الدواء",
-          style: TextStyle(
-            color: Colors.blue.shade800,
-            fontWeight: FontWeight.bold,
-            shadows: [
-              Shadow(
-                color: Colors.white.withOpacity(0.7),
-                blurRadius: 10,
+        title: Text(appBarTitle),
+        backgroundColor: widget.needsConfirmation ? Colors.orange.shade700 : kPrimaryColor,
+        elevation: widget.needsConfirmation ? 2 : 0, // Add slight elevation for confirmation
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(color: kPrimaryColor))
+          : _errorMessage.isNotEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(kSpacing * 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline_rounded, color: kErrorColor, size: 60),
+                        SizedBox(height: kSpacing),
+                        Text(_errorMessage, style: TextStyle(color: kErrorColor, fontSize: 16), textAlign: TextAlign.center),
+                        SizedBox(height: kSpacing * 1.5),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text("العودة"),
+                          style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
+                        )
+                      ],
+                    ),
+                  ))
+              : _medData == null
+                  ? Center(child: Text('لا توجد بيانات لعرضها.'))
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(kSpacing),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start, // Start aligns right in RTL
+                        children: [
+                          // --- Confirmation Section (Shown at the top if needed) ---
+                          if (widget.needsConfirmation)
+                            _buildConfirmationSection(confirmationTimeFormatted),
+
+                          // --- Standard Medication Details ---
+                          // Use Cards for better visual separation
+                          _buildMedicationInfoCard(),
+                          SizedBox(height: kSpacing),
+                          _buildScheduleInfoCard(),
+
+                          // Add Edit/Delete buttons only if NOT in confirmation mode
+                          if (!widget.needsConfirmation)
+                            Padding(
+                              padding: const EdgeInsets.only(top: kSpacing * 2),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  ElevatedButton.icon(
+                                    icon: Icon(Icons.edit_rounded),
+                                    label: Text("تعديل"),
+                                    onPressed: () {
+                                      /* TODO: Implement Edit Navigation */
+                                    },
+                                    style: ElevatedButton.styleFrom(backgroundColor: kSecondaryColor),
+                                  ),
+                                  ElevatedButton.icon(
+                                    icon: Icon(Icons.delete_forever_rounded),
+                                    label: Text("حذف"),
+                                    onPressed: () {
+                                      /* TODO: Implement Delete Confirmation & Action */
+                                    },
+                                    style: ElevatedButton.styleFrom(backgroundColor: kErrorColor.withOpacity(0.8)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          SizedBox(height: kSpacing), // Bottom padding
+                        ],
+                      ),
+                    ),
+    );
+  }
+
+  /// Builds the confirmation prompt section.
+  Widget _buildConfirmationSection(String timeFormatted) {
+    // Extract medication name safely
+    final medName = _medData?['name'] ?? 'هذا الدواء';
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: kSpacing * 1.5),
+      padding: EdgeInsets.all(kSpacing),
+      decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.08), // Use orange theme for confirmation
+          borderRadius: BorderRadius.circular(kBorderRadius),
+          border: Border.all(color: Colors.orange.withOpacity(0.4))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, // Align right in RTL
+        children: [
+          Text(
+            "هل تناولت جرعة '$medName'؟",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange.shade800),
+          ),
+          if (timeFormatted.isNotEmpty && timeFormatted != "وقت غير صالح")
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0, bottom: 12.0),
+              child: Text(
+                "المجدولة في: $timeFormatted",
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+              ),
+            ),
+          if (timeFormatted == "وقت غير صالح") // Show error if time parsing failed
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0, bottom: 12.0),
+              child: Text(
+                "خطأ في تحديد الوقت المجدول.",
+                style: TextStyle(fontSize: 14, color: kErrorColor),
+              ),
+            ),
+          SizedBox(height: 10),
+          Row(
+            children: [
+              // Skip Button (Right in RTL)
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: Icon(Icons.cancel_outlined),
+                  label: Text("تخطيت الجرعة"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade700),
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                  ).copyWith(
+                    // Disable button while processing
+                    foregroundColor: MaterialStateProperty.resolveWith<Color?>(
+                      (Set<MaterialState> states) {
+                        if (states.contains(MaterialState.disabled)) return Colors.grey;
+                        return Colors.red.shade700;
+                      },
+                    ),
+                    side: MaterialStateProperty.resolveWith<BorderSide?>(
+                      (Set<MaterialState> states) {
+                        if (states.contains(MaterialState.disabled)) return BorderSide(color: Colors.grey.shade300);
+                        return BorderSide(color: Colors.red.shade700);
+                      },
+                    ),
+                  ),
+                  // Disable button if processing or if time was invalid
+                  onPressed: _isProcessingConfirmation || timeFormatted == "وقت غير صالح"
+                      ? null
+                      : () => _handleConfirmation(false),
+                ),
+              ),
+              SizedBox(width: kSpacing / 1.5),
+              // Confirm Taken Button (Left in RTL)
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: Icon(Icons.check_circle_outline),
+                  label: Text("نعم، تم تناولها"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade700,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                  ).copyWith(
+                    // Disable button while processing
+                    backgroundColor: MaterialStateProperty.resolveWith<Color?>(
+                      (Set<MaterialState> states) {
+                        if (states.contains(MaterialState.disabled)) return Colors.grey.shade400;
+                        return Colors.green.shade700; // Use the component's default.
+                      },
+                    ),
+                  ),
+                  // Disable button if processing or if time was invalid
+                  onPressed: _isProcessingConfirmation || timeFormatted == "وقت غير صالح"
+                      ? null
+                      : () => _handleConfirmation(true),
+                ),
               ),
             ],
           ),
-        ),
-        centerTitle: true,
-        iconTheme: IconThemeData(color: Colors.blue.shade800),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.shade50,
-              Colors.white.withOpacity(0.8),
-              Colors.blue.shade100,
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: isLoading
-              ? Center(child: CircularProgressIndicator(color: Colors.blue.shade700))
-              : errorMessage.isNotEmpty
-              ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 70, color: Colors.red.shade400),
-                const SizedBox(height: 16),
-                Text(
-                  errorMessage,
-                  style: TextStyle(fontSize: 18, color: Colors.red.shade700),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text("العودة", style: TextStyle(fontSize: 16)),
-                ),
-              ],
+          // Show progress indicator only when processing
+          if (_isProcessingConfirmation)
+            Padding(
+              padding: const EdgeInsets.only(top: 10.0),
+              child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-          )
-              : SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildMedicationCard(),
-                const SizedBox(height: 20),
-                _buildScheduleCard(),
-                const SizedBox(height: 20),
-                _buildActionButtons(),
-              ],
-            ),
-          ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildMedicationCard() {
-    final data = medicationDoc!.data() as Map<String, dynamic>;
-    final imageUrl = data['imageUrl'] as String?;
+  /// Builds a Card containing basic medication info.
+  Widget _buildMedicationInfoCard() {
+    final imageUrl = _medData?['imageUrl'] as String?;
+    final medName = _medData?['name'] ?? 'دواء غير مسمى';
+    final dosage = _medData?['dosage'] ?? 'غير محدد';
+    final instructions = _medData?['instructions'] ?? 'لا توجد تعليمات.';
 
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kBorderRadius)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(kSpacing),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start, // Align right in RTL
           children: [
+            // Optional Image
             if (imageUrl != null && imageUrl.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    imageUrl,
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      height: 160,
-                      width: double.infinity,
-                      color: Colors.grey.shade200,
-                      child: Icon(Icons.image_not_supported, color: Colors.grey.shade400, size: 50),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: kSpacing),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(kBorderRadius / 2),
+                    child: Image.network(
+                      imageUrl,
+                      height: 150,
+                      width: 150,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                          height: 150,
+                          width: 150,
+                          color: Colors.grey.shade200,
+                          child: Icon(Icons.medication_liquid_outlined, size: 50, color: Colors.grey.shade400)),
+                      loadingBuilder: (_, child, loadingProgress) => loadingProgress == null
+                          ? child
+                          : Center(
+                              child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                      : null)),
                     ),
                   ),
                 ),
               ),
-            Text(
-              data['name'] ?? "دواء غير مسمى",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-              ),
-              textAlign: TextAlign.center,
+            Center( // Center the name
+              child: Text(medName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: kPrimaryColor), textAlign: TextAlign.center),
             ),
-            const SizedBox(height: 16),
-            InfoRow(
-              icon: Icons.medical_information,
-              label: "الجرعة:",
-              value: data['dosage'] ?? "غير محددة",
-            ),
-            const Divider(height: 24),
-            InfoRow(
-              icon: Icons.date_range,
-              label: "تاريخ البدء:",
-              value: _formatDate(data['startDate']),
-            ),
-            const SizedBox(height: 12),
-            InfoRow(
-              icon: Icons.event_busy,
-              label: "تاريخ الانتهاء:",
-              value: data['endDate'] != null ? _formatDate(data['endDate']) : "غير محدد",
-            ),
+            SizedBox(height: kSpacing * 1.5),
+            _buildDetailItem(Icons.medical_services_outlined, "الجرعة", dosage),
+            Divider(height: kSpacing * 1.5),
+            _buildDetailItem(Icons.info_outline_rounded, "تعليمات", instructions.isNotEmpty ? instructions : 'لا توجد.'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildScheduleCard() {
-    final data = medicationDoc!.data() as Map<String, dynamic>;
-    final frequency = data['frequency'] ?? "غير محدد";
-    final List<dynamic> times = data['times'] ?? [];
+  /// Builds a Card containing schedule information.
+  Widget _buildScheduleInfoCard() {
+    final frequency = _medData?['frequencyType'] ?? 'غير محدد';
+    final List<dynamic> times = _medData?['times'] ?? [];
+    final startDate = _medData?['startDate'] as Timestamp?;
+    final endDate = _medData?['endDate'] as Timestamp?;
 
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kBorderRadius)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(kSpacing),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start, // Align right in RTL
           children: [
-            Text(
-              "جدول الجرعات",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-              ),
-            ),
-            const SizedBox(height: 12),
-            InfoRow(
-              icon: Icons.repeat,
-              label: "التكرار:",
-              value: frequency,
-            ),
-            const Divider(height: 24),
-            const Text(
-              "أوقات الجرعات:",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
+            Text("الجدول الزمني", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            SizedBox(height: kSpacing),
+            _buildDetailItem(Icons.repeat_rounded, "التكرار", frequency),
+            Divider(height: kSpacing * 1.5),
+            _buildDetailItem(Icons.play_arrow_rounded, "تاريخ البدء", _formatDate(startDate)),
+            SizedBox(height: kSpacing * 0.5),
+            _buildDetailItem(Icons.stop_rounded, "تاريخ الانتهاء", _formatDate(endDate)),
+            Divider(height: kSpacing * 1.5),
+            Text("الأوقات:", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            SizedBox(height: kSpacing * 0.5),
             if (times.isEmpty)
-              Text(
-                "لا توجد أوقات محددة",
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
+              Text("  لا توجد أوقات محددة.", style: TextStyle(color: Colors.grey.shade600)),
             if (times.isNotEmpty)
               ListView.builder(
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+                physics: NeverScrollableScrollPhysics(),
                 itemCount: times.length,
                 itemBuilder: (context, index) {
-                  String timeDisplay;
-                  if (times[index] is Map) {
-                    final day = times[index]['day'];
-                    final time = times[index]['time'];
-                    timeDisplay = "$day: $time";
-                  } else {
-                    timeDisplay = times[index].toString();
-                  }
-                  return ListTile(
-                    leading: Icon(Icons.access_time, color: Colors.blue.shade600),
-                    title: Text(timeDisplay),
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
+                  String timeDisplay = "وقت غير صالح";
+                  String? dayPrefix;
+                  try {
+                    if (times[index] is Map) { // Weekly format
+                      final dayNum = int.tryParse(times[index]['day']?.toString() ?? '');
+                      final timeStr = times[index]['time']?.toString();
+                      if (dayNum != null && timeStr != null) {
+                        final tod = _parseTime(timeStr);
+                        if (tod != null) timeDisplay = _formatTimeOfDay(tod);
+                        // Convert day number to name (Example)
+                        dayPrefix = _getWeekdayName(dayNum);
+                      }
+                    } else if (times[index] is String) { // Daily format
+                      final tod = _parseTime(times[index]);
+                      if (tod != null) timeDisplay = _formatTimeOfDay(tod);
+                    }
+                  } catch (e) { print("Error formatting time in list: $e"); }
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.access_time_rounded, size: 18, color: kSecondaryColor),
+                        SizedBox(width: 8),
+                        if (dayPrefix != null) Text("$dayPrefix: ", style: TextStyle(fontWeight: FontWeight.w500)),
+                        Text(timeDisplay, style: TextStyle(fontSize: 15)),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -903,150 +558,30 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
     );
   }
 
-  Widget _buildActionButtons() {
-    // Check if the dose is significantly late (more than 3 hours)
-    final isDoseLate = _isDoseSignificantlyLate();
-
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (selectedDoseTime != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  "الجرعة الحالية: ${_formatTimeOfDay(selectedDoseTime!)}",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-
-            // Confirm Taken Button
-            SizedBox(
-              height: 60, // Make button larger for easier tapping
-              child: ElevatedButton.icon(
-                onPressed: isProcessingAction || (isDoseLate && false) ? null : _confirmDoseTaken,
-                icon: isProcessingAction
-                    ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    )
-                )
-                    : const Icon(Icons.check_circle_outline, size: 24),
-                label: Text(
-                    "تأكيد أخذ الجرعة",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  disabledBackgroundColor: Colors.green.shade200,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Reschedule Button
-            SizedBox(
-              height: 60, // Make button larger for easier tapping
-              child: ElevatedButton.icon(
-                onPressed: isProcessingAction ? null : _reschedule,
-                icon: isProcessingAction
-                    ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    )
-                )
-                    : const Icon(Icons.update, size: 24),
-                label: Text(
-                    "إعادة جدولة الجرعة",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade600,
-                  disabledBackgroundColor: Colors.orange.shade200,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                ),
-              ),
-            ),
-
-            if (isDoseLate)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  "ملاحظة: مر أكثر من 3 ساعات على موعد الجرعة",
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                    fontStyle: FontStyle.italic,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const InfoRow({
-    Key? key,
-    required this.icon,
-    required this.label,
-    required this.value,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
+  /// Helper to build a detail row with icon, label, and value.
+  Widget _buildDetailItem(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.blue.shade600, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 4),
+          Icon(icon, color: kPrimaryColor.withOpacity(0.8), size: 20),
+          SizedBox(width: 12),
+          Text("$label ", style: TextStyle(color: Colors.grey.shade700, fontSize: 14, fontWeight: FontWeight.w500)),
           Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade800,
-              ),
-              textAlign: TextAlign.start,
-            ),
+            child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
           ),
         ],
       ),
     );
+  }
+
+  // Helper to get weekday name (adjust based on your needs/locale)
+  String _getWeekdayName(int dayNum) {
+    const days = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+    if (dayNum >= 1 && dayNum <= 7) {
+      return days[dayNum - 1]; // Adjust index if your numbers are 0-6 or 1-7
+    }
+    return "يوم؟";
   }
 }
