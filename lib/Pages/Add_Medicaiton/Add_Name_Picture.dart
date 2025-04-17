@@ -1,8 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
+// App theme constants
+const Color kPrimaryColor = Color(0xFF1A5CFF); // Primary blue
+const Color kSecondaryColor = Color(0xFF4ECDC4); // Teal accent
+const Color kErrorColor = Color(0xFFFF6B6B); // Error red
+const Color kBackgroundColor = Color(0xFFF7F9FC); // Light background
+const Color kCardColor = Colors.white;
+const double kBorderRadius = 12.0;
+const double kSpacing = 16.0;
+
 // --- Medicine Autocomplete Widget ---
-// (Moved here as it's only used on this page)
 class MedicineAutocomplete extends StatefulWidget {
   final List<String> suggestions;
   final TextEditingController controller;
@@ -80,12 +88,21 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
           controller: widget.controller,
           focusNode: widget.focusNode,
           textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
           decoration: InputDecoration(
             hintText: 'ابحث عن اسم الدواء...',
-            prefixIcon: Icon(Icons.search, color: Colors.blue.shade800),
+            hintStyle: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+            prefixIcon: Icon(Icons.search, color: kPrimaryColor),
             suffixIcon: widget.controller.text.isNotEmpty
                 ? IconButton(
-              icon: Icon(Icons.clear, color: Colors.red.shade700),
+              icon: Icon(Icons.clear, color: kErrorColor),
               onPressed: () {
                 widget.controller.clear();
                 if (mounted) {
@@ -97,69 +114,109 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
             )
                 : null,
             filled: true,
-            fillColor: Colors.grey.shade100,
+            fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(kBorderRadius),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(kBorderRadius),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.blue.shade800, width: 1.5),
+              borderRadius: BorderRadius.circular(kBorderRadius),
+              borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
             ),
-            contentPadding:
-            const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(kBorderRadius),
+              borderSide: BorderSide(color: kErrorColor, width: 1.5),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(kBorderRadius),
+              borderSide: BorderSide(color: kErrorColor, width: 2.0),
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            errorStyle: TextStyle(
+              color: kErrorColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           validator: (value) =>
           (value == null || value.trim().isEmpty) ? 'الرجاء إدخال اسم الدواء' : null,
         ),
         if (_filteredSuggestions.isNotEmpty)
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             margin: const EdgeInsets.only(top: 4),
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(kBorderRadius),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            // Adjust height based on suggestion count, max 3 items
             height: (_filteredSuggestions.length * 60.0).clamp(60.0, 180.0),
-            child: Scrollbar(
-              controller: _scrollController,
-              thumbVisibility: true,
-              child: ListView.builder(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(kBorderRadius),
+              child: Scrollbar(
                 controller: _scrollController,
-                shrinkWrap: true,
-                physics: const ClampingScrollPhysics(),
-                itemCount: _filteredSuggestions.length,
-                itemBuilder: (context, index) {
-                  final suggestion = _filteredSuggestions[index];
-                  return InkWell(
-                    onTap: () {
-                      widget.onSelected(suggestion);
-                      widget.controller.text = suggestion;
-                      widget.focusNode.unfocus();
-                      if (mounted) {
-                        setState(() {
-                          _filteredSuggestions = [];
-                        });
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(suggestion, style: const TextStyle(fontSize: 16)),
-                    ),
-                  );
-                },
+                thumbVisibility: true,
+                thickness: 6.0,
+                radius: const Radius.circular(10),
+                child: ListView.separated(
+                  controller: _scrollController,
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  physics: const ClampingScrollPhysics(),
+                  itemCount: _filteredSuggestions.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: Colors.grey.shade200,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final suggestion = _filteredSuggestions[index];
+                    return InkWell(
+                      onTap: () {
+                        widget.onSelected(suggestion);
+                        widget.controller.text = suggestion;
+                        widget.focusNode.unfocus();
+                        if (mounted) {
+                          setState(() {
+                            _filteredSuggestions = [];
+                          });
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.medication_outlined, color: kPrimaryColor.withOpacity(0.7), size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                suggestion,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward_ios, color: Colors.grey.shade500, size: 14),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -175,10 +232,10 @@ class AddNamePicturePage extends StatelessWidget {
   final TextEditingController nameController;
   final Future<List<String>> medicineNamesFuture;
   final File? capturedImage;
-  final String? uploadedImageUrl; // To show progress indicator
+  final String? uploadedImageUrl;
   final VoidCallback onPickImage;
   final VoidCallback onNext;
-  final VoidCallback onBack; // Callback for back button
+  final VoidCallback onBack;
 
   const AddNamePicturePage({
     Key? key,
@@ -197,14 +254,24 @@ class AddNamePicturePage extends StatelessWidget {
   Widget _buildImagePicker(BuildContext context, double screenWidth) {
     return Center(
       child: GestureDetector(
-        onTap: onPickImage, // Use the callback
+        onTap: onPickImage,
         child: Container(
           height: screenWidth * 0.45,
           width: screenWidth * 0.7,
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            border: Border.all(color: Colors.blue.shade600, width: 1.5),
-            borderRadius: BorderRadius.circular(15),
+            color: kCardColor,
+            border: Border.all(
+              color: capturedImage != null ? kPrimaryColor : Colors.grey.shade300,
+              width: capturedImage != null ? 2.0 : 1.0,
+            ),
+            borderRadius: BorderRadius.circular(kBorderRadius),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
             image: capturedImage != null
                 ? DecorationImage(
               image: FileImage(capturedImage!),
@@ -213,26 +280,83 @@ class AddNamePicturePage extends StatelessWidget {
                 : null,
           ),
           child: capturedImage == null
-              ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.camera_alt_outlined,
-                    size: screenWidth * 0.12, color: Colors.blue.shade800),
-                const SizedBox(height: 8),
-                Text(
+              ? Stack(
+            alignment: Alignment.center,
+            children: [
+              // Pulsing animation effect for camera icon
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.8, end: 1.0),
+                duration: const Duration(seconds: 2),
+                curve: Curves.easeInOut,
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: kPrimaryColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.camera_alt_outlined,
+                        color: kPrimaryColor,
+                        size: screenWidth * 0.1,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(),
+              ),
+              Positioned(
+                bottom: screenWidth * 0.08,
+                child: Text(
                   'اضغط لالتقاط صورة للدواء',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      color: Colors.blue.shade800, fontSize: screenWidth * 0.04),
+                    color: Colors.grey.shade700,
+                    fontSize: screenWidth * 0.04,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ],
+              ),
+            ],
+          )
+              : (uploadedImageUrl == null
+              ? Center(
+            child: Container(
+              width: 48,
+              height: 48,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(kBorderRadius),
+              ),
+              child: const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 3,
+              ),
             ),
           )
-          // Show progress only if image is captured but not yet uploaded
-              : (uploadedImageUrl == null
-              ? Center(child: CircularProgressIndicator(color: Colors.white))
-              : Container()), // Show nothing if uploaded
+              : Stack(
+            children: [
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          )),
         ),
       ),
     );
@@ -246,17 +370,34 @@ class AddNamePicturePage extends StatelessWidget {
     const verticalPadding = 20.0;
 
     return Form(
-      key: formKey, // Use the passed key
-      child: Padding(
+      key: formKey,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: kBackgroundColor,
+        ),
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
         child: Stack(
           children: [
+            // Back button with improved visibility
             Positioned(
               top: 15,
               left: -10,
-              child: IconButton(
-                icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
-                onPressed: onBack, // Use the callback
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onBack,
+                  borderRadius: BorderRadius.circular(30),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Icon(Icons.arrow_back, color: kPrimaryColor, size: 28),
+                    ),
+                  ),
+                ),
               ),
             ),
             Center(
@@ -266,66 +407,136 @@ class AddNamePicturePage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const SizedBox(height: 50),
+                    // Page title with gradient effect
+                    ShaderMask(
+                      shaderCallback: (bounds) => LinearGradient(
+                        colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ).createShader(bounds),
+                      child: Text(
+                        "إضافة دواء جديد",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.07,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Page subtitle
                     Text(
-                      "إضافة دواء جديد",
+                      "أدخل اسم الدواء والتقط صورة له",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: screenWidth * 0.07,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
+                        fontSize: screenWidth * 0.04,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                     const SizedBox(height: 25.0),
-                    _buildImagePicker(context, screenWidth), // Pass context
+                    _buildImagePicker(context, screenWidth),
                     const SizedBox(height: 25.0),
                     FutureBuilder<List<String>>(
-                      future: medicineNamesFuture, // Use the passed future
+                      future: medicineNamesFuture,
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                color: kPrimaryColor,
+                              ),
+                            ),
+                          );
                         } else if (snapshot.hasError) {
-                          return Padding(
+                          return Container(
                             padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              'خطأ في تحميل أسماء الأدوية: ${snapshot.error}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.red),
+                            decoration: BoxDecoration(
+                              color: kErrorColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(kBorderRadius),
+                              border: Border.all(color: kErrorColor.withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(Icons.error_outline, color: kErrorColor, size: 36),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'خطأ في تحميل أسماء الأدوية: ${snapshot.error}',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: kErrorColor),
+                                ),
+                                const SizedBox(height: 8),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    // Reload medicine names
+                                    // (Would need to implement if desired)
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kErrorColor,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(kBorderRadius/2),
+                                    ),
+                                  ),
+                                  child: const Text('إعادة المحاولة'),
+                                ),
+                              ],
                             ),
                           );
                         } else {
                           final medicineNames = snapshot.data ?? [];
                           return MedicineAutocomplete(
                             suggestions: medicineNames,
-                            controller: nameController, // Use the passed controller
-                            focusNode: FocusNode(), // Can create a local one here
+                            controller: nameController,
+                            focusNode: FocusNode(),
                             onSelected: (selection) {
-                              nameController.text = selection; // Update controller
+                              nameController.text = selection;
                               FocusScope.of(context).unfocus();
-                              debugPrint('Selected: $selection');
                             },
                           );
                         }
                       },
                     ),
                     const SizedBox(height: 30.0),
+                    // Next button with improved styling
                     ElevatedButton(
                       onPressed: () {
-                        // Validate using the passed key before calling the callback
                         if (formKey.currentState!.validate()) {
-                          onNext(); // Use the callback
+                          onNext();
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        minimumSize: Size(double.infinity, 55),
-                        backgroundColor: Colors.blue.shade800,
+                        minimumSize: const Size(double.infinity, 55),
+                        backgroundColor: kPrimaryColor,
                         foregroundColor: Colors.white,
+                        elevation: 4,
+                        shadowColor: kPrimaryColor.withOpacity(0.4),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(kBorderRadius),
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      child: const Text('التالي'),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'التالي',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.arrow_forward,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 20),
                   ],
