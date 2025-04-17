@@ -4,13 +4,14 @@ import 'package:intl/intl.dart';
 import '../add_dose.dart';
 
 // Constants for theming
-const Color kPrimaryColor = Color(0xFF1A5CFF); // Primary blue
-const Color kSecondaryColor = Color(0xFF4ECDC4); // Teal accent
+// Hospital Blue Color Theme
+const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
 const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF7F9FC); // Light background
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
 const Color kCardColor = Colors.white;
-const double kBorderRadius = 12.0;
-const double kSpacing = 16.0;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
 
 class AddDosagePage extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -67,6 +68,11 @@ class AddDosagePage extends StatelessWidget {
 
   // --- Weekly Schedule Section UI ---
   Widget _buildWeeklyScheduleSection(BuildContext context) {
+    // Sort the days according to the week order (Sunday to Saturday in Arabic convention)
+    // Using 1=Monday through 7=Sunday ISO standard
+    List<int> allDays = [1, 2, 3, 4, 5, 6, 7]; // Monday to Sunday
+
+    // Create a sorted list of selected days
     List<int> sortedDays = selectedWeekdays.toList()..sort();
 
     return Container(
@@ -127,7 +133,7 @@ class AddDosagePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Day selection chips with improved styling
+          // Day selection chips with improved styling and layout
           const Text(
             "أيام الأسبوع:",
             style: TextStyle(
@@ -137,49 +143,42 @@ class AddDosagePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8.0,
-            runSpacing: 8.0,
-            children: List.generate(7, (index) {
-              int day = index + 1;
-              bool selected = selectedWeekdays.contains(day);
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                child: FilterChip(
-                  label: Text(
-                    getDayName(day),
-                    style: TextStyle(
+
+          // Fixed to use horizontal ListView for full weekday names
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: allDays.map((day) {
+                bool selected = selectedWeekdays.contains(day);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FilterChip(
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    labelStyle: TextStyle(
                       color: selected ? Colors.white : Colors.black87,
                       fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 14,
                     ),
+                    label: Text(getDayName(day)), // Full day name
+                    selected: selected,
+                    onSelected: (value) => onWeekdaySelected(day, value),
+                    selectedColor: kPrimaryColor,
+                    checkmarkColor: Colors.white,
+                    backgroundColor: selected ? kPrimaryColor.withOpacity(0.1) : Colors.grey.shade100,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: selected ? kPrimaryColor : Colors.grey.shade300,
+                        width: selected ? 1.5 : 1,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    showCheckmark: false,
                   ),
-                  selected: selected,
-                  onSelected: (value) => onWeekdaySelected(day, value),
-                  selectedColor: kPrimaryColor,
-                  checkmarkColor: Colors.white,
-                  backgroundColor: selected ? kPrimaryColor.withOpacity(0.1) : Colors.grey.shade100,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: selected ? kPrimaryColor : Colors.grey.shade300,
-                      width: selected ? 1.5 : 1,
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  avatar: selected
-                      ? Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.check, size: 12, color: kPrimaryColor),
-                  )
-                      : null,
-                  showCheckmark: false,
-                ),
-              );
-            }),
+                );
+              }).toList(),
+            ),
           ),
 
           if (selectedWeekdays.isEmpty)

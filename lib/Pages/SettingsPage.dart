@@ -2,50 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mudhkir_app/main.dart'; // Import notification utilities
 
-class CustomBottomNavigationBar extends StatelessWidget {
-  final int selectedIndex;
-  final Function(int) onItemTapped;
+import '../Widgets/bottom_navigation.dart'; // Import the bottom navigation bar
 
-  const CustomBottomNavigationBar({
-    super.key,
-    required this.selectedIndex,
-    required this.onItemTapped,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        color: Colors.white.withOpacity(0.8),
-        child: BottomNavigationBar(
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'الرئيسية',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'الملف الشخصي',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'الإعدادات',
-            ),
-          ],
-          currentIndex: selectedIndex,
-          selectedItemColor: Colors.blue.shade800,
-          unselectedItemColor: Colors.grey,
-          onTap: onItemTapped,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-        ),
-      ),
-    );
-  }
-}
+// Constants for theming
+// Hospital Blue Color Theme
+const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
+const Color kErrorColor = Color(0xFFFF6B6B); // Error red
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const Color kCardColor = Colors.white;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -71,7 +38,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await prefs.setBool('soundEnabled', _soundEnabled);
 
     print("Settings saved. Vibration: $_vibrationEnabled, Sound: $_soundEnabled");
-    
+
     // Reschedule notifications with new settings
     print("Rescheduling notifications with updated settings...");
     await rescheduleAllNotifications();
@@ -101,11 +68,28 @@ class _SettingsPageState extends State<SettingsPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text("تم جدولة الإشعار التجريبي، ستظهر خلال 5 ثوان"),
-        backgroundColor: Colors.green.shade700,
+        content: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: Colors.white),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                "تم جدولة الإشعار التجريبي، ستظهر خلال 5 ثوان",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: kPrimaryColor,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(12),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: "إغلاق",
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
       ),
     );
   }
@@ -113,134 +97,235 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        automaticallyImplyLeading: false, // added to remove back button
         title: const Text(
           "الإعدادات",
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.blue.shade800,
-      ),
-      body: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade100, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              /// 🌐 Language Settings
-              SettingTile(
-                icon: Icons.language,
-                title: "اللغة",
-                subtitle: "تغيير لغة التطبيق",
-                onTap: () {
-                  // Handle language change navigation.
-                },
-              ),
-              const SizedBox(height: 10),
-              /// 🔒 Privacy & Security
-              SettingTile(
-                icon: Icons.lock,
-                title: "الخصوصية والأمان",
-                subtitle: "إدارة بياناتك وإعدادات الأمان",
-                onTap: () {
-                  // Handle privacy settings navigation.
-                },
-              ),
-              const SizedBox(height: 10),
-              /// 📞 Contact Support
-              SettingTile(
-                icon: Icons.help,
-                title: "الدعم والمساعدة",
-                subtitle: "تواصل معنا في حال واجهتك مشكلة",
-                onTap: () {
-                  // Handle support contact navigation.
-                },
-              ),
-              const SizedBox(height: 20),
-              /// 🔔 Notification Settings Section
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                child: Text(
-                  "إعدادات التنبيهات",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+        centerTitle: true,
+        backgroundColor: kPrimaryColor,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
+        actions: [],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              kPrimaryColor.withOpacity(0.1),
+              kBackgroundColor,
+              Colors.white,
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0, 0.3, 1],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Section headers with dividers
+                _buildSectionHeader("إعدادات التطبيق"),
+
+                /// 🌐 Language Settings
+                SettingTile(
+                  icon: Icons.language,
+                  title: "اللغة",
+                  subtitle: "تغيير لغة التطبيق",
+                  onTap: () {
+                    // Handle language change navigation.
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                /// 🔒 Privacy & Security
+                SettingTile(
+                  icon: Icons.lock_outline_rounded,
+                  title: "الخصوصية والأمان",
+                  subtitle: "إدارة بياناتك وإعدادات الأمان",
+                  onTap: () {
+                    // Handle privacy settings navigation.
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                /// 📞 Contact Support
+                SettingTile(
+                  icon: Icons.help_outline_rounded,
+                  title: "الدعم والمساعدة",
+                  subtitle: "تواصل معنا في حال واجهتك مشكلة",
+                  onTap: () {
+                    // Handle support contact navigation.
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                // Notification settings section
+                _buildSectionHeader("إعدادات التنبيهات"),
+
+                /// 🔊 Sound Settings
+                SettingTile(
+                  icon: _soundEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                  title: "تشغيل الصوت",
+                  subtitle: "تشغيل أو إيقاف صوت التنبيه",
+                  trailing: Switch.adaptive(
+                    value: _soundEnabled,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _soundEnabled = value;
+                      });
+                      _saveAlarmSettings();
+                    },
+                    activeColor: kPrimaryColor,
+                    activeTrackColor: kPrimaryColor.withOpacity(0.3),
                   ),
                 ),
-              ),
-              /// 🔊 Sound Settings
-              SettingTile(
-                icon: Icons.volume_up,
-                title: "تشغيل الصوت",
-                subtitle: "تشغيل أو إيقاف صوت التنبيه",
-                trailing: Switch(
-                  value: _soundEnabled,
-                  onChanged: (bool value) {
-                    setState(() {
-                      _soundEnabled = value;
-                    });
-                    _saveAlarmSettings();
-                  },
-                  activeColor: Colors.blue.shade800,
+                const SizedBox(height: 12),
+
+                /// 📳 Vibration Settings
+                SettingTile(
+                  icon: _vibrationEnabled ? Icons.vibration_rounded : Icons.do_not_disturb_on_rounded,
+                  title: "تشغيل الاهتزاز",
+                  subtitle: "تشغيل أو إيقاف الاهتزاز مع التنبيه",
+                  trailing: Switch.adaptive(
+                    value: _vibrationEnabled,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _vibrationEnabled = value;
+                      });
+                      _saveAlarmSettings();
+                    },
+                    activeColor: kPrimaryColor,
+                    activeTrackColor: kPrimaryColor.withOpacity(0.3),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              /// 📳 Vibration Settings
-              SettingTile(
-                icon: Icons.vibration,
-                title: "تشغيل الاهتزاز",
-                subtitle: "تشغيل أو إيقاف الاهتزاز مع التنبيه",
-                trailing: Switch(
-                  value: _vibrationEnabled,
-                  onChanged: (bool value) {
-                    setState(() {
-                      _vibrationEnabled = value;
-                    });
-                    _saveAlarmSettings();
-                  },
-                  activeColor: Colors.blue.shade800,
+                const SizedBox(height: 24),
+
+                /// 🧪 Test Notification Button with improved styling
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(kBorderRadius),
+                    gradient: LinearGradient(
+                      colors: [
+                        kSecondaryColor,
+                        kSecondaryColor.withOpacity(0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kSecondaryColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton.icon(
+                    onPressed: _sendTestNotification,
+                    icon: const Icon(Icons.notifications_active),
+                    label: const Text(
+                      "اختبار الإشعارات",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kBorderRadius),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              /// 🧪 Test Notification Button
-              ElevatedButton.icon(
-                onPressed: _sendTestNotification,
-                icon: const Icon(Icons.notifications_active),
-                label: const Text("اختبار الإشعارات"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
+                const SizedBox(height: 20),
+
+                // App info section
+                _buildSectionHeader("حول التطبيق"),
+
+                SettingTile(
+                  icon: Icons.info_outline_rounded,
+                  title: "معلومات التطبيق",
+                  subtitle: "الإصدار 1.0.5",
+                  onTap: () {},
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 12),
+
+                SettingTile(
+                  icon: Icons.star_border_rounded,
+                  title: "تقييم التطبيق",
+                  subtitle: "ساعدنا بتحسين التطبيق من خلال تقييمك",
+                  trailing: const Icon(Icons.open_in_new, size: 20, color: kSecondaryColor),
+                  onTap: () {},
+                ),
+
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),
       bottomNavigationBar: CustomBottomNavigationBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (int index) {
-          // Handle bottom navigation taps.
-          setState(() {
-            _selectedIndex = index;
-          });
-          // For example, navigate to the corresponding screen.
-          if (index == 0) {
-            Navigator.pushReplacementNamed(context, '/mainpage');
-          } else if (index == 1) {
-            Navigator.pushReplacementNamed(context, '/personal_data');
+          if (index == _selectedIndex) return;
+
+          String? routeName;
+          if (index == 0) routeName = "/mainpage";
+          if (index == 1) routeName = "/personal_data";
+
+          if (routeName != null) {
+            Navigator.pushReplacementNamed(context, routeName);
           }
-          // Do nothing for index 2 because we are on the Settings page.
         },
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              height: 24,
+              width: 4,
+              decoration: BoxDecoration(
+                color: kPrimaryColor,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 24, thickness: 1),
+      ],
     );
   }
 }
@@ -264,20 +349,75 @@ class SettingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.blue.shade800, size: 30),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(kBorderRadius),
+          splashColor: kPrimaryColor.withOpacity(0.1),
+          highlightColor: kPrimaryColor.withOpacity(0.05),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: kPrimaryColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                trailing ?? const Icon(Icons.chevron_right_rounded,
+                  size: 22,
+                  color: kPrimaryColor,
+                ),
+              ],
+            ),
+          ),
         ),
-        subtitle: Text(subtitle),
-        trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 20),
-        onTap: onTap,
       ),
     );
   }

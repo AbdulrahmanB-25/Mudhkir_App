@@ -34,27 +34,27 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
             .collection('medicines')
             .doc(widget.docId)
             .get();
-            
+
         if (!mounted) return;
-        
+
         if (doc.exists) {
           setState(() {
             medicationDoc = doc;
             isLoading = false;
-            
+
             // Try to determine current dose time
             final data = doc.data() as Map<String, dynamic>;
             final List<dynamic> times = data['times'] ?? [];
-            
+
             if (times.isNotEmpty) {
               // Get the current time for comparison
               final now = TimeOfDay.now();
               final nowMinutes = now.hour * 60 + now.minute;
-              
+
               // Find the closest time (past or future)
               TimeOfDay? closestTime;
               int? minDifference;
-              
+
               for (var timeEntry in times) {
                 String timeStr;
                 if (timeEntry is Map) {
@@ -62,19 +62,19 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
                 } else {
                   timeStr = timeEntry.toString();
                 }
-                
+
                 final time = _parseTime(timeStr);
                 if (time != null) {
                   final timeMinutes = time.hour * 60 + time.minute;
                   final diff = (timeMinutes - nowMinutes).abs();
-                  
+
                   if (minDifference == null || diff < minDifference) {
                     minDifference = diff;
                     closestTime = time;
                   }
                 }
               }
-              
+
               selectedDoseTime = closestTime;
             }
           });
@@ -144,11 +144,11 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
   // Method to mark the dose as taken
   Future<void> _confirmDoseTaken() async {
     if (isProcessingAction) return; // Prevent multiple submissions
-    
+
     setState(() {
       isProcessingAction = true;
     });
-    
+
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -162,30 +162,30 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
       });
       return;
     }
-    
+
     try {
       final now = DateTime.now();
       final Timestamp takenTimestamp = Timestamp.fromDate(now);
-      
+
       // Get the current date in normalized form
       final today = DateTime(now.year, now.month, now.day);
-      
+
       // Reference to the document
       final docRef = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('medicines')
           .doc(widget.docId);
-      
+
       // Get the existing document to update
       final docSnapshot = await docRef.get();
       if (!docSnapshot.exists) {
         throw Exception("Document not found");
       }
-      
+
       final data = docSnapshot.data()!;
       List<Map<String, dynamic>> missedDoses = [];
-      
+
       // Convert existing missedDoses to proper List<Map>
       if (data.containsKey('missedDoses')) {
         final existingDoses = data['missedDoses'];
@@ -197,7 +197,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
           }
         }
       }
-      
+
       // Create a new dose entry
       final doseEntry = {
         'scheduled': takenTimestamp,  // Using current time as scheduled time
@@ -205,17 +205,17 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
         'takenAt': takenTimestamp,
         'originalSchedule': selectedDoseTime != null ? _formatTimeOfDay(selectedDoseTime!) : null,
       };
-      
+
       // Add the new entry
       missedDoses.add(doseEntry);
-      
+
       // Update the document
       await docRef.update({
         'missedDoses': missedDoses,
         'lastTaken': takenTimestamp,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -223,7 +223,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
             backgroundColor: Colors.green.shade700,
           ),
         );
-        
+
         // Optional: Navigate back or reload
         // Navigator.pop(context, true); // Uncomment to go back
         _loadMedication(); // Reload the current page
@@ -246,181 +246,434 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
     }
   }
 
-  // Method to open time picker and reschedule dose
+  // NEW: Fetch all medication times to find available time slots
+  Future<List<TimeOfDay>> _getAllMedicationTimes() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return [];
+
+    List<TimeOfDay> allTimes = [];
+
+    try {
+      // Get all medications for this user
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .get();
+
+      // Process each medication
+      for (var doc in querySnapshot.docs) {
+        // Skip the current medication to avoid duplicate consideration
+        if (doc.id == widget.docId) continue;
+
+        final data = doc.data();
+        final List<dynamic> times = data['times'] ?? [];
+        final String frequencyType = data['frequencyType'] ?? 'يومي';
+
+        // Get current day if needed for weekly medications
+        final now = DateTime.now();
+        final today = now.weekday;
+
+        for (var timeEntry in times) {
+          // Handle both formats (daily string times or weekly map times)
+          if (frequencyType == 'يومي' || timeEntry is String) {
+            String timeStr = timeEntry.toString();
+            final time = _parseTime(timeStr);
+            if (time != null) {
+              allTimes.add(time);
+            }
+          } else if (frequencyType == 'اسبوعي' && timeEntry is Map) {
+            // For weekly medications, only consider today's times
+            if (timeEntry['day'] == today) {
+              String timeStr = timeEntry['time']?.toString() ?? '';
+              final time = _parseTime(timeStr);
+              if (time != null) {
+                allTimes.add(time);
+              }
+            }
+          }
+        }
+      }
+
+      // Sort all times chronologically
+      allTimes.sort((a, b) {
+        final aMins = a.hour * 60 + a.minute;
+        final bMins = b.hour * 60 + b.minute;
+        return aMins.compareTo(bMins);
+      });
+
+      return allTimes;
+
+    } catch (e) {
+      print("Error fetching medication times: $e");
+      return [];
+    }
+  }
+
+  // NEW: Generate suggested times based on other medications
+  Future<List<TimeOfDay>> _generateTimeSuggestions() async {
+    // Get all existing medication times
+    final allMedicationTimes = await _getAllMedicationTimes();
+
+    // Current time for reference (to avoid past times)
+    final now = DateTime.now();
+    final nowTime = TimeOfDay.fromDateTime(now);
+    final nowMinutes = nowTime.hour * 60 + nowTime.minute;
+
+    // Get gaps in the schedule to suggest new times
+    List<TimeOfDay> suggestions = [];
+
+    // Try to generate suggestions at different times of day
+    List<TimeOfDay> candidateTimes = [];
+
+    // Add times from throughout the day (every 1.5 hours from 8 AM to 10 PM)
+    for (int hour = 8; hour <= 22; hour += 2) {
+      // Morning
+      if (hour <= 12) {
+        candidateTimes.add(TimeOfDay(hour: hour, minute: 0));
+      }
+      // Afternoon/evening
+      else if (hour < 20) {
+        candidateTimes.add(TimeOfDay(hour: hour, minute: 0));
+      }
+      // Night
+      else {
+        candidateTimes.add(TimeOfDay(hour: hour, minute: 0));
+      }
+    }
+
+    // Add meal-based times (common for medications)
+    candidateTimes.add(TimeOfDay(hour: 7, minute: 30)); // Breakfast
+    candidateTimes.add(TimeOfDay(hour: 12, minute: 30)); // Lunch
+    candidateTimes.add(TimeOfDay(hour: 18, minute: 30)); // Dinner
+    candidateTimes.add(TimeOfDay(hour: 22, minute: 0)); // Before bed
+
+    // Now check each candidate time against existing times
+    for (var candidate in candidateTimes) {
+      final candidateMinutes = candidate.hour * 60 + candidate.minute;
+
+      // Skip times in the past
+      if (candidateMinutes < nowMinutes) continue;
+
+      bool isValid = true;
+
+      // Check against all existing medication times
+      for (var existingTime in allMedicationTimes) {
+        final existingMinutes = existingTime.hour * 60 + existingTime.minute;
+
+        // Check if candidate is too close to existing time (less than 1 hour)
+        final difference = (candidateMinutes - existingMinutes).abs();
+        if (difference < 60) {
+          isValid = false;
+          break;
+        }
+      }
+
+      if (isValid) {
+        suggestions.add(candidate);
+
+        // Stop once we have 3 suggestions
+        if (suggestions.length >= 3) {
+          break;
+        }
+      }
+    }
+
+    // If we don't have enough suggestions, add some default options
+    if (suggestions.isEmpty) {
+      // If no existing medications, suggest standard times
+      suggestions.add(TimeOfDay(hour: 9, minute: 0)); // Morning
+      suggestions.add(TimeOfDay(hour: 14, minute: 0)); // Afternoon
+      suggestions.add(TimeOfDay(hour: 21, minute: 0)); // Evening
+    } else if (suggestions.length < 3) {
+      // Try to add more diverse suggestions
+      if (!suggestions.any((t) => t.hour < 12)) {
+        suggestions.add(TimeOfDay(hour: 9, minute: 0)); // Morning
+      }
+      if (!suggestions.any((t) => t.hour >= 12 && t.hour < 18)) {
+        suggestions.add(TimeOfDay(hour: 14, minute: 0)); // Afternoon
+      }
+      if (!suggestions.any((t) => t.hour >= 18)) {
+        suggestions.add(TimeOfDay(hour: 21, minute: 0)); // Evening
+      }
+
+      // Ensure we have exactly 3 suggestions
+      suggestions = suggestions.take(3).toList();
+    }
+
+    // Sort suggestions chronologically
+    suggestions.sort((a, b) {
+      final aMins = a.hour * 60 + a.minute;
+      final bMins = b.hour * 60 + b.minute;
+      return aMins.compareTo(bMins);
+    });
+
+    return suggestions;
+  }
+
+  // NEW: Modified reschedule method with suggestions
   Future<void> _reschedule() async {
     if (isProcessingAction) return; // Prevent multiple submissions
-    
-    // Show time picker
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: selectedDoseTime ?? TimeOfDay.now(),
-      builder: (BuildContext context, Widget? child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.orange.shade700,
-            ),
-            buttonTheme: const ButtonThemeData(
-              textTheme: ButtonTextTheme.primary,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    
-    if (picked != null) {
-      setState(() {
-        isProcessingAction = true;
-        selectedDoseTime = picked;
-      });
-      
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
+
+    setState(() {
+      isProcessingAction = true;
+    });
+
+    try {
+      // Generate time suggestions
+      final suggestions = await _generateTimeSuggestions();
+
+      if (!mounted) return;
+
+      // Show the suggestions dialog
+      final result = await showDialog<TimeOfDay?>(
+        context: context,
+        builder: (context) => _buildSuggestionDialog(suggestions),
+      );
+
+      if (result != null) {
+        // User selected a time, proceed with updating
+        await _updateMedicationTime(result);
+      }
+    } catch (e) {
+      print("Error generating suggestions: $e");
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text("المستخدم غير مسجل الدخول"),
+            content: Text("حدث خطأ أثناء إعادة الجدولة: $e"),
             backgroundColor: Colors.red.shade700,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
         setState(() {
           isProcessingAction = false;
         });
-        return;
       }
-      
-      try {
-        final now = DateTime.now();
-        final DateTime scheduledDateTime = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          picked.hour,
-          picked.minute,
-        );
-        
-        if (scheduledDateTime.isBefore(now)) {
-          // If time is in past, schedule for tomorrow
-          scheduledDateTime.add(const Duration(days: 1));
-        }
-        
-        // Reference to the document
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('medicines')
-            .doc(widget.docId);
-        
-        // Get the document to update
-        final docSnapshot = await docRef.get();
-        if (!docSnapshot.exists) {
-          throw Exception("Document not found");
-        }
-        
-        final data = docSnapshot.data()!;
-        List<dynamic> times = List.from(data['times'] ?? []);
-        final String frequencyType = data['frequencyType'] ?? 'يومي';
-        final formattedTime = _formatTimeOfDay(picked);
-        
-        // Update times based on frequency type
-        if (frequencyType == 'يومي') {
-          // For daily medications with simple time list
-          if (times.isNotEmpty && times[0] is String) {
-            // Find closest match to our current time and replace it
-            int matchIndex = -1;
-            TimeOfDay? previousSelectedTime = selectedDoseTime;
-            
-            if (previousSelectedTime != null) {
-              for (int i = 0; i < times.length; i++) {
-                final timeStr = times[i].toString();
-                final time = _parseTime(timeStr);
-                if (time != null && 
-                    time.hour == previousSelectedTime.hour && 
-                    time.minute == previousSelectedTime.minute) {
-                  matchIndex = i;
-                  break;
+    }
+  }
+
+  // NEW: Dialog to show time suggestions
+  Widget _buildSuggestionDialog(List<TimeOfDay> suggestions) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "أوقات مقترحة للجرعة",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue.shade800,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "بناءً على جدول أدويتك الأخرى",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+
+            // Suggested times
+            ...suggestions.map((time) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(time),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade600,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  _formatTimeOfDay(time),
+                  style: const TextStyle(fontSize: 18),
+                ),
+              ),
+            )),
+
+            const SizedBox(height: 10),
+            const Divider(),
+            const SizedBox(height: 10),
+
+            // Custom time option
+            OutlinedButton.icon(
+              onPressed: () async {
+                // Show default time picker
+                final TimeOfDay? picked = await showTimePicker(
+                  context: context,
+                  initialTime: selectedDoseTime ?? TimeOfDay.now(),
+                  builder: (context, child) {
+                    return Theme(
+                      data: ThemeData.light().copyWith(
+                        colorScheme: ColorScheme.light(
+                          primary: Colors.orange.shade700,
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+                if (picked != null) {
+                  Navigator.of(context).pop(picked);
                 }
+              },
+              icon: const Icon(Icons.access_time),
+              label: const Text("اختيار وقت مخصص", style: TextStyle(fontSize: 16)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange.shade700,
+                side: BorderSide(color: Colors.orange.shade700),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("إلغاء", style: TextStyle(color: Colors.grey.shade700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // NEW: Update medication with the newly selected time
+  Future<void> _updateMedicationTime(TimeOfDay newTime) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("المستخدم غير مسجل الدخول"),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final formattedTime = _formatTimeOfDay(newTime);
+
+      // Reference to the document
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(widget.docId);
+
+      // Get the document to update
+      final docSnapshot = await docRef.get();
+      if (!docSnapshot.exists) {
+        throw Exception("Document not found");
+      }
+
+      final data = docSnapshot.data()!;
+      List<dynamic> times = List.from(data['times'] ?? []);
+      final String frequencyType = data['frequencyType'] ?? 'يومي';
+
+      // Update times based on frequency type
+      if (frequencyType == 'يومي') {
+        // For daily medications with simple time list
+        if (times.isNotEmpty && times[0] is String) {
+          // Find closest match to our current time and replace it
+          int matchIndex = -1;
+          TimeOfDay? previousSelectedTime = selectedDoseTime;
+
+          if (previousSelectedTime != null) {
+            for (int i = 0; i < times.length; i++) {
+              final timeStr = times[i].toString();
+              final time = _parseTime(timeStr);
+              if (time != null &&
+                  time.hour == previousSelectedTime.hour &&
+                  time.minute == previousSelectedTime.minute) {
+                matchIndex = i;
+                break;
               }
             }
-            
-            if (matchIndex >= 0) {
-              times[matchIndex] = formattedTime;
-            } else if (times.isNotEmpty) {
-              // If no match found, update the first time
-              times[0] = formattedTime;
-            }
           }
-        } else if (frequencyType == 'اسبوعي') {
-          // For weekly medications with day-specific times
-          int today = now.weekday;
-          bool updated = false;
-          
-          for (int i = 0; i < times.length; i++) {
-            if (times[i] is Map && times[i]['day'] == today) {
-              times[i]['time'] = formattedTime;
-              updated = true;
-              break;
-            }
-          }
-          
-          if (!updated && times.isNotEmpty) {
-            // If no match for today, update the first entry
-            if (times[0] is Map) {
-              times[0]['time'] = formattedTime;
-            }
+
+          if (matchIndex >= 0) {
+            times[matchIndex] = formattedTime;
+          } else if (times.isNotEmpty) {
+            // If no match found, update the first time
+            times[0] = formattedTime;
           }
         }
-        
-        // Update rescheduling record
-        List<Map<String, dynamic>> reschedulingHistory = [];
-        if (data.containsKey('reschedulingHistory') && data['reschedulingHistory'] is List) {
-          for (var entry in data['reschedulingHistory']) {
-            if (entry is Map) {
-              reschedulingHistory.add(Map<String, dynamic>.from(entry));
-            }
+      } else if (frequencyType == 'اسبوعي') {
+        // For weekly medications with day-specific times
+        final now = DateTime.now();
+        int today = now.weekday;
+        bool updated = false;
+
+        for (int i = 0; i < times.length; i++) {
+          if (times[i] is Map && times[i]['day'] == today) {
+            times[i]['time'] = formattedTime;
+            updated = true;
+            break;
           }
         }
-        
-        reschedulingHistory.add({
-          'previousTime': selectedDoseTime != null ? _formatTimeOfDay(selectedDoseTime!) : null,
-          'newTime': formattedTime,
-          'rescheduledAt': Timestamp.now(),
-        });
-        
-        // Update the document
-        await docRef.update({
-          'times': times,
-          'reschedulingHistory': reschedulingHistory,
-          'lastRescheduled': Timestamp.now(),
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("تم إعادة جدولة الجرعة إلى $formattedTime بنجاح"),
-              backgroundColor: Colors.blue.shade700,
-            ),
-          );
-          
-          // Reload the page to show updated information
-          _loadMedication();
+
+        if (!updated && times.isNotEmpty) {
+          // If no match for today, update the first entry
+          if (times[0] is Map) {
+            times[0]['time'] = formattedTime;
+          }
         }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("حدث خطأ أثناء إعادة الجدولة: $e"),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
+      }
+
+      // Update rescheduling record
+      List<Map<String, dynamic>> reschedulingHistory = [];
+      if (data.containsKey('reschedulingHistory') && data['reschedulingHistory'] is List) {
+        for (var entry in data['reschedulingHistory']) {
+          if (entry is Map) {
+            reschedulingHistory.add(Map<String, dynamic>.from(entry));
+          }
         }
-      } finally {
-        if (mounted) {
-          setState(() {
-            isProcessingAction = false;
-          });
-        }
+      }
+
+      reschedulingHistory.add({
+        'previousTime': selectedDoseTime != null ? _formatTimeOfDay(selectedDoseTime!) : null,
+        'newTime': formattedTime,
+        'rescheduledAt': Timestamp.now(),
+      });
+
+      // Update the document
+      await docRef.update({
+        'times': times,
+        'reschedulingHistory': reschedulingHistory,
+        'lastRescheduled': Timestamp.now(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("تم إعادة جدولة الجرعة إلى $formattedTime بنجاح"),
+            backgroundColor: Colors.blue.shade700,
+          ),
+        );
+
+        // Reload the page to show updated information
+        _loadMedication();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("حدث خطأ أثناء إعادة الجدولة: $e"),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
       }
     }
   }
@@ -428,11 +681,11 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
   // Check if the dose is significantly late (more than 3 hours)
   bool _isDoseSignificantlyLate() {
     if (selectedDoseTime == null) return false;
-    
+
     final now = TimeOfDay.now();
     final nowMinutes = now.hour * 60 + now.minute;
     final doseMinutes = selectedDoseTime!.hour * 60 + selectedDoseTime!.minute;
-    
+
     // If dose time is earlier today and more than 3 hours ago
     return doseMinutes < nowMinutes && (nowMinutes - doseMinutes) > 180;
   }
@@ -476,42 +729,42 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
           child: isLoading
               ? Center(child: CircularProgressIndicator(color: Colors.blue.shade700))
               : errorMessage.isNotEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, size: 70, color: Colors.red.shade400),
-                          const SizedBox(height: 16),
-                          Text(
-                            errorMessage,
-                            style: TextStyle(fontSize: 18, color: Colors.red.shade700),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade700,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            ),
-                            child: const Text("العودة", style: TextStyle(fontSize: 16)),
-                          ),
-                        ],
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildMedicationCard(),
-                          const SizedBox(height: 20),
-                          _buildScheduleCard(),
-                          const SizedBox(height: 20),
-                          _buildActionButtons(),
-                        ],
-                      ),
-                    ),
+              ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 70, color: Colors.red.shade400),
+                const SizedBox(height: 16),
+                Text(
+                  errorMessage,
+                  style: TextStyle(fontSize: 18, color: Colors.red.shade700),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade700,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: const Text("العودة", style: TextStyle(fontSize: 16)),
+                ),
+              ],
+            ),
+          )
+              : SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildMedicationCard(),
+                const SizedBox(height: 20),
+                _buildScheduleCard(),
+                const SizedBox(height: 20),
+                _buildActionButtons(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -520,7 +773,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
   Widget _buildMedicationCard() {
     final data = medicationDoc!.data() as Map<String, dynamic>;
     final imageUrl = data['imageUrl'] as String?;
-    
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -585,7 +838,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
     final data = medicationDoc!.data() as Map<String, dynamic>;
     final frequency = data['frequency'] ?? "غير محدد";
     final List<dynamic> times = data['times'] ?? [];
-    
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -653,7 +906,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
   Widget _buildActionButtons() {
     // Check if the dose is significantly late (more than 3 hours)
     final isDoseLate = _isDoseSignificantlyLate();
-    
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -675,25 +928,25 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
                   textAlign: TextAlign.center,
                 ),
               ),
-              
+
             // Confirm Taken Button
             SizedBox(
               height: 60, // Make button larger for easier tapping
               child: ElevatedButton.icon(
                 onPressed: isProcessingAction || (isDoseLate && false) ? null : _confirmDoseTaken,
-                icon: isProcessingAction 
+                icon: isProcessingAction
                     ? SizedBox(
-                        width: 20, 
-                        height: 20, 
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        )
-                      ) 
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    )
+                )
                     : const Icon(Icons.check_circle_outline, size: 24),
                 label: Text(
-                  "تأكيد أخذ الجرعة", 
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                    "تأكيد أخذ الجرعة",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade600,
@@ -703,27 +956,27 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Reschedule Button
             SizedBox(
               height: 60, // Make button larger for easier tapping
               child: ElevatedButton.icon(
                 onPressed: isProcessingAction ? null : _reschedule,
-                icon: isProcessingAction 
+                icon: isProcessingAction
                     ? SizedBox(
-                        width: 20, 
-                        height: 20, 
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        )
-                      ) 
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    )
+                )
                     : const Icon(Icons.update, size: 24),
                 label: Text(
-                  "إعادة جدولة الجرعة", 
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                    "إعادة جدولة الجرعة",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange.shade600,
@@ -733,7 +986,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage> {
                 ),
               ),
             ),
-            
+
             if (isDoseLate)
               Padding(
                 padding: const EdgeInsets.only(top: 12),

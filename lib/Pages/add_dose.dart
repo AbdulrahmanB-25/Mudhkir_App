@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -9,27 +8,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
-// Assuming notification utility is correctly imported from main.dart or its own file
-// Make sure this import path is correct for your project structure
-import 'package:mudhkir_app/main.dart'; // Or potentially a dedicated notification service file
-
-// Import the new page widgets
-import 'Add_Medicaiton/Add_Dosage.dart';
-import 'Add_Medicaiton/Add_Name_Picture.dart';
-import 'Add_Medicaiton/Add_Start_&_End_Date.dart';
+import 'package:mudhkir_app/main.dart'; // Import the notification utility
 
 // --------------------
-// Time Utilities (Keep here or move to a dedicated utils file)
+// Time Utilities
 // --------------------
 class TimeUtils {
   static TimeOfDay? parseTime(String timeStr) {
-    // Try parsing with AM/PM format first
     try {
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = ampmFormat.parseStrict(timeStr);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
-    // Try parsing with Arabic AM/PM markers
     try {
       String normalizedTime =
       timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
@@ -37,40 +27,189 @@ class TimeUtils {
       DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
-    // Try parsing 24-hour format HH:MM
     try {
       final parts = timeStr.split(':');
       if (parts.length == 2) {
         int hour = int.parse(parts[0]);
-        // Remove any non-digit characters from minutes (like AM/PM if accidentally included)
         int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
       }
     } catch (_) {}
-    // Log failure if all parsing attempts fail
     print("Failed to parse time string: $timeStr");
     return null;
   }
 
   static String formatTimeOfDay(BuildContext context, TimeOfDay time) {
-    // Option 1: Use MaterialLocalizations for locale-aware formatting
-    // final localizations = MaterialLocalizations.of(context);
-    // return localizations.formatTimeOfDay(time, alwaysUse24HourFormat: MediaQuery.of(context).alwaysUse24HourFormat);
-
-    // Option 2: Keep the original explicit Arabic formatting
-    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod; // 0 hour is 12 AM
+    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final String minute = time.minute.toString().padLeft(2, '0');
-    // Determine period based on TimeOfDay object
     final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
     return '$hour:$minute $period';
   }
 }
 
-
+//
 // --------------------
-// AddDose Widget (Main State Holder)
+// Custom Inline Autocomplete Widget (MedicineAutocomplete)
+// --------------------
+class MedicineAutocomplete extends StatefulWidget {
+  final List<String> suggestions;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final void Function(String) onSelected;
+
+  const MedicineAutocomplete({
+    Key? key,
+    required this.suggestions,
+    required this.controller,
+    required this.focusNode,
+    required this.onSelected,
+  }) : super(key: key);
+
+  @override
+  _MedicineAutocompleteState createState() => _MedicineAutocompleteState();
+}
+
+class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
+  List<String> _filteredSuggestions = [];
+  final ScrollController _scrollController = ScrollController(); // Add ScrollController
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_filter);
+    widget.focusNode.addListener(_handleFocusChange);
+    _filter();
+  }
+
+  void _filter() {
+    final text = widget.controller.text.toLowerCase().trim();
+    if (text.isEmpty) {
+      setState(() {
+        _filteredSuggestions = [];
+      });
+    } else {
+      setState(() {
+        _filteredSuggestions = widget.suggestions
+            .where((s) => s.toLowerCase().contains(text))
+            .take(3) // Limit to 3 suggestions
+            .toList();
+      });
+    }
+  }
+
+  void _handleFocusChange() {
+    if (!widget.focusNode.hasFocus) {
+      setState(() {
+        _filteredSuggestions = [];
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_filter);
+    widget.focusNode.removeListener(_handleFocusChange);
+    _scrollController.dispose(); // Dispose of the ScrollController
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          textAlign: TextAlign.center,
+          decoration: InputDecoration(
+            hintText: 'ابحث عن اسم الدواء...',
+            prefixIcon: Icon(Icons.search, color: Colors.blue.shade800),
+            suffixIcon: widget.controller.text.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.clear, color: Colors.red.shade700),
+                    onPressed: () {
+                      widget.controller.clear();
+                      setState(() {
+                        _filteredSuggestions = [];
+                      });
+                    },
+                  )
+                : null,
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.blue.shade800, width: 1.5),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          ),
+          validator: (value) =>
+              (value == null || value.trim().isEmpty) ? 'الرجاء إدخال اسم الدواء' : null,
+        ),
+        if (_filteredSuggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            height: _filteredSuggestions.length * 60.0, // Fixed height based on item count
+            child: Scrollbar(
+              controller: _scrollController, // Attach the ScrollController
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _scrollController, // Attach the ScrollController
+                shrinkWrap: true,
+                physics: const ClampingScrollPhysics(),
+                itemCount: _filteredSuggestions.length,
+                itemBuilder: (context, index) {
+                  final suggestion = _filteredSuggestions[index];
+                  return InkWell(
+                    onTap: () {
+                      widget.onSelected(suggestion);
+                      widget.controller.text = suggestion;
+                      widget.focusNode.unfocus();
+                      setState(() {
+                        _filteredSuggestions = [];
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(suggestion, style: const TextStyle(fontSize: 16)),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+//
+// --------------------
+// AddDose Widget
 // --------------------
 class AddDose extends StatefulWidget {
   const AddDose({super.key});
@@ -80,662 +219,233 @@ class AddDose extends StatefulWidget {
 }
 
 class _AddDoseState extends State<AddDose> {
-  // --- State Variables ---
   final String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a'; // Replace with your actual key
 
   final PageController _pageController = PageController();
-  // Form Keys remain here to be passed down
   final GlobalKey<FormState> _formKeyPage1 = GlobalKey<FormState>();
   final GlobalKey<FormState> _formKeyPage2 = GlobalKey<FormState>();
   final GlobalKey<FormState> _formKeyPage3 = GlobalKey<FormState>();
 
-  // Controllers and state variables managed by this main widget
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _dosageController = TextEditingController();
-  String _dosageUnit = 'ملغم'; // Default value
+  String _dosageUnit = 'ملغم';
   List<TimeOfDay?> _selectedTimes = [];
   List<bool> _isAutoGeneratedTimes = [];
-  String _frequencyType = 'يومي'; // Default value
-  int _frequencyNumber = 1; // Default value
-  DateTime? _startDate = DateTime.now(); // Default value
+  String _frequencyType = 'يومي';
+  int _frequencyNumber = 1;
+  DateTime? _startDate = DateTime.now();
   DateTime? _endDate;
   late Future<List<String>> _medicineNamesFuture;
 
   File? _capturedImage;
   String? _uploadedImageUrl;
-  bool _isUploading = false; // Track upload state
 
-  // Options lists
   final List<String> _dosageUnits = ['ملغم', 'غرام', 'مل', 'وحدة'];
   final List<String> _frequencyTypes = ['يومي', 'اسبوعي'];
   final List<int> _frequencyNumbers = [1, 2, 3, 4, 5, 6];
 
-  // Weekly scheduling state
+  // For weekly scheduling:
   Map<int, TimeOfDay?> _weeklyTimes = {};
   Map<int, bool> _weeklyAutoGenerated = {};
   Set<int> _selectedWeekdays = {};
 
-  // --- Lifecycle Methods ---
   @override
   void initState() {
     super.initState();
     _medicineNamesFuture = _loadMedicineNames();
-    // Initialize based on default frequency number
     _selectedTimes = List.filled(_frequencyNumber, null, growable: true);
     _isAutoGeneratedTimes = List.filled(_frequencyNumber, false, growable: true);
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _dosageController.dispose();
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  // --- Data Loading ---
   Future<List<String>> _loadMedicineNames() async {
     try {
-      // Adjust the path according to your project structure
       final String jsonString = await rootBundle.loadString('assets/Mediciens/trade_names.json');
       final List<dynamic> jsonList = json.decode(jsonString);
-      // Ensure all items are strings and handle potential nulls/errors
-      return jsonList.map((item) => item.toString()).toList();
+      return List<String>.from(jsonList);
     } catch (e) {
       print('Error loading medicine names: $e');
-      // Optionally show an error message to the user
-      if (mounted) { // Check if widget is still in the tree
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('حدث خطأ أثناء تحميل قائمة الأدوية')),
-        );
-      }
-      return []; // Return empty list on error
+      return [];
     }
   }
 
-  // --- State Update Logic ---
-
-  /// Update daily times and auto-generated flags when frequency number changes.
+  /// Update daily times and auto-generated flags.
   void _updateTimeFields() {
-    // No need for setState here if called from within another setState,
-    // but safe to keep if called independently.
     setState(() {
-      // Preserve existing times if the new count is larger or equal
-      List<TimeOfDay?> oldTimes = List.from(_selectedTimes);
-      List<bool> oldAutoGenerated = List.from(_isAutoGeneratedTimes);
-
       _selectedTimes = List.generate(
           _frequencyNumber,
-              (index) => index < oldTimes.length ? oldTimes[index] : null,
-          growable: true);
+              (index) =>
+          index < _selectedTimes.length ? _selectedTimes[index] : null);
       _isAutoGeneratedTimes = List.generate(
           _frequencyNumber,
-              (index) => index < oldAutoGenerated.length ? oldAutoGenerated[index] : false,
-          growable: true);
-
-      // Re-run auto-fill if the first time exists and type is daily
+              (index) =>
+          index < _isAutoGeneratedTimes.length ? _isAutoGeneratedTimes[index] : false);
       if (_frequencyType == 'يومي' && _selectedTimes.isNotEmpty && _selectedTimes[0] != null) {
-        _autoFillDosageTimes(); // This function now calls setState internally
+        _autoFillDosageTimes();
       }
     });
   }
-
 
   /// Auto-fill remaining daily dosage times based on the first dose.
   void _autoFillDosageTimes() {
-    if (_frequencyType != 'يومي' || _selectedTimes.isEmpty || _selectedTimes[0] == null || _frequencyNumber <= 1) {
-      return; // Only auto-fill for daily, if first time is set, and more than one dose
-    }
-
-    final firstDose = _selectedTimes[0]!;
-    // Use a fixed date for calculation consistency
-    DateTime base = DateTime(2000, 1, 1, firstDose.hour, firstDose.minute);
-    // Calculate interval - ensure integer division or rounding
-    int intervalMinutes = (24 * 60 / _frequencyNumber).round();
-
-    // Use a temporary list to avoid modifying state directly in the loop
-    List<TimeOfDay?> newTimes = List.from(_selectedTimes);
-    List<bool> newAutoGenerated = List.from(_isAutoGeneratedTimes);
-    bool changed = false; // Track if any changes were made
-
-    for (int i = 1; i < _frequencyNumber; i++) {
-      // Only auto-fill if the slot is currently empty or was previously auto-filled
-      if (newTimes[i] == null || newAutoGenerated[i]) {
+    if (_selectedTimes.isNotEmpty && _selectedTimes[0] != null) {
+      final firstDose = _selectedTimes[0]!;
+      DateTime base = DateTime(2000, 1, 1, firstDose.hour, firstDose.minute);
+      int intervalMinutes = (1440 / _frequencyNumber).round();
+      for (int i = 1; i < _frequencyNumber; i++) {
         DateTime newTime = base.add(Duration(minutes: intervalMinutes * i));
         TimeOfDay newTimeOfDay = TimeOfDay(hour: newTime.hour, minute: newTime.minute);
-        // Only update if the time actually changes
-        if (newTimes[i] != newTimeOfDay || !newAutoGenerated[i]) {
-          newTimes[i] = newTimeOfDay;
-          newAutoGenerated[i] = true;
-          changed = true;
+        setState(() {
+          _selectedTimes[i] = newTimeOfDay;
+          _isAutoGeneratedTimes[i] = true;
+        });
+      }
+    }
+  }
+
+  /// Initialize weekly schedule maps for the selected weekdays.
+  void _initializeWeeklySchedule() {
+    setState(() {
+      // Ensure for each selected day, there's an entry.
+      for (int day in _selectedWeekdays) {
+        if (!_weeklyTimes.containsKey(day)) {
+          _weeklyTimes[day] = null;
+          _weeklyAutoGenerated[day] = false;
         }
       }
-    }
-    // Update state once after the loop ONLY if changes occurred
-    if (changed && mounted) { // Check mounted state
-      setState(() {
-        _selectedTimes = newTimes;
-        _isAutoGeneratedTimes = newAutoGenerated;
-      });
-    }
-  }
-
-
-  /// Initialize or update weekly schedule maps based on selected weekdays.
-  void _initializeWeeklySchedule() {
-    // This function modifies state, so wrap in setState
-    setState(() {
-      Map<int, TimeOfDay?> updatedWeeklyTimes = {};
-      Map<int, bool> updatedWeeklyAutoGenerated = {};
-
-      // Iterate over currently selected weekdays
-      for (int day in _selectedWeekdays) {
-        updatedWeeklyTimes[day] = _weeklyTimes[day]; // Keep existing time if present
-        updatedWeeklyAutoGenerated[day] = _weeklyAutoGenerated[day] ?? false; // Keep existing flag or default to false
-      }
-      // Replace the maps with the filtered/updated versions
-      _weeklyTimes = updatedWeeklyTimes;
-      _weeklyAutoGenerated = updatedWeeklyAutoGenerated;
+      // Remove any days not selected.
+      _weeklyTimes.removeWhere((key, value) => !_selectedWeekdays.contains(key));
+      _weeklyAutoGenerated.removeWhere((key, value) => !_selectedWeekdays.contains(key));
     });
   }
-
-  // --- UI Interaction Callbacks (Passed to Child Widgets) ---
 
   Future<void> _selectStartDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _startDate ?? DateTime.now(),
-      firstDate: DateTime(2000), // Allow past dates for start
-      lastDate: DateTime(DateTime.now().year + 10), // Extend range
-      // locale: const Locale('ar', 'SA'), // Let it inherit from MaterialApp
+      firstDate: DateTime(2000),
+      lastDate: DateTime(DateTime.now().year + 5),
     );
-    if (picked != null && picked != _startDate && mounted) { // Check mounted
-      setState(() {
-        _startDate = picked;
-        // Optional: Clear end date if it's before the new start date
-        if (_endDate != null && _endDate!.isBefore(picked)) {
-          _endDate = null;
-        }
-      });
-    }
+    if (picked != null) setState(() => _startDate = picked);
   }
 
   Future<void> _selectEndDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _endDate ?? _startDate ?? DateTime.now(),
-      // Ensure firstDate is not before startDate
-      firstDate: _startDate ?? DateTime.now().subtract(const Duration(days: 1)),
-      lastDate: DateTime(DateTime.now().year + 10),
-      // locale: const Locale('ar', 'SA'), // Let it inherit from MaterialApp
+      firstDate: _startDate ?? DateTime.now(),
+      lastDate: DateTime(DateTime.now().year + 5),
     );
-    if (picked != null && picked != _endDate && mounted) { // Check mounted
-      setState(() => _endDate = picked);
-    }
+    if (picked != null) setState(() => _endDate = picked);
   }
 
   Future<void> _selectTime(int index) async {
-    final TimeOfDay initialTime = _selectedTimes.length > index && _selectedTimes[index] != null
-        ? _selectedTimes[index]!
-        : TimeOfDay.now();
-
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: initialTime,
-      // *** REMOVED builder argument to fix MaterialLocalizations error ***
+      initialTime: _selectedTimes[index] ?? TimeOfDay.now(),
     );
-
-    if (picked != null && mounted) { // Check mounted
+    if (picked != null) {
       setState(() {
-        // Ensure list is long enough before accessing index
-        if (index < _selectedTimes.length) {
-          _selectedTimes[index] = picked;
-          _isAutoGeneratedTimes[index] = false; // Manually selected
-          // If the first time is changed, re-trigger auto-fill for others
-          if (index == 0 && _frequencyType == 'يومي') {
-            _autoFillDosageTimes(); // This now calls setState internally if needed
-          }
+        _selectedTimes[index] = picked;
+        _isAutoGeneratedTimes[index] = false;
+        if (index == 0 && _frequencyType == 'يومي') {
+          _autoFillDosageTimes();
         }
       });
     }
   }
-
 
   Future<void> _selectWeeklyTime(int day) async {
-    final TimeOfDay initialTime = _weeklyTimes[day] ?? TimeOfDay.now();
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: initialTime,
-      // *** REMOVED builder argument to fix MaterialLocalizations error ***
+      initialTime: _weeklyTimes[day] ?? TimeOfDay.now(),
     );
-    if (picked != null && mounted) { // Check mounted
+    if (picked != null) {
       setState(() {
         _weeklyTimes[day] = picked;
-        _weeklyAutoGenerated[day] = false; // Manually selected
-        // Optional: Auto-fill logic if this was the 'first' day selected
-        // _applyTimeToOtherWeekdaysIfNeeded(day, picked);
+        _weeklyAutoGenerated[day] = false;
+        // If this is the first selected day (sorted by day number), auto-fill for the others.
+        List<int> sortedDays = _selectedWeekdays.toList()..sort();
+        if (sortedDays.isNotEmpty && day == sortedDays.first) {
+          for (int otherDay in sortedDays.skip(1)) {
+            if (_weeklyTimes[otherDay] == null) {
+              _weeklyTimes[otherDay] = picked;
+              _weeklyAutoGenerated[otherDay] = true;
+            }
+          }
+        }
       });
     }
   }
 
-  /// Callback for when a weekday chip is selected/deselected.
-  void _handleWeekdaySelected(int day, bool isSelected) {
-    // Modifies state, wrap in setState
-    setState(() {
-      if (isSelected) {
-        // Prevent adding more than 6 days
-        if (_selectedWeekdays.length < 6) {
-          _selectedWeekdays.add(day);
-          // Initialize time/auto-gen status if not already present
-          if (!_weeklyTimes.containsKey(day)) {
-            _weeklyTimes[day] = null;
-            _weeklyAutoGenerated[day] = false;
-          }
-        } else {
-          // Show feedback if limit reached
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('يمكنك اختيار 6 أيام فقط كحد أقصى')),
-          );
-        }
-      } else {
-        _selectedWeekdays.remove(day);
-        // Remove corresponding time and auto-gen status
-        _weeklyTimes.remove(day);
-        _weeklyAutoGenerated.remove(day);
-      }
-      // No need to call _initializeWeeklySchedule here as we are managing it directly
-    });
-  }
-
-  /// Callback to apply the time of the first selected weekday to others.
-  void _handleApplySameTimeToAllWeekdays() {
-    List<int> sortedDays = _selectedWeekdays.toList()..sort();
-    if (sortedDays.isEmpty || _weeklyTimes[sortedDays.first] == null) {
-      // Show feedback if condition not met
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الرجاء تحديد وقت لليوم الأول في القائمة أولاً")),
-      );
-      return;
-    }
-
-    final firstTime = _weeklyTimes[sortedDays.first]!;
-    bool changed = false; // Track changes
-
-    // Modify state, wrap in setState
-    setState(() {
-      for (int day in sortedDays.skip(1)) {
-        // Only apply if the time is currently null or auto-generated
-        if (_weeklyTimes[day] == null || (_weeklyAutoGenerated[day] ?? false)) {
-          // Only update if the time actually changes
-          if (_weeklyTimes[day] != firstTime || !(_weeklyAutoGenerated[day] ?? false)) {
-            _weeklyTimes[day] = firstTime;
-            _weeklyAutoGenerated[day] = true; // Mark as auto-generated
-            changed = true;
-          }
-        }
-      }
-    });
-    if (changed) {
-      print("Applied same time to other weekdays.");
-    }
-  }
-
-
-  // --- Image Handling ---
   Future<void> _pickImage() async {
-    File? tempImage; // Temporary variable to hold the picked image file
-    bool wasUploading = _isUploading; // Store previous upload state
-
     try {
-      // Request camera permission explicitly
-      var status = await Permission.camera.request();
-      if (status.isGranted) {
-        final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
-        if (pickedFile != null) {
-          tempImage = File(pickedFile.path);
-          if (mounted) { // Check mounted before setState
-            setState(() {
-              _capturedImage = tempImage; // Update the state variable
-              _uploadedImageUrl = null; // Reset URL when new image is picked
-              _isUploading = true; // Start showing progress indicator
-            });
-          }
-          // Start upload in background, handle errors
-          // Use the tempImage variable for the upload function
-          _uploadImageToImgBB(tempImage).then((url) {
-            if (mounted) { // Check mounted before final setState
-              setState(() {
-                _uploadedImageUrl = url;
-                _isUploading = false;
-              });
-            }
-          }).catchError((e) {
-            print("Error during image upload: $e");
-            if (mounted) { // Check mounted before error setState
-              setState(() {
-                _isUploading = false; // Stop progress on error
-                // Decide if you want to clear the image on error
-                // _capturedImage = null;
-              });
-              _showBlockingAlert("خطأ تحميل", "فشل تحميل الصورة. الرجاء المحاولة مرة أخرى.");
-            }
-          });
-        } else {
-          // User cancelled the picker
-          if (mounted && wasUploading) { // If was uploading before cancel, reset state
-            setState(() { _isUploading = false; });
-          }
-        }
-      } else if (status.isPermanentlyDenied) {
-        // Guide user to settings if permanently denied
-        _showBlockingAlert(
-            "الإذن مطلوب",
-            "تم رفض الوصول إلى الكاميرا بشكل دائم. يرجى تمكين الإذن من إعدادات التطبيق.",
-            onOk: openAppSettings // Requires permission_handler package
+      // Request camera permission before accessing the camera
+      final cameraPermission = await Permission.camera.request();
+      if (cameraPermission.isDenied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("يجب السماح بالوصول إلى الكاميرا لالتقاط صورة"))
         );
-        if (mounted && wasUploading) { setState(() { _isUploading = false; }); }
-
-      } else {
-        // Inform user if permission denied temporarily
-        _showBlockingAlert("الإذن مطلوب", "يجب السماح بالوصول إلى الكاميرا لالتقاط صورة.");
-        if (mounted && wasUploading) { setState(() { _isUploading = false; }); }
+        return;
+      }
+      
+      final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (pickedFile != null) {
+        setState(() => _capturedImage = File(pickedFile.path));
+        _uploadImageToImgBB(_capturedImage!).catchError((e) {
+          print("Error initiating image upload: $e");
+          _showBlockingAlert("خطأ", "حدث خطأ أثناء بدء تحميل الصورة");
+        });
       }
     } catch (e) {
       print("Image picker error: $e");
-      if (mounted) { // Check mounted before error setState
-        setState(() { _isUploading = false; }); // Ensure uploading stops on error
-        _showBlockingAlert("خطأ", "حدث خطأ أثناء التقاط الصورة.");
-      }
+      _showBlockingAlert("خطأ", "حدث خطأ أثناء التقاط الصورة");
     }
   }
 
-
-  Future<String?> _uploadImageToImgBB(File imageFile) async {
-    // This function runs in the background, no setState needed here.
+  Future<void> _uploadImageToImgBB(File imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(bytes);
       final url = Uri.parse('https://api.imgbb.com/1/upload?key=$imgbbApiKey');
 
-      // Consider adding a timeout to the request
-      final response = await http.post(url, body: {'image': base64Image})
-          .timeout(const Duration(seconds: 60)); // Example: 60 second timeout
-
+      final response = await http.post(url, body: {'image': base64Image});
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        // Safely access the URL, checking for nulls
-        final imageUrl = jsonResponse['data']?['url'] as String?;
-        if (imageUrl != null) {
-          print("Image uploaded to ImgBB: $imageUrl");
-          return imageUrl; // Return the URL
-        } else {
-          print("ImgBB response missing image URL: ${response.body}");
-          throw Exception("فشل تحميل الصورة: لم يتم العثور على رابط الصورة في الاستجابة.");
-        }
-      } else {
-        print("ImgBB upload failed: Status Code ${response.statusCode}, Body: ${response.body}");
-        // Throw an error with more context
-        throw Exception("فشل تحميل الصورة. رمز الحالة: ${response.statusCode}");
-      }
-    } on TimeoutException {
-      print("Error uploading image to ImgBB: Request timed out.");
-      throw Exception("فشل تحميل الصورة: انتهت مهلة الطلب.");
-    } catch (e) {
-      print("Error uploading image to ImgBB: $e");
-      // Re-throw a user-friendly error or the original exception
-      throw Exception("حدث خطأ غير متوقع أثناء تحميل الصورة: $e");
-    }
-  }
-
-
-  // --- Navigation and Submission ---
-
-  void _nextPage() {
-    if (!_pageController.hasClients) return; // Avoid error if called before mounted
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  void _previousPage() {
-    if (!_pageController.hasClients) return;
-    _pageController.previousPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  /// Final submission logic.
-  Future<void> _submitForm() async {
-    // 1. Validate the final form page first
-    if (!_formKeyPage3.currentState!.validate()) {
-      print("Form Page 3 validation failed.");
-      return;
-    }
-
-    // 2. Check if an image was picked but is still uploading
-    if (_capturedImage != null && _isUploading) {
-      _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار لحظات ثم المحاولة مرة أخرى.");
-      return;
-    }
-
-    // 3. Validate weekly schedule specifics if type is weekly
-    if (_frequencyType == 'اسبوعي') {
-      if (_selectedWeekdays.isEmpty) {
-        _showBlockingAlert("خطأ", "الرجاء تحديد يوم واحد على الأقل للجدول الأسبوعي.");
-        // Optionally, navigate back to page 2
-        // _pageController.animateToPage(1, duration: Duration(milliseconds: 300), curve: Curves.easeInOut);
-        return;
-      }
-      // Ensure all selected weekdays have a time picked
-      bool allWeeklyTimesSet = _selectedWeekdays.every((day) => _weeklyTimes[day] != null);
-      if (!allWeeklyTimesSet) {
-        _showBlockingAlert("خطأ", "الرجاء تحديد وقت لكل يوم تم اختياره في الجدول الأسبوعي.");
-        // Optionally, navigate back to page 2
-        // _pageController.animateToPage(1, duration: Duration(milliseconds: 300), curve: Curves.easeInOut);
-        return;
-      }
-    }
-
-    // 4. Check user authentication
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showBlockingAlert("خطأ", "المستخدم غير مسجل الدخول.");
-      // Optionally navigate to login screen
-      // Navigator.of(context).pushReplacementNamed('/login');
-      return;
-    }
-
-    // --- 5. Prepare Data for Firestore ---
-    List<String> dailyTimesFormatted = [];
-    List<Map<String, dynamic>> weeklyScheduleFormatted = [];
-    List<Map<String, dynamic>> initialMissedDoses = []; // Keep this structure
-
-    if (_frequencyType == 'يومي') {
-      dailyTimesFormatted = _selectedTimes
-          .where((t) => t != null)
-          .map((t) => TimeUtils.formatTimeOfDay(context, t!)) // Use utility function
-          .toList();
-
-      // Populate initialMissedDoses for daily schedule
-      for (var time in _selectedTimes) {
-        if (time != null && _startDate != null) {
-          // Use start date for the initial schedule date, time from selection
-          DateTime doseDateTime = DateTime(
-              _startDate!.year, _startDate!.month, _startDate!.day,
-              time.hour, time.minute
-          );
-          // Add all initial doses regardless of whether they are past or future
-          initialMissedDoses.add({
-            'scheduled': Timestamp.fromDate(doseDateTime),
-            'status': 'pending' // Initial status
+        if (mounted) {
+          setState(() {
+            _uploadedImageUrl = jsonResponse['data']['url'];
           });
         }
-      }
-
-    } else { // Weekly
-      List<int> sortedDays = _selectedWeekdays.toList()..sort();
-      weeklyScheduleFormatted = sortedDays.map((day) {
-        final time = _weeklyTimes[day];
-        return {
-          'day': day, // Store ISO weekday number (1=Mon, 7=Sun)
-          'time': time != null ? TimeUtils.formatTimeOfDay(context, time) : '' // Store formatted time string
-        };
-      }).toList();
-
-      // Populate initialMissedDoses for weekly schedule for the first week
-      if (_startDate != null) {
-        DateTime currentCheckDate = _startDate!;
-        DateTime firstWeekEndDate = _startDate!.add(const Duration(days: 7));
-        // Consider the actual end date if it's within the first week
-        DateTime effectiveEndDate = _endDate != null && _endDate!.isBefore(firstWeekEndDate)
-            ? _endDate!.add(const Duration(days: 1)) // Include end date itself
-            : firstWeekEndDate;
-
-        while(currentCheckDate.isBefore(effectiveEndDate)) {
-          if (_selectedWeekdays.contains(currentCheckDate.weekday)) {
-            final time = _weeklyTimes[currentCheckDate.weekday];
-            if (time != null) {
-              DateTime doseDateTime = DateTime(
-                  currentCheckDate.year, currentCheckDate.month, currentCheckDate.day,
-                  time.hour, time.minute
-              );
-              initialMissedDoses.add({
-                'scheduled': Timestamp.fromDate(doseDateTime),
-                'status': 'pending'
-              });
-            }
-          }
-          currentCheckDate = currentCheckDate.add(const Duration(days: 1));
+        print("Image uploaded to ImgBB: $_uploadedImageUrl");
+      } else {
+        print("ImgBB upload failed: ${response.body}");
+        if (mounted) {
+          _showBlockingAlert("خطأ تحميل", "فشل تحميل الصورة. رمز الحالة: ${response.statusCode}");
         }
       }
-    }
-
-    // Construct the final data object
-    final newMedicine = <String, dynamic>{
-      'userId': user.uid,
-      'name': _nameController.text.trim(),
-      'dosage': '${_dosageController.text.trim()} $_dosageUnit',
-      'frequencyType': _frequencyType, // Store type ('يومي' or 'اسبوعي')
-      // Store frequency details based on type
-      'frequencyDetails': _frequencyType == 'يومي'
-          ? {'timesPerDay': _frequencyNumber}
-          : {'selectedWeekdays': _selectedWeekdays.toList()..sort()}, // Store selected days
-      'times': _frequencyType == 'يومي' ? dailyTimesFormatted : weeklyScheduleFormatted, // Store appropriate schedule
-      'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
-      'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
-      'createdAt': FieldValue.serverTimestamp(),
-      'missedDoses': initialMissedDoses, // Store the initial list
-      'lastUpdated': Timestamp.now(), // Track last update
-      'isActive': true, // Default to active
-      // Add image URL only if it was successfully uploaded
-      if (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty)
-        'imageUrl': _uploadedImageUrl,
-    };
-
-    // Handle case where image upload failed but user tries to submit
-    if (_capturedImage != null && (_uploadedImageUrl == null || _uploadedImageUrl!.isEmpty) && !_isUploading) {
-      print("⚠️ Image was captured but upload failed or URL is missing.");
-      // Decide how to handle: allow submit without image, or block?
-      bool allowSubmitWithoutImage = false; // Set to true to allow, false to block
-      if (!allowSubmitWithoutImage) {
-        _showBlockingAlert("خطأ", "فشل تحميل الصورة. لا يمكن حفظ الدواء بدون صورة حالياً.");
-        return; // Block submission
-      }
-      // If allowing, the 'imageUrl' field simply won't be added to newMedicine
-    }
-
-
-    // --- 6. Firestore Operation ---
-    try {
-      print("Attempting to add medication: ${newMedicine['name']}");
-      final docRef = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('medicines')
-          .add(newMedicine);
-
-      print("✅ Medication added with ID: ${docRef.id}");
-
-      // --- 7. Schedule Notifications ---
-      // Use a base notification ID and increment for uniqueness within this add operation
-      int baseNotificationId = docRef.id.hashCode.abs() % 2147483647; // Use .abs() ensure positive int range
-      int notificationCounter = 0;
-
-      // Schedule based on frequency type
-      if (_frequencyType == 'يومي') {
-        for (var time in _selectedTimes) {
-          if (time != null) {
-            print("Scheduling DAILY notification for ${newMedicine['name']} at $time");
-            // Replace with your actual notification scheduling call
-            await scheduleDailyRepeatingNotification(
-              id: baseNotificationId + notificationCounter++,
-              title: 'تذكير الدواء',
-              body: 'حان وقت تناول ${_nameController.text.trim()}',
-              timeOfDay: time,
-              payload: docRef.id,
-              startDate: _startDate,
-              endDate: _endDate,
-            );
-          }
-        }
-      } else { // Weekly
-        for (int day in _selectedWeekdays) {
-          final time = _weeklyTimes[day];
-          if (time != null) {
-            print("Scheduling WEEKLY notification for ${newMedicine['name']} on day $day at $time");
-            // Replace with your actual notification scheduling call
-            await scheduleWeeklyRepeatingNotification(
-              id: baseNotificationId + notificationCounter++,
-              title: 'تذكير الدواء',
-              body: 'حان وقت تناول ${_nameController.text.trim()}',
-              weekday: day,
-              timeOfDay: time,
-              payload: docRef.id,
-              startDate: _startDate,
-              endDate: _endDate,
-            );
-          }
-        }
-      }
-
-      // 8. Success feedback and navigation
-      if (mounted) { // Check mounted before showing dialog/popping
-        _showBlockingAlert("نجاح", "تمت إضافة الدواء وجدولة التذكيرات بنجاح!", onOk: () {
-          if (mounted) Navigator.pop(context, true); // Pop back, indicating success
-        });
-      }
-
-    } catch (e, s) { // Catch error and stack trace
-      print("❌ Firestore/Scheduling error: $e");
-      print("❌ Stack trace: $s");
-      if (mounted) { // Check mounted before showing error
-        _showBlockingAlert("خطأ", "حدث خطأ أثناء حفظ الدواء أو جدولة التذكيرات: $e");
+    } catch (e) {
+      print("Error uploading image to ImgBB: $e");
+      if (mounted) {
+        _showBlockingAlert("خطأ تحميل", "حدث خطأ غير متوقع أثناء تحميل الصورة.");
       }
     }
   }
 
-
-  // --- Helper Functions ---
-
-  /// Shows a non-dismissible alert dialog.
   void _showBlockingAlert(String title, String message, {VoidCallback? onOk}) {
-    if (!mounted) return; // Don't show dialog if widget is disposed
+    if (!mounted) return;
     showDialog(
       context: context,
-      barrierDismissible: false, // Make it non-dismissible until OK is pressed
+      barrierDismissible: onOk == null,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(title, textAlign: TextAlign.center),
-          content: Text(message, textAlign: TextAlign.center),
-          actionsAlignment: MainAxisAlignment.center,
+          title: Text(title),
+          content: Text(message),
           actions: [
             TextButton(
               child: const Text("حسناً"),
               onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-                onOk?.call(); // Execute callback if provided
+                Navigator.of(context).pop();
+                if (onOk != null) onOk();
               },
             )
           ],
@@ -744,57 +454,867 @@ class _AddDoseState extends State<AddDose> {
     );
   }
 
-  /// Returns the Arabic name for a given ISO weekday number (1=Mon, 7=Sun).
-  String _dayName(int day) {
-    // Ensure day is within 1-7 range
-    switch (day) {
-      case 1: return "الإثنين";
-      case 2: return "الثلاثاء";
-      case 3: return "الأربعاء";
-      case 4: return "الخميس";
-      case 5: return "الجمعة";
-      case 6: return "السبت";
-      case 7: return "الأحد"; // Sunday is 7 in ISO 8601 standard
-      default: return "";
+  Future<void> _submitForm() async {
+    if (!_formKeyPage3.currentState!.validate()) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showBlockingAlert("خطأ", "المستخدم غير مسجل الدخول.");
+      return;
+    }
+    if (_capturedImage != null && _uploadedImageUrl == null) {
+      _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار لحظات ثم المحاولة مرة أخرى.");
+      return;
+    }
+
+    dynamic schedule;
+    List<Map<String, dynamic>> doseSchedule = [];
+
+    if (_frequencyType == 'اسبوعي') {
+      if (_selectedWeekdays.isEmpty || _selectedWeekdays.length > 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('الرجاء تحديد من 1 إلى 6 أيام')),
+        );
+        return;
+      }
+      List<int> sortedDays = _selectedWeekdays.toList()..sort();
+      schedule = sortedDays.map((day) {
+        final time = _weeklyTimes[day];
+        return {
+          'day': day,
+          'time': time != null ? TimeUtils.formatTimeOfDay(context, time) : ''
+        };
+      }).toList();
+    }
+
+    // Create initial missedDoses array
+    List<Map<String, dynamic>> initialMissedDoses = [];
+    DateTime now = DateTime.now();
+
+    if (_frequencyType == 'يومي') {
+      for (var time in _selectedTimes) {
+        if (time != null) {
+          DateTime doseTime = DateTime(
+            now.year, now.month, now.day, time.hour, time.minute
+          );
+          initialMissedDoses.add({
+            'scheduled': Timestamp.fromDate(doseTime),
+            'status': 'pending'
+          });
+        }
+      }
+    } else if (_frequencyType == 'اسبوعي') {
+      for (var day in _selectedWeekdays) {
+        if (_weeklyTimes[day] != null) {
+          TimeOfDay time = _weeklyTimes[day]!;
+          DateTime doseTime = DateTime(
+            now.year, now.month, now.day, time.hour, time.minute
+          );
+          initialMissedDoses.add({
+            'scheduled': Timestamp.fromDate(doseTime),
+            'status': 'pending'
+          });
+        }
+      }
+    }
+
+    final newMedicine = <String, dynamic>{
+      'userId': user.uid,
+      'name': _nameController.text.trim(),
+      'dosage': '${_dosageController.text.trim()} $_dosageUnit',
+      'frequency': '$_frequencyNumber $_frequencyType',
+      'times': _frequencyType == 'يومي'
+          ? _selectedTimes.map((t) => t?.format(context)).where((t) => t != null).toList()
+          : schedule,
+      'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+      'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+      'createdAt': FieldValue.serverTimestamp(),
+      'missedDoses': initialMissedDoses,
+      'lastUpdated': Timestamp.now(),
+    };
+
+    if (_uploadedImageUrl != null) {
+      newMedicine['imageUrl'] = _uploadedImageUrl;
+      print("✅ Image URL ready for Firestore: $_uploadedImageUrl");
+    }
+
+    try {
+      final docRef = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .add(newMedicine);
+
+      // Debug log to confirm dose addition
+      print("New medication added with ID: ${docRef.id}");
+
+      // Schedule notifications for the new dose
+      int notificationId = docRef.id.hashCode; // Use doc ID hash as notification ID
+      if (_frequencyType == 'يومي') {
+        for (var time in _selectedTimes) {
+          if (time != null) {
+            final scheduledTime = DateTime(
+              _startDate!.year,
+              _startDate!.month,
+              _startDate!.day,
+              time.hour,
+              time.minute,
+            );
+            if (scheduledTime.isAfter(DateTime.now())) {
+              print("Scheduling notification for docId: ${docRef.id}"); // ADDED LOG
+              await scheduleNotification(
+                id: notificationId++,
+                title: 'تذكير الدواء',
+                body: 'حان وقت تناول ${_nameController.text.trim()}',
+                scheduledTime: scheduledTime,
+                docId: docRef.id, // Pass the actual document ID as payload
+              );
+            }
+          }
+        }
+      }
+
+      _showBlockingAlert("نجاح", "تمت إضافة الدواء بنجاح!", onOk: () {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } catch (e) {
+      print("❌ Firestore error: $e");
+      _showBlockingAlert("خطأ", "حدث خطأ أثناء إضافة الدواء إلى قاعدة البيانات.");
     }
   }
 
-  // --- Mock/Placeholder Notification Scheduling Functions ---
-  // !!! REPLACE THESE WITH YOUR ACTUAL NOTIFICATION IMPLEMENTATION !!!
-  Future<void> scheduleDailyRepeatingNotification({
-    required int id, required String title, required String body,
-    required TimeOfDay timeOfDay, String? payload, DateTime? startDate, DateTime? endDate}) async {
-    // This is a placeholder. Use your notification package (e.g., flutter_local_notifications)
-    // to schedule a notification that repeats daily at the specified timeOfDay,
-    // potentially respecting startDate and endDate if the package supports it.
-    print("[MOCK] Scheduling Daily Notification: ID=$id, Title=$title, Time=${timeOfDay.format(context)}, Start=$startDate, End=$endDate, Payload=$payload");
-    await Future.delayed(const Duration(milliseconds: 50)); // Simulate async operation
+  String _dayName(int day) {
+    switch (day) {
+      case 1:
+        return "الإثنين";
+      case 2:
+        return "الثلاثاء";
+      case 3:
+        return "الأربعاء";
+      case 4:
+        return "الخميس";
+      case 5:
+        return "الجمعة";
+      case 6:
+        return "السبت";
+      case 7:
+        return "الأحد";
+      default:
+        return "";
+    }
   }
 
-  Future<void> scheduleWeeklyRepeatingNotification({
-    required int id, required String title, required String body,
-    required int weekday, required TimeOfDay timeOfDay, String? payload, DateTime? startDate, DateTime? endDate}) async {
-    // This is a placeholder. Use your notification package
-    // to schedule a notification that repeats weekly on the specified weekday and timeOfDay,
-    // potentially respecting startDate and endDate if the package supports it.
-    // Note: Weekday mapping might be needed depending on the package (e.g., Sunday=1 vs Sunday=7)
-    print("[MOCK] Scheduling Weekly Notification: ID=$id, Title=$title, Weekday=$weekday, Time=${timeOfDay.format(context)}, Start=$startDate, End=$endDate, Payload=$payload");
-    await Future.delayed(const Duration(milliseconds: 50)); // Simulate async operation
+  //
+  // --------------------
+  // Weekly Schedule Section (Reworked)
+  // --------------------
+  Widget _buildWeeklyScheduleSection() {
+    // Initialize weekly maps if not already initialized.
+    _initializeWeeklySchedule();
+    // Sort the selected weekdays.
+    List<int> sortedDays = _selectedWeekdays.toList()..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "جدول الجرعات الأسبوعي",
+          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 8),
+        // Day selection chips.
+        Wrap(
+          spacing: 8.0,
+          children: List.generate(7, (index) {
+            int day = index + 1;
+            bool selected = _selectedWeekdays.contains(day);
+            return FilterChip(
+              label: Text(_dayName(day)),
+              selected: selected,
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    // Allow selection only if maximum not reached.
+                    if (_selectedWeekdays.length < 6) {
+                      _selectedWeekdays.add(day);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('يمكنك اختيار 6 أيام فقط')),
+                      );
+                    }
+                  } else {
+                    _selectedWeekdays.remove(day);
+                    _weeklyTimes.remove(day);
+                    _weeklyAutoGenerated.remove(day);
+                  }
+                });
+              },
+              selectedColor: Colors.blue.shade300,
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.grey.shade200,
+            );
+          }),
+        ),
+        if (_selectedWeekdays.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              "الرجاء اختيار يوم واحد على الأقل",
+              style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            ),
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  // Auto fill: If the first sorted day has time, copy to others.
+                  if (sortedDays.isNotEmpty && _weeklyTimes[sortedDays.first] != null) {
+                    setState(() {
+                      for (int day in sortedDays.skip(1)) {
+                        _weeklyTimes[day] = _weeklyTimes[sortedDays.first];
+                        _weeklyAutoGenerated[day] = true;
+                      }
+                    });
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("حدد وقت اليوم الأول أولاً")));
+                  }
+                },
+                child: const Text("تطبيق نفس الوقت لجميع الأيام"),
+              ),
+              const SizedBox(height: 10),
+              // Display a time picker for each selected day.
+              Column(
+                children: sortedDays.map((day) {
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6.0),
+                    elevation: 1.0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      leading: Text(
+                        _dayName(day),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      title: InkWell(
+                        onTap: () async {
+                          await _selectWeeklyTime(day);
+                        },
+                        child: Text(
+                          _weeklyTimes[day] == null
+                              ? "اضغط لاختيار الوقت"
+                              : TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: _weeklyTimes[day] == null ? Colors.grey.shade600 : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      trailing: Icon(
+                        _weeklyTimes[day] == null
+                            ? Icons.edit_calendar_outlined
+                            : ((_weeklyAutoGenerated[day] ?? false)
+                            ? Icons.smart_toy
+                            : Icons.person),
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+      ],
+    );
   }
 
+  //
+  // --------------------
+  // Page 1: Medication Name and Image (with inline autocomplete)
+  // --------------------
+  Widget _buildMedicationNamePage() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+    return Form(
+      key: _formKeyPage1,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 15,
+              left: -10,
+              child: IconButton(
+                icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 50),
+                    Text(
+                      "إضافة دواء جديد",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.07,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 25.0),
+                    _buildImagePicker(screenWidth),
+                    const SizedBox(height: 25.0),
+                    FutureBuilder<List<String>>(
+                      future: _medicineNamesFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        } else if (snapshot.hasError) {
+                          return Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              'خطأ في تحميل أسماء الأدوية: ${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          );
+                        } else {
+                          final medicineNames = snapshot.data ?? [];
+                          return MedicineAutocomplete(
+                            suggestions: medicineNames,
+                            controller: _nameController,
+                            focusNode: FocusNode(),
+                            onSelected: (selection) {
+                              _nameController.text = selection;
+                              FocusScope.of(context).unfocus();
+                              debugPrint('Selected: $selection');
+                            },
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 30.0),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (_formKeyPage1.currentState!.validate()) {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 700),
+                            curve: Curves.easeInOutCubic,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size(double.infinity, 55),
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      child: const Text('التالي'),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
 
-  // --- Build Method ---
+  //
+  // --------------------
+  // Page 2: Dosage and Times
+  // --------------------
+  Widget _buildDosageAndTimesPage() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+    return Form(
+      key: _formKeyPage2,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 15,
+              left: -10,
+              child: IconButton(
+                icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
+                onPressed: () => _pageController.previousPage(
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeInOutCubic,
+                ),
+              ),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 50),
+                    Text(
+                      "الجرعة والأوقات",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.07,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 25.0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(Icons.science_outlined, color: Colors.blue.shade800),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextFormField(
+                            controller: _dosageController,
+                            textAlign: TextAlign.center,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: 'الجرعة',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'ادخل الجرعة';
+                              }
+                              if (double.tryParse(value.trim()) == null) {
+                                return 'أدخل رقماً صحيحاً';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            value: _dosageUnit,
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (value != null) setState(() => _dosageUnit = value);
+                            },
+                            items: _dosageUnits
+                                .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20.0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Only show frequency number if the frequency type is daily.
+                        if (_frequencyType == 'يومي') ...[
+                          Icon(Icons.repeat, color: Colors.blue.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _frequencyNumber,
+                              decoration: InputDecoration(
+                                labelText: 'عدد المرات',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _frequencyNumber = value;
+                                    _updateTimeFields();
+                                  });
+                                }
+                              },
+                              items: _frequencyNumbers
+                                  .map((num) => DropdownMenuItem(value: num, child: Text(num.toString())))
+                                  .toList(),
+                              validator: (value) => value == null ? 'اختر العدد' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        // This widget (and its spacing) always shows, regardless of frequency type.
+                        Icon(Icons.calendar_today_outlined, color: Colors.blue.shade800),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _frequencyType,
+                            decoration: InputDecoration(
+                              labelText: 'النوع',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.blue.shade800, width: 2.0),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _frequencyType = value;
+                                  if (value == 'اسبوعي') {
+                                    _initializeWeeklySchedule();
+                                  } else {
+                                    _updateTimeFields();
+                                  }
+                                });
+                              }
+                            },
+                            items: _frequencyTypes
+                                .map((type) =>
+                                DropdownMenuItem(value: type, child: Text(type)))
+                                .toList(),
+                            validator: (value) => value == null ? 'اختر النوع' : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 25.0),
+                    _frequencyType == 'يومي'
+                        ? Column(
+                      children: [
+                        Text(
+                          "أوقات تناول الجرعة:",
+                          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _frequencyNumber,
+                          itemBuilder: (context, index) {
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 6.0),
+                              elevation: 1.0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              child: ListTile(
+                                leading: Icon(Icons.access_time_filled, color: Colors.blue.shade700),
+                                title: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('${index + 1}. ', style: const TextStyle(fontSize: 16)),
+                                    Text(
+                                      _selectedTimes[index] == null
+                                          ? 'اضغط لاختيار الوقت'
+                                          : _selectedTimes[index]!.format(context),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: _selectedTimes[index] == null
+                                            ? FontWeight.normal
+                                            : FontWeight.bold,
+                                        color: _selectedTimes[index] == null
+                                            ? Colors.grey.shade600
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    if (_selectedTimes[index] != null)
+                                      Icon(
+                                        _isAutoGeneratedTimes[index] ? Icons.smart_toy : Icons.person,
+                                        size: 16,
+                                        color: Colors.grey,
+                                      ),
+                                  ],
+                                ),
+                                trailing: const Icon(Icons.edit_calendar_outlined),
+                                onTap: () => _selectTime(index),
+                              ),
+                            );
+                          },
+                        ),
+                        if (_selectedTimes.any((t) => t == null))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'الرجاء تحديد جميع الأوقات المطلوبة.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                            ),
+                          ),
+                      ],
+                    )
+                        : _buildWeeklyScheduleSection(),
+                    const SizedBox(height: 30.0),
+                    ElevatedButton(
+                      onPressed: () {
+                        bool allTimesSelected = _frequencyType == 'يومي'
+                            ? !_selectedTimes.any((t) => t == null)
+                            : _weeklyTimes.values.every((t) => t != null);
+                        if (_formKeyPage2.currentState!.validate() && allTimesSelected) {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 700),
+                            curve: Curves.easeInOutCubic,
+                          );
+                        } else if (!allTimesSelected) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('الرجاء تحديد جميع أوقات الجرعات')));
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size(double.infinity, 55),
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      child: const Text('التالي'),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  //
+  // --------------------
+  // Page 3: Start and End Dates
+  // --------------------
+  Widget _buildStartDateEndDatePage() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+    return Form(
+      key: _formKeyPage3,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 15,
+              left: -10,
+              child: IconButton(
+                icon: Icon(Icons.arrow_back, color: Colors.blue.shade800, size: 28),
+                onPressed: () => _pageController.previousPage(
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeInOutCubic,
+                ),
+              ),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 50),
+                    Text(
+                      "تاريخ البدء والانتهاء",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.07,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 35.0),
+                    Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8.0),
+                      elevation: 1.0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: ListTile(
+                        leading: Icon(Icons.calendar_month, color: Colors.blue.shade700),
+                        title: Text(
+                          _startDate == null
+                              ? 'اختر تاريخ البدء (إلزامي)'
+                              : "تاريخ البدء: ${_startDate!.day}/${_startDate!.month}/${_startDate!.year}",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _startDate == null ? Colors.grey.shade600 : Colors.black87,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.edit_calendar_outlined),
+                        onTap: _selectStartDate,
+                      ),
+                    ),
+                    FormField<DateTime>(
+                      initialValue: _startDate,
+                      validator: (value) {
+                        if (value == null) {
+                          return 'تاريخ البدء مطلوب';
+                        }
+                        return null;
+                      },
+                      builder: (FormFieldState<DateTime> state) {
+                        return state.hasError
+                            ? Padding(
+                          padding: const EdgeInsets.only(top: 5.0),
+                          child: Text(
+                            state.errorText ?? '',
+                            style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                            : Container();
+                      },
+                    ),
+                    const SizedBox(height: 15.0),
+                    Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8.0),
+                      elevation: 1.0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: ListTile(
+                        leading: Icon(Icons.event_busy, color: Colors.orange.shade700),
+                        title: Text(
+                          _endDate == null
+                              ? 'اختر تاريخ الانتهاء (اختياري)'
+                              : "تاريخ الانتهاء: ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _endDate == null ? Colors.grey.shade600 : Colors.black87,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.edit_calendar_outlined),
+                        onTap: _selectEndDate,
+                      ),
+                    ),
+                    FormField<DateTime>(
+                      initialValue: _endDate,
+                      validator: (value) {
+                        if (value != null && _startDate != null && value.isBefore(_startDate!)) {
+                          return 'تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء';
+                        }
+                        return null;
+                      },
+                      builder: (FormFieldState<DateTime> state) {
+                        return state.hasError
+                            ? Padding(
+                          padding: const EdgeInsets.only(top: 5.0),
+                          child: Text(
+                            state.errorText ?? '',
+                            style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                            : Container();
+                      },
+                    ),
+                    const SizedBox(height: 40.0),
+                    ElevatedButton(
+                      onPressed: _submitForm,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size(double.infinity, 55),
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      child: const Text('إضافة الدواء إلى خزانتي'),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  //
+  // --------------------
+  // Image Picker Section
+  // --------------------
+  Widget _buildImagePicker(double screenWidth) {
+    return Center(
+      child: GestureDetector(
+        onTap: _pickImage,
+        child: Container(
+          height: screenWidth * 0.45,
+          width: screenWidth * 0.7,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            border: Border.all(color: Colors.blue.shade600, width: 1.5),
+            borderRadius: BorderRadius.circular(15),
+            image: _capturedImage != null
+                ? DecorationImage(
+              image: FileImage(_capturedImage!),
+              fit: BoxFit.cover,
+            )
+                : null,
+          ),
+          child: _capturedImage == null
+              ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.camera_alt_outlined,
+                    size: screenWidth * 0.12, color: Colors.blue.shade800),
+                const SizedBox(height: 8),
+                Text(
+                  'اضغط لالتقاط صورة للدواء',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.blue.shade800, fontSize: screenWidth * 0.04),
+                ),
+              ],
+            ),
+          )
+              : _uploadedImageUrl == null
+              ? Center(child: CircularProgressIndicator(color: Colors.white))
+              : Container(),
+        ),
+      ),
+    );
+  }
+
+  //
+  // --------------------
+  // Main Build Method (PageView)
+  // --------------------
   @override
   Widget build(BuildContext context) {
-    // Use GestureDetector to dismiss keyboard when tapping outside fields
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        // Consider adding an AppBar for consistency
-        // appBar: AppBar(title: Text("إضافة دواء جديد")), // Example
         body: Stack(
           children: [
-            // Optional: Background decoration
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -804,115 +1324,13 @@ class _AddDoseState extends State<AddDose> {
                 ),
               ),
             ),
-            // PageView to host the different steps
             PageView(
               controller: _pageController,
-              // Disable swiping between pages, navigation is controlled by buttons
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                // --- Page 1 ---
-                AddNamePicturePage(
-                  formKey: _formKeyPage1,
-                  nameController: _nameController,
-                  medicineNamesFuture: _medicineNamesFuture,
-                  capturedImage: _capturedImage,
-                  // Pass the uploading state to show progress correctly
-                  uploadedImageUrl: _uploadedImageUrl, // Used to determine if upload finished
-                  onPickImage: _pickImage,
-                  onNext: () {
-                    // Validate before moving next
-                    if (_formKeyPage1.currentState!.validate()) {
-                      // Check if image is currently uploading
-                      if (_capturedImage != null && _isUploading) {
-                        _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار.");
-                      } else {
-                        _nextPage();
-                      }
-                    }
-                  },
-                  onBack: () => Navigator.pop(context), // Exit on back from first page
-                ),
-                // --- Page 2 ---
-                AddDosagePage(
-                  formKey: _formKeyPage2,
-                  dosageController: _dosageController,
-                  dosageUnit: _dosageUnit,
-                  dosageUnits: _dosageUnits,
-                  frequencyType: _frequencyType,
-                  frequencyTypes: _frequencyTypes,
-                  frequencyNumber: _frequencyNumber,
-                  frequencyNumbers: _frequencyNumbers,
-                  selectedTimes: _selectedTimes,
-                  isAutoGeneratedTimes: _isAutoGeneratedTimes,
-                  selectedWeekdays: _selectedWeekdays,
-                  weeklyTimes: _weeklyTimes,
-                  weeklyAutoGenerated: _weeklyAutoGenerated,
-                  onDosageUnitChanged: (value) {
-                    if (value != null && mounted) setState(() => _dosageUnit = value); // Check mounted
-                  },
-                  onFrequencyNumberChanged: (value) {
-                    if (value != null && value != _frequencyNumber && mounted) { // Check mounted
-                      setState(() => _frequencyNumber = value);
-                      _updateTimeFields(); // Update times when number changes
-                    }
-                  },
-                  onFrequencyTypeChanged: (value) {
-                    if (value != null && value != _frequencyType && mounted) { // Check mounted
-                      setState(() {
-                        _frequencyType = value;
-                        // Reset/initialize schedules based on new type
-                        if (value == 'يومي') {
-                          // Re-init daily fields (will call setState internally if needed)
-                          _updateTimeFields();
-                          // Clear weekly selections
-                          _selectedWeekdays.clear();
-                          _weeklyTimes.clear();
-                          _weeklyAutoGenerated.clear();
-                        } else { // Weekly
-                          // Clear daily selections
-                          _selectedTimes = List.filled(_frequencyNumber, null, growable: true);
-                          _isAutoGeneratedTimes = List.filled(_frequencyNumber, false, growable: true);
-                          // Init weekly fields (will call setState internally)
-                          _initializeWeeklySchedule();
-                        }
-                      });
-                    }
-                  },
-                  onSelectTime: _selectTime, // Pass daily time selection callback
-                  onWeekdaySelected: _handleWeekdaySelected, // Pass weekly day toggle callback
-                  onSelectWeeklyTime: _selectWeeklyTime, // Pass weekly time selection callback
-                  onApplySameTimeToAllWeekdays: _handleApplySameTimeToAllWeekdays,
-                  onNext: () {
-                    // Validate before moving next
-                    if (_formKeyPage2.currentState!.validate()) {
-                      // Additional check: Ensure all required times are filled
-                      bool allTimesFilled = _frequencyType == 'يومي'
-                          ? _selectedTimes.every((t) => t != null)
-                          : (_selectedWeekdays.isEmpty || _selectedWeekdays.every((day) => _weeklyTimes[day] != null));
-
-                      if (allTimesFilled) {
-                        _nextPage();
-                      } else {
-                        // Show feedback if times are missing
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('الرجاء تحديد جميع أوقات الجرعات المطلوبة.'))
-                        );
-                      }
-                    }
-                  },
-                  onBack: _previousPage, // Go back to page 1
-                  getDayName: _dayName, // Pass day name function
-                ),
-                // --- Page 3 ---
-                AddStartEndDatePage(
-                  formKey: _formKeyPage3,
-                  startDate: _startDate,
-                  endDate: _endDate,
-                  onSelectStartDate: _selectStartDate,
-                  onSelectEndDate: _selectEndDate,
-                  onSubmit: _submitForm, // Call the final submit logic
-                  onBack: _previousPage, // Go back to page 2
-                ),
+                _buildMedicationNamePage(),
+                _buildDosageAndTimesPage(),
+                _buildStartDateEndDatePage(),
               ],
             ),
           ],
@@ -920,4 +1338,13 @@ class _AddDoseState extends State<AddDose> {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _dosageController.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
 }
+

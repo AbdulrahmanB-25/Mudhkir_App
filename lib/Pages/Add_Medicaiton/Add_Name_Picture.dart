@@ -2,13 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 // App theme constants
-const Color kPrimaryColor = Color(0xFF1A5CFF); // Primary blue
-const Color kSecondaryColor = Color(0xFF4ECDC4); // Teal accent
+// Hospital Blue Color Theme
+const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
 const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF7F9FC); // Light background
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
 const Color kCardColor = Colors.white;
-const double kBorderRadius = 12.0;
-const double kSpacing = 16.0;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
 
 // --- Medicine Autocomplete Widget ---
 class MedicineAutocomplete extends StatefulWidget {

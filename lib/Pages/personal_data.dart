@@ -4,10 +4,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mudhkir_app/Pages/ForgetPassword.dart';
 import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
 
+// Constants for theming - consistent with other pages
+// Hospital Blue Color Theme
+const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
+const Color kErrorColor = Color(0xFFFF6B6B); // Error red
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const Color kCardColor = Colors.white;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
+
 class PersonalDataPage extends StatefulWidget {
   const PersonalDataPage({super.key});
 
- //TODO : ACCOUNT EDITING AND EMAIL CHANGE MAKE IT IN SETTINGS
   @override
   _PersonalDataPageState createState() => _PersonalDataPageState();
 }
@@ -35,7 +44,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
       curve: Curves.easeIn,
     );
     _animationController.forward();
-    
+
     fetchUserData();
   }
 
@@ -49,14 +58,14 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
   Future<void> fetchUserData() async {
     setState(() => _isLoading = true);
     User? user = FirebaseAuth.instance.currentUser;
-    
+
     if (user != null) {
       try {
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .get();
-        
+
         if (userDoc.exists && userDoc.data() != null) {
           if (mounted) {
             setState(() {
@@ -91,7 +100,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
           _email = '';
           _isLoading = false;
         });
-        
+
         // Navigate to login if not authenticated
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Navigator.pushReplacementNamed(context, "/login");
@@ -111,7 +120,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
   // Show dialog to edit username
   Future<void> _showEditProfileDialog() async {
     _usernameController.text = _username;
-    
+
     return showDialog(
       context: context,
       barrierDismissible: false,
@@ -119,7 +128,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
         return AlertDialog(
           title: Text(
             'تعديل البيانات الشخصية',
-            style: TextStyle(color: Colors.blue.shade800),
+            style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold),
             textAlign: TextAlign.right,
           ),
           content: SingleChildScrollView(
@@ -131,10 +140,15 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
                     controller: _usernameController,
                     decoration: InputDecoration(
                       labelText: 'اسم المستخدم',
+                      labelStyle: TextStyle(color: kPrimaryColor),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      prefixIcon: Icon(Icons.person, color: Colors.blue.shade700),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: kPrimaryColor, width: 2),
+                      ),
+                      prefixIcon: Icon(Icons.person, color: kPrimaryColor),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -147,26 +161,32 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
               ],
             ),
           ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           actions: <Widget>[
             TextButton(
-              child: const Text('إلغاء'),
+              child: Text('إلغاء', style: TextStyle(color: Colors.grey.shade700)),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
             _isUpdating
-                ? CircularProgressIndicator(color: Colors.blue.shade700)
+                ? Center(child: CircularProgressIndicator(color: kPrimaryColor))
                 : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('حفظ'),
-                    onPressed: () async {
-                      await _updateProfile();
-                      if (mounted) Navigator.of(context).pop();
-                    },
-                  ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('حفظ'),
+              onPressed: () async {
+                await _updateProfile();
+                if (mounted) Navigator.of(context).pop();
+              },
+            ),
           ],
         );
       },
@@ -177,7 +197,19 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
   Future<void> _updateProfile() async {
     if (_usernameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرجاء إدخال اسم المستخدم')),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('الرجاء إدخال اسم المستخدم')),
+            ],
+          ),
+          backgroundColor: kErrorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.all(10),
+        ),
       );
       return;
     }
@@ -206,8 +238,22 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('تم تحديث البيانات الشخصية بنجاح'),
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'تم تحديث البيانات الشخصية بنجاح',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
             backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: EdgeInsets.all(10),
           ),
         );
       }
@@ -215,11 +261,20 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
       setState(() {
         _isUpdating = false;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('حدث خطأ أثناء تحديث البيانات: $e'),
-          backgroundColor: Colors.red.shade600,
+          content: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('حدث خطأ أثناء تحديث البيانات: $e')),
+            ],
+          ),
+          backgroundColor: kErrorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.all(10),
         ),
       );
     }
@@ -228,249 +283,241 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        automaticallyImplyLeading: false, // added to remove back button
+        title: const Text(
+          "الملف الشخصي",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: kPrimaryColor,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
+        actions: [],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
+            colors: [
+              kPrimaryColor.withOpacity(0.1),
+              kBackgroundColor,
+              Colors.white,
+            ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
+            stops: const [0, 0.3, 1],
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              // Custom Header - Removed back button and centered title
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Center(
-                  child: Text(
-                    "الملف الشخصي",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade800,
+          child: _isLoading
+              ? Center(child: CircularProgressIndicator(color: kPrimaryColor))
+              : FadeTransition(
+            opacity: _fadeInAnimation,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // Profile Header with Avatar
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kPrimaryColor.withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 0,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              
-              // Main Content
-              Expanded(
-                child: _isLoading
-                    ? Center(child: CircularProgressIndicator(color: Colors.blue.shade700))
-                    : FadeTransition(
-                        opacity: _fadeInAnimation,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            children: [
-                              // Profile Header with Avatar
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.blue.shade200.withOpacity(0.2),
-                                      blurRadius: 10,
-                                      spreadRadius: 0,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  children: [
-                                    // Profile Avatar
-                                    Container(
-                                      width: 100,
-                                      height: 100,
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.blue.shade200,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        Icons.person,
-                                        size: 60,
-                                        color: Colors.blue.shade700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 15),
-                                    
-                                    // Username
-                                    Text(
-                                      _username,
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade800,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    
-                                    // Email
-                                    Text(
-                                      _email,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.blue.shade600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
+                    child: Column(
+                      children: [
+                        // Profile Avatar
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 3,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                spreadRadius: 1,
                               ),
-                              
-                              const SizedBox(height: 25),
-                              
-                              // Personal Info Card
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.blue.shade200.withOpacity(0.2),
-                                      blurRadius: 10,
-                                      spreadRadius: 0,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "معلومات الحساب",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 15),
-                                    
-                                    // Username field
-                                    _buildInfoRow(
-                                      icon: Icons.person_outline,
-                                      label: "اسم المستخدم",
-                                      value: _username,
-                                    ),
-                                    
-                                    const Divider(height: 25),
-                                    
-                                    // Email field
-                                    _buildInfoRow(
-                                      icon: Icons.email_outlined,
-                                      label: "البريد الإلكتروني",
-                                      value: _email,
-                                    ),
-                                    
-                                    const Divider(height: 25),
-                                    
-                                    // Account type field (just a placeholder, you can modify as needed)
-                                    _buildInfoRow(
-                                      icon: Icons.verified_user_outlined,
-                                      label: "نوع الحساب",
-                                      value: "مستخدم عادي",
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              
-                              const SizedBox(height: 25),
-                              
-                              // Account Actions
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.blue.shade200.withOpacity(0.2),
-                                      blurRadius: 10,
-                                      spreadRadius: 0,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "إجراءات الحساب",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 15),
-                                    
-                                    // Edit Profile Button
-                                    _buildActionButton(
-                                      icon: Icons.edit_outlined,
-                                      label: "تعديل البيانات الشخصية",
-                                      color: Colors.orange.shade700,
-                                      onPressed: () {
-                                        _showEditProfileDialog();
-                                      },
-                                    ),
-                                    
-                                    const SizedBox(height: 15),
-                                    
-                                    // Change Password Button
-                                    _buildActionButton(
-                                      icon: Icons.lock_outline,
-                                      label: "تغيير كلمة المرور",
-                                      color: Colors.blue.shade700,
-                                      onPressed: () {
-                                        // Update to use Navigator.push with the parameter
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => const ForgetPassword(fromPersonalData: true),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    
-                                    const SizedBox(height: 15),
-                                    
-                                    // Logout Button - Updated to navigate to welcome page
-                                    _buildActionButton(
-                                      icon: Icons.logout,
-                                      label: "تسجيل الخروج",
-                                      color: Colors.red.shade700,
-                                      onPressed: () async {
-                                        await FirebaseAuth.instance.signOut();
-                                        if (mounted) {
-                                          // Navigate to welcome page and clear navigation history
-                                          Navigator.of(context).pushNamedAndRemoveUntil(
-                                            '/welcome', 
-                                            (route) => false
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              
-                              const SizedBox(height: 30),
                             ],
                           ),
+                          child: Icon(
+                            Icons.person,
+                            size: 60,
+                            color: kPrimaryColor,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 15),
+
+                        // Username
+                        Text(
+                          _username,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        // Email
+                        Text(
+                          _email,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  // Personal Info Card
+                  _buildSectionHeader("معلومات الحساب"),
+
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          spreadRadius: 0,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Username field
+                        _buildInfoRow(
+                          icon: Icons.person_outline_rounded,
+                          label: "اسم المستخدم",
+                          value: _username,
+                        ),
+
+                        const Divider(height: 25),
+
+                        // Email field
+                        _buildInfoRow(
+                          icon: Icons.email_outlined,
+                          label: "البريد الإلكتروني",
+                          value: _email,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  // Account Actions
+                  _buildSectionHeader("إجراءات الحساب"),
+
+                  // Edit Profile Button
+                  _buildActionButton(
+                    icon: Icons.edit_outlined,
+                    label: "تعديل البيانات الشخصية",
+                    color: kSecondaryColor,
+                    onPressed: () {
+                      _showEditProfileDialog();
+                    },
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  // Change Password Button
+                  _buildActionButton(
+                    icon: Icons.lock_outline,
+                    label: "تغيير كلمة المرور",
+                    color: kPrimaryColor,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ForgetPassword(fromPersonalData: true),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  // Logout Button
+                  _buildActionButton(
+                    icon: Icons.logout,
+                    label: "تسجيل الخروج",
+                    color: kErrorColor,
+                    onPressed: () async {
+                      // Show confirmation dialog
+                      final shouldLogout = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text("تسجيل الخروج", textAlign: TextAlign.right),
+                          content: const Text(
+                            "هل أنت متأكد من تسجيل الخروج من حسابك؟",
+                            textAlign: TextAlign.right,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: Text("إلغاء", style: TextStyle(color: Colors.grey.shade700)),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kErrorColor,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text("تسجيل الخروج"),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (shouldLogout == true) {
+                        await FirebaseAuth.instance.signOut();
+                        if (mounted) {
+                          Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/welcome',
+                                  (route) => false
+                          );
+                        }
+                      }
+                    },
+                  ),
+
+                  const SizedBox(height: 30),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -480,7 +527,37 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
       ),
     );
   }
-  
+
+  Widget _buildSectionHeader(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              height: 24,
+              width: 4,
+              decoration: BoxDecoration(
+                color: kPrimaryColor,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 24, thickness: 1),
+      ],
+    );
+  }
+
   Widget _buildInfoRow({
     required IconData icon,
     required String label,
@@ -492,12 +569,12 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: Colors.blue.shade50,
+            color: kPrimaryColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
             icon,
-            color: Colors.blue.shade700,
+            color: kPrimaryColor,
             size: 22,
           ),
         ),
@@ -528,34 +605,69 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
       ],
     );
   }
-  
+
   Widget _buildActionButton({
     required IconData icon,
     required String label,
     required Color color,
     required VoidCallback onPressed,
   }) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      child: TextButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: color),
-        label: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
           ),
-        ),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          alignment: Alignment.centerRight,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: color.withOpacity(0.3)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(kBorderRadius),
+          splashColor: color.withOpacity(0.1),
+          highlightColor: color.withOpacity(0.05),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: color,
+                  size: 16,
+                ),
+              ],
+            ),
           ),
-          backgroundColor: color.withOpacity(0.1),
         ),
       ),
     );

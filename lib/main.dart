@@ -178,7 +178,6 @@ Future<void> scheduleNotification({
       notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: payload,
-      matchDateTimeComponents: DateTimeComponents.time, // Repeats daily
     );
 
     print('[ScheduleNotification] Successfully scheduled notification $id for $scheduledTime (repeats daily). Payload: $payload');
@@ -349,6 +348,12 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        pageTransitionsTheme: PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
       ),
       home: const AuthWrapper(),
       routes: {

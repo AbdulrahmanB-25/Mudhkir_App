@@ -2,62 +2,34 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mudhkir_app/main.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // For username cache
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // For robust date/time parsing/formatting
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:intl/intl.dart';
+import 'dart:ui' as ui;
 
-// -----------------------
-// Custom Bottom Navigation Bar
-// -----------------------
-class CustomBottomNavigationBar extends StatelessWidget {
-  final int selectedIndex;
-  final Function(int) onItemTapped;
-  const CustomBottomNavigationBar({
-    super.key,
-    required this.selectedIndex,
-    required this.onItemTapped,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withOpacity(0.3),
-            blurRadius: 8,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: BottomNavigationBar(
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'الرئيسية'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'الملف الشخصي'),
-            BottomNavigationBarItem(icon: Icon(Icons.settings_rounded), label: 'الإعدادات'),
-          ],
-          currentIndex: selectedIndex,
-          selectedItemColor: Colors.blue.shade800,
-          unselectedItemColor: Colors.grey.shade500,
-          onTap: onItemTapped,
-          backgroundColor: Colors.white.withOpacity(0.95),
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          unselectedLabelStyle: const TextStyle(fontSize: 12),
-          showUnselectedLabels: true,
-        ),
-      ),
-    );
-  }
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
+
+
+// Constants for theming
+// Hospital Blue Color Theme
+const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
+const Color kErrorColor = Color(0xFFFF6B6B); // Error red
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const Color kCardColor = Colors.white;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
+
+// Assuming scheduleNotification is defined globally or imported correctly
+// If it's in main.dart, ensure it's accessible here.
+// Example placeholder if it's missing:
+Future<void> scheduleNotification({required int id, required String title, required String body, required DateTime scheduledTime, required String docId}) async {
+  print("Scheduling notification: $title at $scheduledTime");
+  // Actual implementation needed
 }
 
-// -----------------------
-// MainPage Widget
-// -----------------------
+
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
   @override
@@ -68,17 +40,16 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   int _selectedIndex = 0;
   String _userName = '';
   String _closestMedName = '';
-  String _closestMedTimeStr = ''; // Formatted time string
+  String _closestMedTimeStr = '';
   String _closestMedDocId = '';
-  bool _isLoadingMed = true; // Loading indicator state
+  bool _isLoadingMed = true;
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
-  bool _isAuthenticated = false; // Track if user is authenticated
+  bool _isAuthenticated = false;
 
   @override
   void initState() {
     super.initState();
-    // Set up animations
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -88,29 +59,44 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       curve: Curves.easeIn,
     );
     _animationController.forward();
-
-    // Check authentication status first
     _checkAuthStatus();
   }
 
-  // New method to check authentication status
   Future<void> _checkAuthStatus() async {
+    // Ensure context is valid before using it
+    if (!mounted) return;
     final user = FirebaseAuth.instance.currentUser;
-    setState(() {
-      _isAuthenticated = user != null;
-    });
+    final currentAuthStatus = user != null;
 
-    if (_isAuthenticated) {
-      _loadUserData(); // Only load user data if authenticated
-    } else {
-      // If not authenticated, redirect to welcome page
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushReplacementNamed('/welcome');
+    // Only update state and navigate if auth status changed or initially loading
+    if (_isAuthenticated != currentAuthStatus || _userName.isEmpty) {
+      setState(() {
+        _isAuthenticated = currentAuthStatus;
       });
-    }
 
-    _setupFCM(); // Still set up FCM for all users
+      if (_isAuthenticated) {
+        await _loadUserData(); // Load data only if authenticated
+      } else {
+        // Use pushReplacementNamed to prevent going back to MainPage
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && ModalRoute.of(context)?.settings.name != '/welcome') {
+            Navigator.of(context).pushReplacementNamed('/welcome');
+          }
+        });
+        // Clear user-specific data when logged out
+        setState(() {
+          _userName = 'زائر';
+          _closestMedName = '';
+          _closestMedTimeStr = '';
+          _closestMedDocId = '';
+          _isLoadingMed = false; // Stop loading as there's no data to load
+        });
+      }
+    }
+    // Setup FCM regardless of auth state, but token handling might depend on auth
+    _setupFCM();
   }
+
 
   @override
   void dispose() {
@@ -119,7 +105,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   void _setupFCM() {
+    FirebaseMessaging.instance.requestPermission(); // Request permission
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print('Foreground Message received: ${message.notification?.title}');
       if (message.notification != null) {
         flutterLocalNotificationsPlugin.show(
           message.notification.hashCode,
@@ -127,232 +116,267 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           message.notification!.body,
           NotificationDetails(
             android: AndroidNotificationDetails(
-              'medication_channel',
+              'medication_channel', // Ensure this matches channel in main.dart
               'Medication Reminders',
-              channelDescription: 'This channel is used for medication reminders.',
+              channelDescription: 'Channel for medication reminder notifications.',
               importance: Importance.high,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
+              icon: '@mipmap/ic_launcher', // Ensure this icon exists
             ),
           ),
+          payload: message.data['docId'] ?? '', // Pass docId as payload
         );
       }
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      if (message.data['action'] == 'taken') {
-        _markDoseAsTaken(message.data['docId']);
-      } else if (message.data['action'] == 'reschedule') {
-        _promptReschedule(message.data['docId']);
+      print('Message clicked!');
+      // Handle notification tap when app is in background/terminated
+      final docId = message.data['docId'];
+      if (docId != null) {
+        Navigator.pushNamed(
+          context,
+          '/medication_detail',
+          arguments: {'docId': docId},
+        );
       }
+      // You might want to check message.data for specific actions like 'taken' or 'reschedule'
+      // if (message.data['action'] == 'taken') _markDoseAsTaken(docId);
     });
   }
 
+
   Future<void> _markDoseAsTaken(String docId) async {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(FirebaseAuth.instance.currentUser!.uid)
-        .collection('medicines')
-        .doc(docId)
-        .update({'status': 'taken'});
-    _loadClosestMed();
+    if (!_isAuthenticated || !mounted) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .collection('medicines')
+          .doc(docId)
+          .update({'status': 'taken'}); // Consider updating a specific dose record if applicable
+      _loadClosestMed(); // Refresh the upcoming dose
+    } catch (e) {
+      print("Error marking dose as taken: $e");
+      // Optionally show a snackbar error
+    }
   }
 
   Future<void> _promptReschedule(String docId) async {
-    // Logic to reschedule dose
-    // Suggest optimal time and update Firestore
+    if (!mounted) return;
+    // Example: Show a dialog or navigate to a rescheduling screen
+    print("Reschedule prompted for docId: $docId");
+    // Navigator.pushNamed(context, '/reschedule_dose', arguments: {'docId': docId});
   }
 
   Future<void> _loadUserData() async {
+    if (!mounted || !_isAuthenticated) return; // Check auth again
     await _loadUserName();
-    if (mounted) {
+    if (mounted) { // Check mounted again after async gap
       await _loadClosestMed();
     }
   }
 
-  // Load username from Firestore and cache it in SharedPreferences.
   Future<void> _loadUserName() async {
+    if (!mounted || !_isAuthenticated) return;
     User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      setState(() => _userName = 'زائر'); // Set to "Guest" in Arabic
-      return;
-    }
+    // No need to check user == null again due to _isAuthenticated check
+
     try {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user!.uid) // user is guaranteed non-null here
           .get();
+
+      String fetchedName = 'مستخدم'; // Default
       if (userDoc.exists && userDoc.data() != null) {
         final data = userDoc.data() as Map<String, dynamic>;
-        String fetchedName = data['username'] as String? ?? 'مستخدم';
+        fetchedName = data['username'] as String? ?? 'مستخدم';
+      }
+
+      if (mounted) { // Check mounted before setState
         SharedPreferences prefs = await SharedPreferences.getInstance();
-        String? cachedName = prefs.getString('userName');
-        if (cachedName == null || cachedName != fetchedName) {
-          await prefs.setString('userName', fetchedName);
-        }
-        if (mounted) {
-          setState(() {
-            _userName = fetchedName;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _userName = 'مستخدم');
+        await prefs.setString('userName', fetchedName); // Update cache
+        setState(() {
+          _userName = fetchedName;
+        });
       }
     } catch (e) {
       print("Error loading username: $e");
-      if (mounted) setState(() => _userName = 'مستخدم');
+      if (mounted) { // Check mounted before setState
+        setState(() => _userName = 'مستخدم'); // Fallback
+      }
     }
   }
 
-  // Parse time string using several strategies
+
   TimeOfDay? _parseTime(String timeStr) {
+    // Try parsing formats like "9:30 AM" or "14:00"
     try {
+      // Handle standard AM/PM format
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = ampmFormat.parseStrict(timeStr);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
+
     try {
+      // Handle Arabic AM/PM (normalize first)
       String normalizedTime = timeStr
           .replaceAll('صباحاً', 'AM')
           .replaceAll('مساءً', 'PM')
           .trim();
-      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US');
+      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US'); // Still parse with en_US locale
       DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
+
     try {
+      // Handle 24-hour format like "14:30"
       final parts = timeStr.split(':');
       if (parts.length == 2) {
         int hour = int.parse(parts[0]);
+        // Allow minutes part to have extra non-numeric chars sometimes seen, like "30 "
         int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
       }
     } catch (_) {}
+
     print("Failed to parse time string: $timeStr");
-    return null;
+    return null; // Return null if all parsing attempts fail
   }
 
   String _formatTimeOfDay(BuildContext context, TimeOfDay time) {
-    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    // Format TimeOfDay to Arabic AM/PM string
+    // Use MediaQuery context if available, otherwise default to 12-hour format logic
+    final localizations = MaterialLocalizations.of(context);
+    // Format using localizations for better adaptability if needed, or stick to manual
+    // return localizations.formatTimeOfDay(time, alwaysUse24HourFormat: false);
+
+    // Manual formatting for specific Arabic AM/PM
+    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod; // 0 becomes 12 for 12-hour clock
     final String minute = time.minute.toString().padLeft(2, '0');
     final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
     return '$hour:$minute $period';
   }
 
-  // Load the closest upcoming medication dose.
+
   Future<void> _loadClosestMed() async {
-    if (!mounted) return; // Ensure the widget is still in the tree
-    setState(() {
-      _isLoadingMed = true;
-    });
+    if (!mounted || !_isAuthenticated) return;
+    setState(() { _isLoadingMed = true; });
 
     User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) {
-        setState(() {
-          _isLoadingMed = false;
-        });
-      }
-      return;
-    }
+    // Already checked _isAuthenticated, so user is non-null
+
     List<Map<String, dynamic>> potentialDoses = [];
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final nowMinutes = now.hour * 60 + now.minute; // Minutes passed today
+    final nowMinutes = now.hour * 60 + now.minute;
 
     try {
       final medsSnapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user!.uid) // user is non-null
           .collection('medicines')
           .get();
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
-
-        // Check start and end dates.
+        final medName = data['name'] as String? ?? 'دواء غير مسمى';
         final startTimestamp = data['startDate'] as Timestamp?;
         final endTimestamp = data['endDate'] as Timestamp?;
 
-        if (startTimestamp == null) continue;
+        if (startTimestamp == null) continue; // Skip if no start date
 
         final startDate = startTimestamp.toDate();
         final endDate = endTimestamp?.toDate();
+        // Normalize dates to compare days only
         final startDay = DateTime(startDate.year, startDate.month, startDate.day);
         final endDay = endDate != null ? DateTime(endDate.year, endDate.month, endDate.day) : null;
 
-        // Skip meds that haven't started or have ended.
+        // Skip if medication hasn't started or has already ended
         if (today.isBefore(startDay)) continue;
         if (endDay != null && today.isAfter(endDay)) continue;
 
-        // Determine frequency type.
         final frequencyType = data['frequencyType'] as String? ?? 'يومي';
-        List<TimeOfDay> doseTimes = [];
         final List<dynamic> timesRaw = data['times'] ?? [];
+        List<TimeOfDay> doseTimesToday = [];
 
         if (frequencyType == 'اسبوعي') {
-          // For weekly, find times whose 'day' matches today's weekday.
+          final todayWeekday = today.weekday; // 1 (Monday) to 7 (Sunday)
           for (var entry in timesRaw) {
-            if (entry is Map<String, dynamic> && entry['day'] == today.weekday) {
-              String? timeStr = entry['time']?.toString();
-              if (timeStr != null) {
-                final parsedTime = _parseTime(timeStr);
-                if (parsedTime != null) {
-                  doseTimes.add(parsedTime);
+            // Check if entry is a map and contains 'day' and 'time'
+            if (entry is Map<String, dynamic> && entry['day'] != null && entry['time'] != null) {
+              int? dayOfWeek = int.tryParse(entry['day'].toString());
+              if (dayOfWeek == todayWeekday) {
+                String? timeStr = entry['time']?.toString();
+                if (timeStr != null) {
+                  final parsedTime = _parseTime(timeStr);
+                  if (parsedTime != null) doseTimesToday.add(parsedTime);
                 }
               }
             }
           }
-        } else {
-          // For daily, treat times as List<String> or List<dynamic>.
+        } else { // Assumes 'يومي' or default
           for (var timeEntry in timesRaw) {
+            // Handles List<String> or List<dynamic> containing strings
             if (timeEntry is String) {
               final parsedTime = _parseTime(timeEntry);
-              if (parsedTime != null) {
-                doseTimes.add(parsedTime);
-              }
+              if (parsedTime != null) doseTimesToday.add(parsedTime);
             }
+            // You might need to handle Map entries here too if daily times can be stored differently
           }
         }
 
-        if (doseTimes.isEmpty) continue;
+        if (doseTimesToday.isEmpty) continue; // Skip if no doses scheduled for today
 
-        // For each dose time, calculate minutes until next dose.
-        for (TimeOfDay doseTime in doseTimes) {
+        // Calculate time until each dose today
+        for (TimeOfDay doseTime in doseTimesToday) {
           final doseTotalMinutes = doseTime.hour * 60 + doseTime.minute;
-          int minutesUntilNextDose = doseTotalMinutes - nowMinutes;
-          if (minutesUntilNextDose < 0) {
-            minutesUntilNextDose += 24 * 60;
+          int minutesUntil = doseTotalMinutes - nowMinutes;
+
+          // If the dose time has passed for today, calculate for the next occurrence (potentially tomorrow, handled by sorting later)
+          // For simplicity here, we only consider upcoming doses *today* or the *next* dose if all today's have passed.
+          // A more robust solution might calculate the exact next dose time across days.
+          if (minutesUntil < 0) {
+            // Option 1: Ignore past doses for today
+            // continue;
+            // Option 2: Calculate time until *next* day's dose (adds complexity)
+            minutesUntil += 24 * 60; // Add 24 hours in minutes
           }
+
           potentialDoses.add({
-            'name': data['name'] as String? ?? 'دواء غير مسمى',
-            'doseTime': doseTime,
-            'doseTimeStr': _formatTimeOfDay(context, doseTime),
-            'minutesUntil': minutesUntilNextDose,
-            'docId': doc.id, // Pass docId here
+            'name': medName,
+            'doseTime': doseTime, // Keep the TimeOfDay object if needed
+            'doseTimeStr': _formatTimeOfDay(context, doseTime), // Formatted string for display
+            'minutesUntil': minutesUntil,
+            'docId': doc.id,
           });
         }
-      }
+      } // End loop through meds
 
+      // Update state after processing all medications
       if (mounted) {
         setState(() {
           if (potentialDoses.isNotEmpty) {
-            final closest = potentialDoses.first;
+            // Sort by minutes until the dose (ascending)
+            potentialDoses.sort((a, b) => (a['minutesUntil'] as int).compareTo(b['minutesUntil'] as int));
+            final closest = potentialDoses.first; // The one with the smallest positive minutesUntil
             _closestMedName = closest['name'];
-            _closestMedTimeStr =
-                _formatTimeOfDay(context, closest['doseTime'] as TimeOfDay);
+            _closestMedTimeStr = closest['doseTimeStr'];
             _closestMedDocId = closest['docId'];
           } else {
-            _closestMedName = '';
+            _closestMedName = ''; // No upcoming doses found
             _closestMedTimeStr = '';
             _closestMedDocId = '';
           }
           _isLoadingMed = false;
         });
       }
+
     } catch (e) {
+      print("Error loading closest medication: $e");
       if (mounted) {
         setState(() {
           _closestMedName = '';
@@ -364,548 +388,466 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
   }
 
-  Future<void> _sendTestNotification(BuildContext context) async {
-    final now = DateTime.now();
-    final testTime = now.add(const Duration(seconds: 10)); // Schedule 10 seconds from now
 
-    // Get a random medication ID for testing
+  Future<void> _sendTestNotification(BuildContext context) async {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final testTime = now.add(const Duration(seconds: 10));
+
     final medicationId = await _getRandomMedicationId();
     if (medicationId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text("لم يتم العثور على أدوية لاختبار الإشعارات"),
-          backgroundColor: Colors.orange.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(10),
+          content: Text("لا يوجد دواء لاختبار الإشعار.", textAlign: TextAlign.right),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    await scheduleNotification(
-      id: 9999, // Unique ID for the test notification
-      title: "تذكير تجريبي",
-      body: "هذا إشعار تجريبي لتذكير الدواء.",
-      scheduledTime: testTime,
-      docId: medicationId, // Use a real ID format for testing navigation
-    );
+    try {
+      await scheduleNotification(
+        id: 9999, // Use a unique ID for the test notification
+        title: "تذكير تجريبي",
+        body: "هذا إشعار تجريبي. اضغط لعرض الدواء.",
+        scheduledTime: testTime,
+        docId: medicationId, // Pass the docId for payload
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text("تم جدولة الإشعار التجريبي بنجاح، سيظهر خلال 10 ثوان"),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(10),
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("تم جدولة إشعار تجريبي خلال 10 ثوان.", textAlign: TextAlign.right),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print("Error scheduling test notification: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("خطأ في جدولة الإشعار التجريبي.", textAlign: TextAlign.right),
+          backgroundColor: kErrorColor,
+        ),
+      );
+    }
   }
 
+
   Future<String?> _getRandomMedicationId() async {
+    if (!_isAuthenticated) return null;
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
 
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user!.uid)
           .collection('medicines')
-          .limit(1) // Just get one document
+          .limit(1)
           .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        return snapshot.docs.first.id;
-      } else {
-        // No medications found
-        return null;
-      }
+      return snapshot.docs.isNotEmpty ? snapshot.docs.first.id : null;
     } catch (e) {
-      print('Error getting medication ID: $e');
+      print('Error getting random medication ID: $e');
       return null;
     }
   }
 
   Future<void> _testMedicationDetailNavigation(BuildContext context) async {
+    if (!mounted) return;
     // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => Center(child: CircularProgressIndicator(color: kPrimaryColor)),
     );
 
     try {
-      // Get a medication ID to use for testing
       final medicationId = await _getRandomMedicationId();
-
-      // Close loading dialog
-      Navigator.pop(context);
+      Navigator.pop(context); // Dismiss loading indicator
 
       if (medicationId != null) {
-        // Navigate to the medication detail page with the retrieved ID
         Navigator.pushNamed(
           context,
           '/medication_detail',
           arguments: {'docId': medicationId},
         );
       } else {
-        // No medications found, show error message
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("لم يتم العثور على أدوية لاختبار الصفحة"),
-            backgroundColor: Colors.orange.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(10),
-          ),
+          SnackBar(content: Text("لم يتم العثور على دواء لاختبار التفاصيل.", textAlign: TextAlign.right), backgroundColor: Colors.orange),
         );
       }
     } catch (e) {
-      // Close loading dialog if error occurs
-      Navigator.pop(context);
-
+      Navigator.pop(context); // Dismiss loading indicator on error
+      print("Error testing medication detail navigation: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("حدث خطأ: $e"),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(10),
-        ),
+        SnackBar(content: Text("حدث خطأ أثناء الاختبار.", textAlign: TextAlign.right), backgroundColor: kErrorColor),
       );
     }
   }
 
+
   void _onItemTapped(int index) {
-    // Navigation logic: update index and call routes based on index.
     if (_selectedIndex == index) return;
 
-    // Check if user is authenticated before allowing navigation to certain pages
     if (!_isAuthenticated) {
-      // Show dialog prompting user to login
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('تنبيه', textAlign: TextAlign.right),
-            content: const Text(
-              'يجب تسجيل الدخول للوصول إلى هذه الصفحة',
-              textAlign: TextAlign.right,
-            ),
-            actions: <Widget>[
-              TextButton(
-                child: const Text('إلغاء'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-              ElevatedButton(
-                child: const Text('تسجيل الدخول'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-              ),
-            ],
-          );
-        },
-      );
+      _showLoginRequiredDialog();
       return;
     }
 
     String? routeName;
-    if (index == 1) routeName = "/personal_data";
-    if (index == 2) routeName = "/settings";
-
-    if (routeName != null) {
-      Navigator.pushNamed(context, routeName).then((_) {
-        setState(() {
-          _selectedIndex = index;
-        });
-        if (_isAuthenticated) {
-          _loadClosestMed();
-        }
-      });
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
+    // Define routes for bottom navigation items
+    switch (index) {
+      case 0: // Home - already here, do nothing or reload
+      // You might want to reload data if they tap home again
+      // _loadClosestMed();
+        setState(() { _selectedIndex = index; }); // Update index if needed
+        return; // Don't navigate if already on home
+      case 1:
+        routeName = "/personal_data"; // Profile/Personal Data Page
+        break;
+      case 2:
+        routeName = "/settings"; // Settings Page
+        break;
+      default:
+        return; // Should not happen
     }
+
+    // Navigate and then update the index visually *after* returning (if needed)
+    // Or update index immediately if navigation replaces the current screen
+    Navigator.pushNamed(context, routeName).then((_) {
+      // This runs when returning from the pushed route
+      if (mounted) {
+        // If you want the home screen to refresh data when returning:
+        // if (index == 0) { // Check if returning to home index
+        //   _loadClosestMed();
+        // }
+        // Visually, the bottom bar should reflect the *current* screen.
+        // If navigation pushes screens *on top*, selectedIndex should remain 0 (home).
+        // If navigation *replaces* or uses a different structure, adjust accordingly.
+        // For a simple pushNamed, keep selectedIndex as 0 unless you change pages differently.
+        // setState(() { _selectedIndex = index; }); // Reconsider if this logic is correct for pushNamed
+      }
+    });
+    // If you want the bar to highlight the *target* page immediately:
+    // setState(() { _selectedIndex = index; });
   }
+
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Background Gradient - matching login/signup pages
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.white.withOpacity(0.8),
-                  Colors.blue.shade100,
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+    final now = DateTime.now();
+    final greeting = _getGreeting(now.hour);
+
+    return Directionality(
+      textDirection: ui.TextDirection.rtl, // Set RTL direction for the entire scaffold
+      child: Scaffold(
+        extendBodyBehindAppBar: true, // Allows body to go behind AppBar
+        body: Container(
+          // Use a gradient background that blends from primary color to background color
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kPrimaryColor,
+                kPrimaryColor.withOpacity(0.8),
+                kBackgroundColor.withOpacity(0.9), // Blend into background
+                kBackgroundColor,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: const [0.0, 0.3, 0.7, 1.0], // Adjust stops for smooth transition
             ),
           ),
-
-          // Decorative pill shape in background (subtle)
-          Positioned(
-            top: MediaQuery.of(context).size.height * 0.12,
-            left: MediaQuery.of(context).size.width * 0.05,
-            child: Opacity(
-              opacity: 0.1,
-              child: Transform.rotate(
-                angle: 0.3,
-                child: Container(
-                  height: 70,
-                  width: 140,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade800,
-                    borderRadius: BorderRadius.circular(35),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Main Content with Pull-to-Refresh
-          SafeArea(
+          child: SafeArea( // Ensure content is below status bar/notches
             child: RefreshIndicator(
-              onRefresh: _isAuthenticated ? _loadClosestMed : () async {}, // Only refresh if authenticated
-              color: Colors.blue.shade700,
+              onRefresh: _isAuthenticated ? _loadClosestMed : () async {}, // Allow refresh only if logged in
+              color: kPrimaryColor, // Color of the refresh indicator
               child: FadeTransition(
                 opacity: _fadeInAnimation,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 25),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // Welcome Message - Show different message for guests
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.shade200.withOpacity(0.2),
-                                blurRadius: 10,
-                                spreadRadius: 0,
-                                offset: const Offset(0, 4),
+                child: SingleChildScrollView( // Allows scrolling if content overflows
+                  physics: const AlwaysScrollableScrollPhysics(), // Ensure scrollability even if content fits
+                  child: Column(
+                    // Main column layout
+                    children: [
+                      // Header Section
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 10, 24, 20), // Adjust padding (more bottom)
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end, // In RTL, this will align to right
+                          children: [
+                            Text(
+                              _isAuthenticated
+                                  ? "$greeting، $_userName" // Combined greeting
+                                  : "$greeting، زائر",
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      _isAuthenticated
-                                          ? (_userName.isEmpty ? "مرحباً بك" : "مرحباً بك، $_userName")
-                                          : "مرحباً بك، $_userName",
-                                      style: TextStyle(
-                                        fontSize: 26,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade800,
-                                      ),
-                                      textAlign: TextAlign.right,
-                                    ),
-                                    const SizedBox(height: 5),
-                                    Text(
-                                      _isAuthenticated
-                                          ? "نتمنى لك يوماً صحياً"
-                                          : "سجل الدخول للوصول إلى جميع الميزات",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: _isAuthenticated
-                                            ? Colors.blue.shade600
-                                            : Colors.orange.shade700,
-                                      ),
-                                      textAlign: TextAlign.right,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                child: Icon(
-                                  _isAuthenticated
-                                      ? Icons.medication_rounded
-                                      : Icons.person_outline,
-                                  size: 32,
-                                  color: Colors.blue.shade800,
-                                ),
-                              ),
-                            ],
-                          ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 25),
+                      ),
 
-                        // Show login button for unauthenticated users
-                        if (!_isAuthenticated)
-                          Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.only(bottom: 25),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.blue.shade100.withOpacity(0.4),
-                                  blurRadius: 8,
-                                  spreadRadius: 0,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                              gradient: LinearGradient(
-                                colors: [Colors.blue.shade700, Colors.blue.shade900],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: ElevatedButton.icon(
-                              onPressed: () => Navigator.pushNamed(context, '/login'),
-                              icon: const Icon(Icons.login, size: 20),
-                              label: const Text(
-                                "تسجيل الدخول",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: Colors.transparent,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
+                      // Main Content Area (White Rounded Container)
+                      Container(
+                        width: double.infinity, // Take full width
+                        padding: const EdgeInsets.fromLTRB(24, 30, 24, 24), // Inner padding
+                        decoration: BoxDecoration(
+                          color: Colors.white, // Background for content area
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(30),
+                            topRight: Radius.circular(30),
                           ),
+                          boxShadow: [ // Subtle shadow
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: Offset(0, -5), // Shadow upwards
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+                          children: [
+                            // Conditionally show Login or Upcoming Dose
+                            if (!_isAuthenticated)
+                              _buildLoginSection()
+                            else
+                              _buildUpcomingDoseSection(),
 
-                        // Upcoming Dose Section - only show if authenticated
-                        if (_isAuthenticated) ...[
-                          Text(
-                            "الجرعة القادمة",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.blue.shade100.withOpacity(0.3),
-                                  spreadRadius: 0,
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: _isLoadingMed
-                                ? Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(20.0),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 3,
-                                        color: Colors.blue.shade600,
-                                      ),
-                                    ),
-                                  )
-                                : _closestMedName.isEmpty
-                                    ? Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 20.0),
-                                          child: Column(
-                                            children: [
-                                              Icon(
-                                                Icons.medication_liquid_outlined,
-                                                size: 50,
-                                                color: Colors.grey.shade400,
-                                              ),
-                                              const SizedBox(height: 10),
-                                              Text(
-                                                "لا توجد جرعات قادمة",
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      )
-                                    : DoseTile(
-                                        medicationName: _closestMedName,
-                                        nextDose: _closestMedTimeStr,
-                                        docId: _closestMedDocId,
-                                        imageUrl: "", // No image shown here
-                                        onDelete: () {},
-                                        deletable: false,
-                                      ),
-                          ),
-                          const SizedBox(height: 30),
-                        ],
+                            SizedBox(height: 25),
+                            _buildActionCardsSection(), // Always show actions?
+                            SizedBox(height: 30),
 
-                        // Action Cards Section - Modify to check authentication
-                        _buildActionCards(),
-
-                        const SizedBox(height: 20),
-                        // Test buttons - only show if authenticated
-                        if (_isAuthenticated) ...[
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.blue.shade100.withOpacity(0.4),
-                                  blurRadius: 8,
-                                  spreadRadius: 0,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                              gradient: LinearGradient(
-                                colors: [Colors.blue.shade700, Colors.blue.shade800],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: ElevatedButton.icon(
-                              onPressed: () => _sendTestNotification(context),
-                              icon: const Icon(Icons.notifications_active, size: 20),
-                              label: const Text(
-                                "إرسال إشعار تجريبي",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: Colors.transparent,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 15),
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.purple.shade100.withOpacity(0.4),
-                                  blurRadius: 8,
-                                  spreadRadius: 0,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                              gradient: LinearGradient(
-                                colors: [Colors.purple.shade500, Colors.purple.shade700],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: ElevatedButton.icon(
-                              onPressed: () => _testMedicationDetailNavigation(context),
-                              icon: const Icon(Icons.medication, size: 20),
-                              label: const Text(
-                                "اختبار صفحة تفاصيل الدواء",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: Colors.transparent,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                      ],
-                    ),
+                            // Conditionally show Dev Tools
+                            if (_isAuthenticated && true) // Use kDebugMode or env variable in production
+                              _buildDevelopmentToolsSection(),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNavigationBar(
-        selectedIndex: _selectedIndex,
-        onItemTapped: _onItemTapped,
+        ),
+        // Bottom Navigation Bar
+        bottomNavigationBar: Directionality(
+          textDirection: ui.TextDirection.ltr,
+          child: CustomBottomNavigationBar(
+            selectedIndex: _selectedIndex, // Reflects the current logical tab index
+            onItemTapped: _onItemTapped,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildActionCards() {
+  // Helper method to get appropriate greeting
+  String _getGreeting(int hour) {
+    if (hour < 12) return "صباح الخير";
+    if (hour < 17) return "مساء الخير"; // Afternoon
+    return "مساء الخير"; // Evening
+  }
+
+  // --- Build Helper Methods ---
+
+  Widget _buildLoginSection() {
+    // Builds the section shown to non-authenticated users
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
       children: [
+        Container(
+          width: double.infinity, // Ensure container takes full width for alignment
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [kPrimaryColor.withOpacity(0.1), Colors.blue.shade50],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kPrimaryColor.withOpacity(0.2), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+            children: [
+              Text(
+                "مرحباً بك في تطبيق مُذكر",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimaryColor),
+                // No need for textAlign in RTL parent
+              ),
+              SizedBox(height: 10),
+              Text(
+                "سجل الدخول للوصول إلى ميزات التطبيق الكاملة وإدارة أدويتك.",
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+                // No need for textAlign in RTL parent
+              ),
+              SizedBox(height: 20),
+              Row( // Buttons side-by-side
+                children: [
+                  // Register Button (Right side in RTL)
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pushNamed(context, '/register'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent, foregroundColor: kPrimaryColor, elevation: 0,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10), side: BorderSide(color: kPrimaryColor),
+                        ),
+                      ),
+                      child: Text("إنشاء حساب"),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  // Login Button (Left side in RTL)
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pushNamed(context, '/login'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kPrimaryColor, foregroundColor: Colors.white, elevation: 0,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text("تسجيل الدخول"),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 30),
+        Text(
+          "استكشف الميزات",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+          // No need for textAlign in RTL parent
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUpcomingDoseSection() {
+    // Builds the section showing the next medication dose
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            "الجرعة القادمة",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+            // No need for textAlign in RTL parent
+          ),
+        ),
+        // Use a dedicated widget for the dose tile for cleaner code
+        _isLoadingMed
+            ? _buildLoadingIndicator()
+            : _closestMedName.isEmpty
+            ? _buildEmptyDoseIndicator()
+            : DoseTile( // Assuming DoseTile handles its internal RTL correctly
+          medicationName: _closestMedName,
+          nextDose: _closestMedTimeStr,
+          docId: _closestMedDocId,
+          // imageUrl: "", // Pass image URL if available
+          // onDelete: () {}, // Pass callback if needed
+          // deletable: false, // Control if delete action is shown
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    // Simple loading indicator for the dose tile area
+    return Container(
+      height: 120, // Match DoseTile height approx
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kPrimaryColor.withOpacity(0.2)),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(strokeWidth: 3, color: kPrimaryColor),
+            SizedBox(height: 10),
+            Text("جاري تحميل الجرعة...", style: TextStyle(color: Colors.grey.shade600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyDoseIndicator() {
+    // Widget shown when no upcoming doses are found
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 25, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.medication_liquid_outlined, size: 40, color: kSecondaryColor),
+            SizedBox(height: 10),
+            Text(
+              "لا توجد جرعات قادمة مجدولة",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey.shade700),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 4),
+            Text(
+              "أضف دواء جديد باستخدام الزر أدناه.",
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildActionCardsSection() {
+    // Builds the grid/row of action cards
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            "الإجراءات السريعة",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+            // No need for textAlign in RTL parent
+          ),
+        ),
+        // Row for Add and Schedule cards
         Row(
           children: [
+            // Add Dose Card (Right side in RTL)
             Expanded(
-              child: ActionCard(
-                icon: Icons.add_circle_outline,
+              child: EnhancedActionCard(
+                icon: Icons.add_circle_outline, // Use outline icon
                 label: "إضافة دواء",
-                color: Colors.green.shade700,
+                color: Colors.green.shade600,
                 onTap: () {
                   if (_isAuthenticated) {
-                    Navigator.pushNamed(context, '/add_dose').then((result) {
-                      if (result != null) {
-                        _loadClosestMed();
-                      }
-                    });
+                    Navigator.pushNamed(context, '/add_dose').then((_) => _loadClosestMed()); // Refresh on return
                   } else {
-                    // Show login dialog
                     _showLoginRequiredDialog("إضافة دواء");
                   }
                 },
               ),
             ),
-            const SizedBox(width: 15),
+            SizedBox(width: 16),
+            // Schedule Card (Left in RTL)
             Expanded(
-              child: ActionCard(
-                icon: Icons.calendar_month_outlined,
+              child: EnhancedActionCard(
+                icon: Icons.calendar_today_rounded, // Different icon
                 label: "جدول الأدوية",
-                color: Colors.blue.shade700,
+                color: kPrimaryColor,
                 onTap: () {
                   if (_isAuthenticated) {
                     Navigator.pushNamed(context, '/dose_schedule');
@@ -917,12 +859,14 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             ),
           ],
         ),
-        const SizedBox(height: 15),
-        ActionCard(
-          icon: Icons.people_outline,
+        SizedBox(height: 16),
+        // Companions Card (Full width)
+        EnhancedActionCard(
+          icon: Icons.people_alt_rounded, // Different icon
           label: "المرافقين",
+          description: "إدارة ومتابعة حالة المرافقين.", // Updated description
           color: Colors.orange.shade700,
-          isFullWidth: true,
+          isHorizontal: true, // Use horizontal layout
           onTap: () {
             if (_isAuthenticated) {
               Navigator.pushNamed(context, '/companions');
@@ -935,31 +879,107 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     );
   }
 
-  // New helper method to show login dialog
-  void _showLoginRequiredDialog(String featureName) {
+
+  Widget _buildDevelopmentToolsSection() {
+    // Builds the developer tools section (conditionally shown)
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 10), // Add some margin above
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        border: Border.all(color: Colors.grey.shade300, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+        children: [
+          Row( // Use Row for icon and title, align right implicitly by Column parent
+            mainAxisSize: MainAxisSize.min, // Prevent Row from taking full width unnecessarily
+            children: [
+              Text(
+                "أدوات المطور (للاختبار)", // Title on the right
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                // No need for textAlign in RTL parent
+              ),
+              SizedBox(width: 8),
+              Icon(Icons.developer_mode, size: 20, color: Colors.grey.shade800), // Icon on the left
+            ],
+          ),
+          SizedBox(height: 16),
+          Row( // Buttons side-by-side
+            children: [
+              // Test Notifications Button (Right in RTL)
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _sendTestNotification(context),
+                  icon: Icon(Icons.notification_add_rounded, size: 18),
+                  label: Text("إشعار تجريبي", style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryColor.withOpacity(0.8), foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              SizedBox(width: 10),
+              // Test Details Button (Left in RTL)
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _testMedicationDetailNavigation(context),
+                  icon: Icon(Icons.medication_liquid_rounded, size: 18),
+                  label: Text("تفاصيل تجريبية", style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple.shade600, foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  void _showLoginRequiredDialog([String? featureName]) {
+    // Shows a dialog prompting the user to log in
+    if (!mounted) return; // Check if context is valid
+
+    String message = featureName != null
+        ? 'يجب تسجيل الدخول للوصول إلى ميزة "$featureName".'
+        : 'يجب تسجيل الدخول للمتابعة.';
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) { // Use different context name
         return AlertDialog(
-          title: Text('تسجيل الدخول مطلوب', textAlign: TextAlign.right),
-          content: Text(
-            'يجب تسجيل الدخول للوصول إلى "$featureName"',
-            textAlign: TextAlign.right,
+          title: Row(
+            children: [
+              Icon(Icons.login_rounded, color: kPrimaryColor),
+              SizedBox(width: 8),
+              Text('تسجيل الدخول مطلوب', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
           ),
+          content: Text(message), // In RTL, no need for explicit textAlign
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          actionsAlignment: MainAxisAlignment.spaceBetween, // Space out buttons
           actions: [
             TextButton(
-              child: Text('إلغاء'),
-              onPressed: () => Navigator.of(context).pop(),
+              child: Text('إلغاء', style: TextStyle(color: Colors.grey.shade700)),
+              onPressed: () => Navigator.of(dialogContext).pop(), // Use dialog context
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
+              icon: Icon(Icons.login_rounded, size: 18),
+              label: Text('تسجيل الدخول'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
-                foregroundColor: Colors.white,
+                backgroundColor: kPrimaryColor, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: Text('تسجيل الدخول'),
               onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.pushReplacementNamed(context, '/login'); // Changed to pushReplacementNamed
+                Navigator.of(dialogContext).pop(); // Close dialog
+                // Use pushReplacementNamed to go to login, replacing current route if needed
+                Navigator.pushReplacementNamed(context, '/login');
               },
             ),
           ],
@@ -967,184 +987,264 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       },
     );
   }
-}
 
-// -----------------------
-// DoseTile Widget for Closest Dose
-// -----------------------
+} // End of _MainPageState
+
+
+// --- Separate Widgets (for better organization) ---
+
+// Enhanced DoseTile widget
 class DoseTile extends StatelessWidget {
   final String medicationName;
-  final String nextDose; // formatted time string
+  final String nextDose;
   final String docId;
-  final String imageUrl;
-  final VoidCallback onDelete;
-  final bool deletable;
+  // final String imageUrl; // Uncomment if needed
+  // final VoidCallback onDelete; // Uncomment if needed
+  // final bool deletable; // Uncomment if needed
+
   const DoseTile({
     super.key,
     required this.medicationName,
     required this.nextDose,
     required this.docId,
-    required this.imageUrl,
-    required this.onDelete,
-    this.deletable = true,
+    // required this.imageUrl,
+    // required this.onDelete,
+    // this.deletable = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      // margin: EdgeInsets.symmetric(vertical: 4), // Margin handled by parent Column spacing
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.blue.shade100, width: 1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        leading: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.shade100.withOpacity(0.3),
-                blurRadius: 4,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.medication_liquid,
-            size: 32,
-            color: Colors.blue.shade700,
-          ),
-        ),
-        title: Text(
-          medicationName,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.blue.shade900,
-          ),
-        ),
-        subtitle: Row(
-          children: [
-            Icon(
-              Icons.access_time_rounded,
-              size: 16,
-              color: Colors.blue.shade600,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              nextDose,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.blue.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        trailing: Icon(
-          Icons.notifications_active_rounded,
-          color: Colors.orange.shade600,
-          size: 24,
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------
-// ActionCard Widget
-// -----------------------
-class ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  final bool isFullWidth;
-
-  const ActionCard({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.color,
-    this.isFullWidth = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: isFullWidth ? double.infinity : null,
-      height: 100,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withOpacity(0.3),
-            blurRadius: 8,
-            spreadRadius: 0,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: Offset(0, 2)),
+        ],
+        border: Border.all(color: kPrimaryColor.withOpacity(0.2), width: 1.5),
+      ),
+      child: Material( // For InkWell effect
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(kBorderRadius),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-            decoration: BoxDecoration(
-              border: Border.all(color: color.withOpacity(0.2), width: 1.5),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: isFullWidth
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
+          onTap: () {
+            if (docId.isNotEmpty) {
+              Navigator.pushNamed(context, '/medication_detail', arguments: {'docId': docId});
+            }
+          },
+          splashColor: kPrimaryColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(kBorderRadius),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row( // Main row layout
+              mainAxisAlignment: MainAxisAlignment.spaceBetween, // Push content apart
               children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 26,
-                    color: color,
-                  ),
-                ),
-                const SizedBox(width: 15),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
+                // Right side content (in RTL)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+                    children: [
+                      Text(
+                        medicationName,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                        overflow: TextOverflow.ellipsis, // Handle long names
+                      ),
+                      SizedBox(height: 6),
+                      _buildTimeDisplay(), // Time display row
+                    ],
                   ),
                 ),
-                if (isFullWidth)
-                  const Spacer(),
-                if (isFullWidth)
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 16,
-                    color: color,
-                  ),
+                SizedBox(width: 16), // Spacing
+                // Left side icon (in RTL)
+                _buildMedicationIcon(),
+                // Notification badge can be added here or overlayed if needed
+                // _buildNotificationBadge(),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMedicationIcon() {
+    // Builds the styled medication icon
+    return Container(
+      width: 56, height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.2), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      alignment: Alignment.center,
+      child: Icon(Icons.medication_liquid_rounded, size: 32, color: Colors.white),
+    );
+  }
+
+  Widget _buildTimeDisplay() {
+    // Builds the formatted time display part
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start, // In RTL, this will align to right
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: kSecondaryColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: kSecondaryColor.withOpacity(0.3), width: 1),
+          ),
+          child: Row( // Icon and text within the time badge
+            mainAxisSize: MainAxisSize.min, // Don't take full width
+            children: [
+              Text( // Time text on the right
+                nextDose,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: kPrimaryColor, // FIXED: Changed from shade800
+                ),
+              ),
+              SizedBox(width: 4),
+              Icon(
+                Icons.access_time_filled_rounded,
+                size: 14,
+                color: kPrimaryColor, // FIXED: Changed from shade800
+              ), // Icon on the left
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Optional: Notification Badge (Consider placement)
+  Widget _buildNotificationBadge() {
+    return Container(
+      padding: EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle,
+        border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1.5),
+      ),
+      child: Icon(Icons.notifications_active_rounded, color: Colors.orange.shade600, size: 22),
+    );
+  }
+}
+
+
+// Enhanced action card widget
+class EnhancedActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? description;
+  final Color color;
+  final VoidCallback onTap;
+  final bool isHorizontal;
+
+  const EnhancedActionCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.description,
+    required this.color,
+    required this.onTap,
+    this.isHorizontal = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 8, offset: Offset(0, 3))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(kBorderRadius),
+          onTap: onTap,
+          splashColor: color.withOpacity(0.1),
+          highlightColor: color.withOpacity(0.05),
+          child: Padding( // Add padding consistently
+            padding: isHorizontal
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12) // Padding for horizontal
+                : const EdgeInsets.symmetric(horizontal: 8, vertical: 16), // Padding for vertical
+            child: isHorizontal ? _buildHorizontalLayout() : _buildVerticalLayout(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVerticalLayout() {
+    // Vertical layout (Icon top, Text bottom)
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 32),
+        ),
+        SizedBox(height: 12),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: color, // FIXED: Changed from shade800
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHorizontalLayout() {
+    // Horizontal layout (Icon left, Text right in RTL)
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween, // Space between elements
+      children: [
+        // Right side: Text content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, // In RTL, this will align to right
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: color, // FIXED: Changed from shade800
+                ),
+              ),
+              if (description != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    description!,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(width: 16), // Spacing
+        // Left side: Icon
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 28),
+        ),
+        // Optional: Add arrow icon if needed
+        // Icon(Icons.arrow_forward_ios_rounded, color: color, size: 16), // Forward arrow (Left in RTL)
+      ],
     );
   }
 }

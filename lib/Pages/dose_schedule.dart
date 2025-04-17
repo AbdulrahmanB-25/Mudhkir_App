@@ -6,16 +6,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:intl/intl.dart'; // For time parsing and date formatting
+import 'package:intl/intl.dart';
+import 'dart:ui' as ui;
 
-// --- Import your Edit screen ---
-// Ensure this path is correct for your project structure
+// Import your Edit screen
 import 'package:mudhkir_app/pages/EditMedicationScreen.dart';
-
 import '../main.dart';
 
-// --- Time Utilities (Ideally move to a separate utils file) ---
-// Using the same TimeUtils logic provided
+// --- Theme constants ---
+const Color kPrimaryColor = Color(0xFF2E86C1); // Hospital blue (primary)
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const double kBorderRadius = 16.0; // Consistent border radius
+const double kSpacing = 16.0; // Base spacing unit
+
+// --- Time Utilities ---
 class TimeUtils {
   static TimeOfDay? parseTime(String timeStr) {
     try {
@@ -53,9 +58,8 @@ class TimeUtils {
     return '$hour:$minute $period';
   }
 }
-// --- End Time Utilities ---
 
-// --- EnlargeableImage Widget (Styled to fit theme) ---
+// --- EnlargeableImage Widget (Styled to match theme) ---
 class EnlargeableImage extends StatefulWidget {
   final String imageUrl;
   final double width;
@@ -114,22 +118,42 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
 
   void _openEnlargedImage(BuildContext context, File imageFile) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) {
-          return Scaffold(
-            backgroundColor: Colors.black87, // Keep dark for focus
-            appBar: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Colors.blue),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                panEnabled: true,
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.file(imageFile),
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (_, animation, __) {
+          return FadeTransition(
+            opacity: animation,
+            child: Directionality(
+              textDirection: ui.TextDirection.rtl,
+              child: Scaffold(
+                backgroundColor: Colors.black.withOpacity(0.85),
+                appBar: AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  iconTheme: IconThemeData(color: kSecondaryColor),
+                  leading: IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+                body: Center(
+                  child: Hero(
+                    tag: 'medication_image_${widget.imageUrl.hashCode}',
+                    child: InteractiveViewer(
+                      panEnabled: true,
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.file(imageFile),
+                    ),
+                  ),
+                ),
               ),
             ),
           );
@@ -141,7 +165,6 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
   @override
   Widget build(BuildContext context) {
     final uri = Uri.tryParse(widget.imageUrl);
-    // Use placeholder if URL is invalid or empty
     if (widget.imageUrl.isEmpty || uri == null || !uri.isAbsolute) {
       return _buildPlaceholder(showErrorText: false);
     }
@@ -150,80 +173,97 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
       future: _imageFileFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Loading state with themed placeholder
           return Container(
             width: widget.width,
             height: widget.height,
             decoration: BoxDecoration(
-              color: Colors.blue.shade50, // Match theme background elements
-              borderRadius: BorderRadius.circular(12), // Consistent rounding
+              color: kSecondaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(kBorderRadius),
             ),
             child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.blue.shade600, // Match theme progress indicator
-                )),
+                  color: kPrimaryColor,
+                ),
+              ),
+            ),
           );
         } else if (snapshot.hasData && snapshot.data != null) {
-          // Image loaded successfully
-          return GestureDetector(
-            onTap: () => _openEnlargedImage(context, snapshot.data!),
-            child: Container(
-              decoration: BoxDecoration( // Add subtle shadow like ActionCards
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.shade100.withOpacity(0.3),
-                    blurRadius: 4,
-                    spreadRadius: 1,
+          return Hero(
+            tag: 'medication_image_${widget.imageUrl.hashCode}',
+            child: GestureDetector(
+              onTap: () => _openEnlargedImage(context, snapshot.data!),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(kBorderRadius),
+                  boxShadow: [
+                    BoxShadow(
+                      color: kPrimaryColor.withOpacity(0.15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(kBorderRadius),
+                  child: Image.file(
+                    snapshot.data!,
+                    width: widget.width,
+                    height: widget.height,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print("Error displaying file image: $error");
+                      return _buildPlaceholder(showErrorText: true);
+                    },
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12), // Consistent rounding
-                child: Image.file(
-                  snapshot.data!,
-                  width: widget.width,
-                  height: widget.height,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    print("Error displaying file image: $error");
-                    return _buildPlaceholder(showErrorText: true); // Show error placeholder
-                  },
                 ),
               ),
             ),
           );
         } else {
-          // Error loading image or no image URL
-          return _buildPlaceholder(showErrorText: true); // Show error placeholder
+          return _buildPlaceholder(showErrorText: true);
         }
       },
     );
   }
 
-  // Placeholder widget, styled consistently
   Widget _buildPlaceholder({required bool showErrorText}) {
     return Container(
       width: widget.width,
       height: widget.height,
       decoration: BoxDecoration(
-        color: Colors.blue.shade50, // Match theme background elements
-        borderRadius: BorderRadius.circular(12), // Consistent rounding
-        border: Border.all(color: Colors.blue.shade100, width: 1),
+        color: kSecondaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        border: Border.all(color: kSecondaryColor.withOpacity(0.2)),
       ),
-      alignment: Alignment.center,
-      child: Icon(
-        showErrorText ? Icons.broken_image_outlined : Icons.image_not_supported_outlined,
-        color: Colors.blue.shade300, // Softer color for placeholder icon
-        size: widget.width * 0.5, // Adjust size as needed
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            showErrorText ? Icons.broken_image_rounded : Icons.medication_rounded,
+            color: kSecondaryColor.withOpacity(0.5),
+            size: widget.width * 0.4,
+          ),
+          if (showErrorText) const SizedBox(height: 4),
+          if (showErrorText)
+            Text(
+              "لا توجد صورة",
+              style: TextStyle(
+                fontSize: 10,
+                color: kSecondaryColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+        ],
       ),
     );
   }
 }
-// --- End EnlargeableImage Widget ---
 
-// --- DoseSchedule Widget (Themed) ---
+// --- DoseSchedule Main Widget ---
 class DoseSchedule extends StatefulWidget {
   const DoseSchedule({super.key});
 
@@ -232,7 +272,7 @@ class DoseSchedule extends StatefulWidget {
 }
 
 class _DoseScheduleState extends State<DoseSchedule> {
-  User? _user; // Make user nullable initially
+  User? _user;
   CalendarFormat _calendarFormat = CalendarFormat.month;
   Map<DateTime, List<Map<String, dynamic>>> _doses = {};
   DateTime _selectedDay = DateTime.now();
@@ -242,42 +282,36 @@ class _DoseScheduleState extends State<DoseSchedule> {
   @override
   void initState() {
     super.initState();
-    _user = FirebaseAuth.instance.currentUser; // Get current user
+    _user = FirebaseAuth.instance.currentUser;
     if (_user == null) {
       print("Error: User not logged in for DoseSchedule.");
-      // Schedule Snackbar display after the first frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text("الرجاء تسجيل الدخول أولاً لعرض الجدول"),
-              backgroundColor: Colors.red.shade700, // Error color
+              backgroundColor: Colors.red.shade700,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               margin: const EdgeInsets.all(10),
             ),
           );
-          // Optionally navigate back if appropriate
-          // if (Navigator.canPop(context)) {
-          //   Navigator.of(context).pop();
-          // }
         }
       });
-      setState(() => _isLoading = false); // Stop loading if no user
+      setState(() => _isLoading = false);
     } else {
-      _fetchDoses(); // Fetch doses only if user is logged in
+      _fetchDoses();
     }
   }
 
-  // Fetch doses remains largely the same, added null check for user
   Future<void> _fetchDoses() async {
-    if (!mounted || _user == null) return; // Check if mounted and user exists
+    if (!mounted || _user == null) return;
     setState(() {
       _isLoading = true;
     });
 
     final Map<DateTime, List<Map<String, dynamic>>> newDoses = {};
-    final String userId = _user!.uid; // Safe to use ! here due to check above
+    final String userId = _user!.uid;
 
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -286,7 +320,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
           .collection('medicines')
           .get();
 
-      // --- (Parsing logic remains the same as provided) ---
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final String medicationName = data['name'] as String? ?? 'دواء غير مسمى';
@@ -303,7 +336,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final List<String> frequencyParts = frequencyRaw.split(" ");
         final String frequencyType = frequencyParts.length > 1 ? frequencyParts[1] : 'يومي';
 
-        // Use frequencyType from the 'frequency' field for logic
         final String resolvedFrequencyType = frequencyType;
 
         final List<dynamic> timesRaw = data['times'] ?? [];
@@ -352,7 +384,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
 
           currentDate = currentDate.add(const Duration(days: 1));
           if (endDate != null && currentDate.isAfter(endDate)) break;
-          // Add a safety break for potentially endless loops without an end date
           if (endDate == null && currentDate.difference(startDate).inDays > (365 * 10)) {
             print("Warning: Medication ${doc.id} seems to have no end date or a very long duration; stopping iteration after 10 years.");
             break;
@@ -368,11 +399,9 @@ class _DoseScheduleState extends State<DoseSchedule> {
               ? timeA.hour.compareTo(timeB.hour)
               : timeA.minute.compareTo(timeB.minute);
           if (cmp != 0) return cmp;
-          // Secondary sort by name if times are identical
           return (a['medicationName'] as String).compareTo(b['medicationName'] as String);
         });
       });
-      // --- (End of parsing logic) ---
 
       if (mounted) {
         setState(() {
@@ -386,12 +415,12 @@ class _DoseScheduleState extends State<DoseSchedule> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _doses = {}; // Clear doses on error
+          _doses = {};
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text("حدث خطأ أثناء تحميل جدول الأدوية."),
-            backgroundColor: Colors.red.shade700, // Error color
+            backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(10),
@@ -401,7 +430,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
     }
   }
 
-  // Get events for a specific day (used by TableCalendar).
   List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
     final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
     return _doses[normalizedDay] ?? [];
@@ -409,19 +437,15 @@ class _DoseScheduleState extends State<DoseSchedule> {
 
   @override
   Widget build(BuildContext context) {
-    // Display message if loading is done and user is still null
     if (!_isLoading && _user == null) {
       return Scaffold(
-        // Apply background gradient even on the error screen
         body: Container(
-          width: double.infinity,
-          height: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.blue.shade50,
-                Colors.white.withOpacity(0.8),
-                Colors.blue.shade100,
+                kPrimaryColor.withOpacity(0.2),
+                kBackgroundColor,
+                Colors.white,
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -431,16 +455,20 @@ class _DoseScheduleState extends State<DoseSchedule> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.login_rounded, size: 60, color: Colors.blue.shade300),
-                const SizedBox(height: 15),
+                Icon(Icons.login_rounded, size: 60, color: kPrimaryColor.withOpacity(0.7)),
+                const SizedBox(height: 20),
                 Text(
                   "الرجاء تسجيل الدخول لعرض الجدول",
-                  style: TextStyle(fontSize: 18, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: kPrimaryColor,
+                  ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 16),
+                  icon: const Icon(Icons.arrow_back),
                   label: const Text("العودة"),
                   onPressed: () {
                     if (Navigator.canPop(context)) {
@@ -448,12 +476,13 @@ class _DoseScheduleState extends State<DoseSchedule> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
+                    backgroundColor: kPrimaryColor,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -461,283 +490,356 @@ class _DoseScheduleState extends State<DoseSchedule> {
       );
     }
 
-    // Main Scaffold with Themed Elements
-    return Scaffold(
-      extendBodyBehindAppBar: true, // Allow body content to go behind AppBar
-      appBar: AppBar(
-        backgroundColor: Colors.transparent, // Make AppBar transparent
-        elevation: 0, // Remove shadow
-        title: const Text(
-          "جدول الأدوية",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.blue,
-            shadows: [
-              Shadow(
-                offset: Offset(0, 1),
-                blurRadius: 3.0,
-                color: Color.fromARGB(150, 0, 0, 0),
+    return Directionality(
+      textDirection: ui.TextDirection.rtl,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text(
+            "جدول الأدوية",
+            style: TextStyle(
+              color: kPrimaryColor,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Colors.white.withOpacity(0.7),
+                  blurRadius: 15,
+                )
+              ],
+            ),
+          ),
+          centerTitle: true,
+          iconTheme: IconThemeData(
+            color: kPrimaryColor,
+            size: 28,
+          ),
+        ),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kPrimaryColor.withOpacity(0.2),
+                kBackgroundColor,
+                Colors.white,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: SafeArea(
+            child: _isLoading
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: kPrimaryColor),
+                  const SizedBox(height: 16),
+                  Text(
+                    "جاري تحميل الجدول...",
+                    style: TextStyle(
+                      color: kPrimaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          textAlign: TextAlign.center,
-        ),
-        centerTitle: true,
-        iconTheme: const IconThemeData(
-          color: Colors.blue,
-          shadows: [Shadow(offset: Offset(0, 1), blurRadius: 3.0, color: Color.fromARGB(150, 0, 0, 0))],
-        ), // Add shadow to back arrow
-      ),
-      // Apply background gradient
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.shade50,
-              Colors.white.withOpacity(0.8),
-              Colors.blue.shade100,
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Scrollable Content Area
-              Expanded(
-                child: _isLoading
-                    ? Center(child: CircularProgressIndicator(color: Colors.blue.shade700))
-                    : SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(), // Nicer scroll physics
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0), // Consistent padding
-                    child: Column(
-                      children: [
-                        // Calendar Card - Themed
-                        Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16), // Consistent rounding
-                          ),
-                          elevation: 3, // Subtle elevation
-                          color: Colors.white.withOpacity(0.95), // Slightly transparent white
-                          shadowColor: Colors.blue.shade100.withOpacity(0.3),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: TableCalendar<Map<String, dynamic>>(
-                              locale: 'ar_SA',
-                              focusedDay: _focusedDay,
-                              firstDay: DateTime.utc(DateTime.now().year - 2, 1, 1),
-                              lastDay: DateTime.utc(DateTime.now().year + 5, 12, 31),
-                              calendarFormat: _calendarFormat,
-                              // Keep format options simple
-                              availableCalendarFormats: const {
-                                CalendarFormat.month: 'شهر',
-                                CalendarFormat.week: 'اسبوع',
-                              },
-                              eventLoader: _getEventsForDay,
-                              // Themed Header Style
-                              headerStyle: HeaderStyle(
-                                formatButtonVisible: true,
-                                titleCentered: true,
-                                titleTextStyle: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade800, // Theme color
-                                ),
-                                formatButtonDecoration: BoxDecoration(
-                                    color: Colors.blue.shade100.withOpacity(0.5), // Lighter blue
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.blue.shade200)
-                                ),
-                                formatButtonTextStyle: TextStyle(
-                                  color: Colors.blue.shade700, // Theme color
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                                leftChevronIcon: Icon(Icons.chevron_left, color: Colors.blue.shade600),
-                                rightChevronIcon: Icon(Icons.chevron_right, color: Colors.blue.shade600),
+            )
+                : RefreshIndicator(
+              onRefresh: _fetchDoses,
+              color: kPrimaryColor,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.all(kSpacing),
+                  child: Column(
+                    children: [
+                      // Calendar Card with shadow and rounded corners
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: kPrimaryColor.withOpacity(0.1),
+                              blurRadius: 10,
+                              spreadRadius: 0,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          child: TableCalendar<Map<String, dynamic>>(
+                            locale: 'ar_SA',
+                            firstDay: DateTime.utc(DateTime.now().year - 1, 1, 1),
+                            lastDay: DateTime.utc(DateTime.now().year + 2, 12, 31),
+                            focusedDay: _focusedDay,
+                            calendarFormat: _calendarFormat,
+                            eventLoader: _getEventsForDay,
+                            selectedDayPredicate: (day) =>
+                                isSameDay(_selectedDay, day),
+                            onDaySelected: (selectedDay, focusedDay) {
+                              if (!isSameDay(_selectedDay, selectedDay)) {
+                                setState(() {
+                                  _selectedDay = selectedDay;
+                                  _focusedDay = focusedDay;
+                                });
+                              }
+                            },
+                            onFormatChanged: (format) {
+                              if (_calendarFormat != format) {
+                                setState(() => _calendarFormat = format);
+                              }
+                            },
+                            onPageChanged: (focusedDay) {
+                              _focusedDay = focusedDay;
+                            },
+                            availableCalendarFormats: const {
+                              CalendarFormat.month: 'شهر',
+                              CalendarFormat.week: 'أسبوع',
+                            },
+
+                            // Styled Calendar Header
+                            headerStyle: HeaderStyle(
+                              titleCentered: true,
+                              formatButtonVisible: true,
+                              formatButtonDecoration: BoxDecoration(
+                                color: kSecondaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              // Remove default markers/event dots
-                              calendarBuilders: CalendarBuilders(
-                                // Empty marker builder to remove event dots
-                                markerBuilder: (context, date, events) {
-                                  // Return empty container instead of dots
-                                  return const SizedBox.shrink();
-                                },
-                                // Customize day cells to show a subtle indicator for days with events
-                                // by adding a bottom border or different background
-                                defaultBuilder: (context, day, focusedDay) {
-                                  final events = _getEventsForDay(day);
+                              formatButtonTextStyle: TextStyle(
+                                color: kPrimaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              titleTextStyle: TextStyle(
+                                color: kPrimaryColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              leftChevronIcon: Icon(Icons.chevron_left, color: kPrimaryColor),
+                              rightChevronIcon: Icon(Icons.chevron_right, color: kPrimaryColor),
+                              headerPadding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: kSecondaryColor.withOpacity(0.1),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // Styled Calendar Days
+                            daysOfWeekStyle: DaysOfWeekStyle(
+                              weekdayStyle: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              weekendStyle: TextStyle(
+                                color: Colors.red.shade300,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              decoration: BoxDecoration(
+                                color: kSecondaryColor.withOpacity(0.05),
+                              ),
+                            ),
+
+                            // Styled Calendar
+                            calendarStyle: CalendarStyle(
+                              outsideDaysVisible: false,
+                              defaultDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.transparent,
+                              ),
+                              weekendDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.transparent,
+                              ),
+                              todayDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: kPrimaryColor,
+                              ),
+                              selectedDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: kSecondaryColor,
+                              ),
+                              markerDecoration: BoxDecoration(
+                                color: Colors.orange.shade400,
+                                shape: BoxShape.circle,
+                              ),
+                              markerSize: 5,
+                              markersMaxCount: 3,
+                              cellMargin: const EdgeInsets.all(6),
+                              todayTextStyle: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              selectedTextStyle: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            // Custom builders for more control
+                            calendarBuilders: CalendarBuilders(
+                              markerBuilder: (context, date, events) {
+                                if (events.isEmpty) return const SizedBox();
+
+                                return Positioned(
+                                  bottom: 1,
+                                  child: Container(
+                                    width: events.length > 2 ? 16 : 12,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: events.any((e) => e['isImportant'] == true)
+                                          ? Colors.orange.shade400
+                                          : kSecondaryColor,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                );
+                              },
+
+                              // Add subtle fills to days with events
+                              defaultBuilder: (context, day, focusedDay) {
+                                final events = _getEventsForDay(day);
+                                if (events.isNotEmpty) {
                                   return Container(
-                                    margin: const EdgeInsets.all(4),
+                                    margin: const EdgeInsets.all(5),
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      // Apply a subtle bottom border for days with events
-                                      border: events.isNotEmpty
-                                          ? Border(
-                                              bottom: BorderSide(
-                                                color: Colors.orange.shade300,
-                                                width: 2,
-                                              ),
-                                            )
-                                          : null,
-                                      // Optional: Add a very subtle background for days with events
-                                      color: events.isNotEmpty
-                                          ? Colors.orange.shade50.withOpacity(0.3)
-                                          : null,
-                                      borderRadius: BorderRadius.circular(8),
+                                      color: kSecondaryColor.withOpacity(0.08),
+                                      shape: BoxShape.circle,
                                     ),
                                     child: Text(
                                       '${day.day}',
                                       style: TextStyle(
-                                        color: events.isNotEmpty
-                                            ? Colors.blue.shade900
-                                            : null,
-                                        fontWeight: events.isNotEmpty
-                                            ? FontWeight.bold
-                                            : null,
+                                        color: kPrimaryColor,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   );
-                                },
-                              ),
-                              // Themed Calendar Style
-                              calendarStyle: CalendarStyle(
-                                outsideDaysVisible: false,
-                                todayDecoration: BoxDecoration(
-                                  color: Colors.blue.shade700.withOpacity(0.8), // Theme color
-                                  shape: BoxShape.circle,
-                                ),
-                                selectedDecoration: BoxDecoration(
-                                  color: Colors.lightBlueAccent.shade100, // Lighter accent for selection
-                                  shape: BoxShape.circle,
-                                ),
-                                weekendTextStyle: TextStyle(
-                                  color: Colors.red.shade600, // Keep weekend color distinct
-                                ),
-                                defaultTextStyle: const TextStyle(color: Colors.black87),
-                                todayTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                selectedTextStyle: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.bold),
-                                // Remove markers (another way to hide event dots)
-                                markersMaxCount: 0,
-                                markersAnchor: 0,
-                                markerMargin: EdgeInsets.zero,
-                                markerDecoration: const BoxDecoration(),
-                              ),
-                              onFormatChanged: (format) {
-                                if (_calendarFormat != format) {
-                                  setState(() => _calendarFormat = format);
                                 }
+                                return null;
                               },
-                              onPageChanged: (focusedDay) {
-                                _focusedDay = focusedDay; // Update focused day on page change
-                                // Optionally fetch doses again if your logic requires it for different months/years
-                              },
-                              onDaySelected: (selectedDay, focusedDay) {
-                                if (!isSameDay(_selectedDay, selectedDay)) {
-                                  setState(() {
-                                    _selectedDay = selectedDay;
-                                    _focusedDay = focusedDay; // Keep focused day in sync
-                                  });
-                                }
-                              },
-                              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 25),
+                      ),
 
-                        // Dose List Section Title - Themed
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                          child: Text(
-                            "جرعات يوم: ${DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay)}",
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600, // Bold but not too heavy
-                                color: Colors.blue.shade900), // Darker blue for title
-                            textAlign: TextAlign.center,
-                          ),
+                      // Date display with styled container
+                      Container(
+                        margin: const EdgeInsets.only(top: 24, bottom: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: kPrimaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.event_note_rounded,
+                              color: kPrimaryColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: kPrimaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
-                        // Dose List - Uses themed DoseTile
-                        _buildDoseList(),
+                      // Dose list with improved spacing
+                      _buildDoseList(),
 
-                        const SizedBox(height: 30), // Bottom Padding
-                      ],
-                    ),
+                      // Add bottom padding for scrolling
+                      const SizedBox(height: 30),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Helper widget to build the list of doses for the selected day.
   Widget _buildDoseList() {
     final events = _getEventsForDay(_selectedDay);
+
     if (events.isEmpty) {
-      // Themed 'No Doses' message
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40.0),
-        child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.medication_liquid_outlined,
-                  size: 50,
-                  color: Colors.grey.shade400, // Match MainPage empty state
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "لا توجد جرعات لهذا اليوم",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey.shade600, // Match MainPage empty state
-                  ),
-                ),
-              ],
-            )
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 30),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kSecondaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.medication_liquid_outlined,
+                size: 48,
+                color: kSecondaryColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "لا توجد جرعات لهذا اليوم",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kPrimaryColor.withOpacity(0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "أضف دواءً جديدًا باستخدام زر الإضافة",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
-    } else {
-      // Use ListView.separated for better spacing between tiles
-      return ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(), // Disable scrolling within the parent scroll view
-        itemCount: events.length,
-        itemBuilder: (context, index) {
-          final dose = events[index];
-          final String docId = dose['docId'] ?? 'missing_doc_id_$index';
-          final String timeString = dose['timeString'] ?? '??:??';
-          final String imageUrl = dose['imageUrl'] ?? '';
-          final String imgbbDeleteHash = dose['imgbbDeleteHash'] ?? '';
-
-          // Use the themed DoseTile
-          return DoseTile(
-            key: ValueKey(docId + timeString + imageUrl), // More robust key
-            medicationName: dose['medicationName'] ?? 'غير مسمى',
-            nextDose: timeString,
-            docId: docId,
-            imageUrl: imageUrl,
-            imgbbDeleteHash: imgbbDeleteHash,
-            onDataChanged: _fetchDoses, // Pass callback to refresh list after changes
-          );
-        },
-        separatorBuilder: (context, index) => const SizedBox(height: 8), // Space between cards
-      );
     }
+
+    return Column(
+      children: [
+        for (int index = 0; index < events.length; index++) ...[
+          DoseTile(
+            key: ValueKey('${events[index]['docId']}_${events[index]['timeString']}'),
+            medicationName: events[index]['medicationName'],
+            nextDose: events[index]['timeString'],
+            docId: events[index]['docId'],
+            imageUrl: events[index]['imageUrl'],
+            imgbbDeleteHash: events[index]['imgbbDeleteHash'],
+            onDataChanged: _fetchDoses,
+          ),
+          // Add space between tiles except for the last one
+          if (index < events.length - 1) const SizedBox(height: 12),
+        ],
+      ],
+    );
   }
 }
 
-// --- Themed DoseTile Widget ---
 class DoseTile extends StatefulWidget {
   final String medicationName;
   final String nextDose; // formatted time string
@@ -760,21 +862,36 @@ class DoseTile extends StatefulWidget {
   _DoseTileState createState() => _DoseTileState();
 }
 
-class _DoseTileState extends State<DoseTile> {
+class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
-  String _doseStatus = 'pending'; // Initial status
-  bool _isLoadingStatus = true; // Loading indicator for status check
+  String _doseStatus = 'pending';
+  bool _isLoadingStatus = true;
+  late AnimationController _animationController;
+  late Animation<double> _expandAnimation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
     _checkDoseStatus();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant DoseTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Re-check status if docId or time changes (though less likely here)
     if (oldWidget.docId != widget.docId || oldWidget.nextDose != widget.nextDose) {
       _checkDoseStatus();
     }
@@ -805,7 +922,7 @@ class _DoseTileState extends State<DoseTile> {
 
       final data = doc.data()!;
       final missedDoses = data['missedDoses'] as List<dynamic>? ?? [];
-      final selectedDay = context.findAncestorStateOfType<_DoseScheduleState>()?._selectedDay ?? DateTime.now(); // Get selected day from parent state
+      final selectedDay = context.findAncestorStateOfType<_DoseScheduleState>()?._selectedDay ?? DateTime.now();
       final normalizedSelectedDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
 
       final doseTime = TimeUtils.parseTime(widget.nextDose);
@@ -825,7 +942,7 @@ class _DoseTileState extends State<DoseTile> {
             // Check if the dose time and date match the current tile's time and selected day
             if (scheduledDate.hour == doseTime.hour &&
                 scheduledDate.minute == doseTime.minute &&
-                isSameDay(normalizedScheduledDate, normalizedSelectedDay) ) {
+                isSameDay(normalizedScheduledDate, normalizedSelectedDay)) {
               currentStatus = dose['status'] as String? ?? 'pending';
               break; // Found the status for this specific dose instance
             }
@@ -843,8 +960,8 @@ class _DoseTileState extends State<DoseTile> {
       print('Error checking dose status for ${widget.docId}: $e');
       if (mounted) {
         setState(() {
-          _isLoadingStatus = false; // Stop loading on error
-          _doseStatus = 'pending'; // Reset to pending on error
+          _isLoadingStatus = false;
+          _doseStatus = 'pending';
         });
       }
     }
@@ -860,7 +977,14 @@ class _DoseTileState extends State<DoseTile> {
 
     if (doseTime == null) {
       print("Error: Could not parse dose time for toggling status.");
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في تحديث حالة الجرعة."), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("خطأ في تحديث حالة الجرعة."),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
       return;
     }
 
@@ -874,7 +998,7 @@ class _DoseTileState extends State<DoseTile> {
     final targetTimestamp = Timestamp.fromDate(targetDateTime);
     final newStatus = _doseStatus == 'taken' ? 'pending' : 'taken';
 
-    setState(() => _isLoadingStatus = true); // Show loading while updating
+    setState(() => _isLoadingStatus = true);
 
     try {
       final docRef = FirebaseFirestore.instance
@@ -890,12 +1014,10 @@ class _DoseTileState extends State<DoseTile> {
         }
 
         final data = snapshot.data()!;
-        // Ensure missedDoses is treated as List<Map<String, dynamic>>
         final missedDosesRaw = data['missedDoses'] as List<dynamic>? ?? [];
         final List<Map<String, dynamic>> missedDoses = List<Map<String, dynamic>>.from(
             missedDosesRaw.whereType<Map<String, dynamic>>()
         );
-
 
         int foundIndex = -1;
         for (int i = 0; i < missedDoses.length; i++) {
@@ -908,34 +1030,30 @@ class _DoseTileState extends State<DoseTile> {
         }
 
         if (foundIndex != -1) {
-          // Update existing entry
           missedDoses[foundIndex]['status'] = newStatus;
-          missedDoses[foundIndex]['updatedAt'] = Timestamp.now(); // Add update timestamp
+          missedDoses[foundIndex]['updatedAt'] = Timestamp.now();
         } else {
-          // Add new entry if it wasn't found
           missedDoses.add({
             'scheduled': targetTimestamp,
             'status': newStatus,
-            'createdAt': Timestamp.now(), // Add creation timestamp
+            'createdAt': Timestamp.now(),
           });
         }
 
         transaction.update(docRef, {
           'missedDoses': missedDoses,
-          'lastUpdated': Timestamp.now(), // Update medication's last update time
+          'lastUpdated': Timestamp.now(),
         });
       });
 
       if (mounted) {
         setState(() {
-          _doseStatus = newStatus; // Optimistically update UI
+          _doseStatus = newStatus;
           _isLoadingStatus = false;
         });
-        widget.onDataChanged(); // Refresh the main list if needed (e.g., if filtering by status)
+        widget.onDataChanged();
 
-        // If status changed to 'taken', reschedule the notification for tomorrow
         if (newStatus == 'taken') {
-          // Cancel today's notification and schedule for tomorrow
           final notificationId = widget.docId.hashCode + doseTime.hour * 100 + doseTime.minute;
           DateTime tomorrowTime = DateTime(
             DateTime.now().year,
@@ -945,14 +1063,13 @@ class _DoseTileState extends State<DoseTile> {
             doseTime.minute,
           );
 
-          // FIX: Ensure proper docId is passed for the medication
-          print("Rescheduling notification with docId: ${widget.docId}"); // ADDED LOG
+          print("Rescheduling notification with docId: ${widget.docId}");
           await scheduleNotification(
             id: notificationId,
             title: 'تذكير الدواء',
             body: 'حان وقت تناول ${widget.medicationName}',
             scheduledTime: tomorrowTime,
-            docId: widget.docId, // Correctly pass the document ID
+            docId: widget.docId,
           );
         }
       }
@@ -961,17 +1078,20 @@ class _DoseTileState extends State<DoseTile> {
       print('Error toggling dose status: $e');
       if (mounted) {
         setState(() {
-          _isLoadingStatus = false; // Stop loading on error
-          // Revert optimistic update maybe? Or show error.
-          _checkDoseStatus(); // Re-fetch the actual status on error
+          _isLoadingStatus = false;
+          _checkDoseStatus();
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("فشل تحديث حالة الجرعة: $e"), backgroundColor: Colors.red));
+              SnackBar(
+                content: Text("فشل تحديث حالة الجرعة: $e"),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ));
         });
       }
     }
   }
 
-  // Confirmation Dialog - styled
   Future<bool?> _showConfirmationDialog({
     required BuildContext context,
     required String title,
@@ -981,11 +1101,22 @@ class _DoseTileState extends State<DoseTile> {
   }) async {
     return showDialog<bool>(
       context: context,
-      barrierDismissible: false, // User must explicitly choose
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), // Rounded corners
-        title: Text(title, style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
-        content: Text(content, style: TextStyle(color: Colors.black87)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: kPrimaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.right,
+        ),
+        content: Text(
+          content,
+          style: const TextStyle(color: Colors.black87),
+          textAlign: TextAlign.right,
+        ),
         actionsAlignment: MainAxisAlignment.spaceBetween,
         actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         actions: [
@@ -1009,32 +1140,23 @@ class _DoseTileState extends State<DoseTile> {
     );
   }
 
-  // --- Action Handlers (Edit, Finish, Delete) ---
-  // These remain logically the same but use the styled confirmation dialog
-  // and themed Snackbars.
-
   Future<void> _handleEdit(BuildContext context) async {
     final confirmed = await _showConfirmationDialog(
       context: context,
       title: "تعديل الدواء",
       content: "هل تريد الانتقال إلى شاشة تعديل بيانات هذا الدواء؟",
       confirmText: "نعم، تعديل",
-      confirmButtonColor: Colors.orange.shade700, // Use theme action colors
+      confirmButtonColor: Colors.blue.shade700,
     );
 
     if (confirmed == true && mounted) {
-      // Ensure the EditMedicationScreen exists and the route is correct
       final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => EditMedicationScreen(docId: widget.docId),
         ),
       );
-      // Check if data might have changed (e.g., if Edit screen returns true)
-      // or just always refresh
-      // if (result == true) {
       widget.onDataChanged();
-      // }
     }
   }
 
@@ -1044,14 +1166,19 @@ class _DoseTileState extends State<DoseTile> {
       title: "إنهاء الدواء",
       content: "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى اليوم ولن يظهر في الأيام القادمة.",
       confirmText: "نعم، إنهاء",
-      confirmButtonColor: Colors.red.shade700, // Use theme action colors
+      confirmButtonColor: Colors.orange.shade700,
     );
 
     if (confirmed == true) {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("خطأ: المستخدم غير مسجل."), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating));
+            SnackBar(
+              content: const Text("خطأ: المستخدم غير مسجل."),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ));
         return;
       }
 
@@ -1066,14 +1193,24 @@ class _DoseTileState extends State<DoseTile> {
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: const Text("تم إنهاء الدواء بنجاح"), backgroundColor: Colors.orange.shade700, behavior: SnackBarBehavior.floating), // Orange for finish
+              SnackBar(
+                content: const Text("تم إنهاء الدواء بنجاح"),
+                backgroundColor: Colors.green.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             );
-            widget.onDataChanged(); // Refresh the list
+            widget.onDataChanged();
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("فشل إنهاء الدواء: $e"), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating));
+                SnackBar(
+                  content: Text("فشل إنهاء الدواء: $e"),
+                  backgroundColor: Colors.red.shade700,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ));
           }
         }
       }
@@ -1086,7 +1223,7 @@ class _DoseTileState extends State<DoseTile> {
       title: "تأكيد الحذف",
       content: "هل أنت متأكد من حذف هذا الدواء؟ سيتم حذف صورته أيضاً إذا كانت مرتبطة (لا يمكن التراجع عن هذا الإجراء).",
       confirmText: "نعم، حذف",
-      confirmButtonColor: Colors.red.shade700, // Use theme action colors
+      confirmButtonColor: Colors.red.shade700,
     );
 
     if (confirmed == true) {
@@ -1098,28 +1235,43 @@ class _DoseTileState extends State<DoseTile> {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("خطأ: المستخدم غير مسجل."), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating));
+          SnackBar(
+            content: const Text("خطأ: المستخدم غير مسجل."),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ));
       return;
     }
 
     if (user != null) {
-      // Show loading indicator during deletion
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+        builder: (context) => Center(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: kPrimaryColor),
+                const SizedBox(height: 16),
+                const Text("جاري حذف الدواء..."),
+              ],
+            ),
+          ),
+        ),
       );
 
       try {
-        // Attempt to delete ImgBB image first (if hash exists)
         if (widget.imgbbDeleteHash.isNotEmpty) {
-          // IMPORTANT: Handle API Key securely in production!
-          // Avoid hardcoding keys directly in the source code.
-          // Consider using environment variables or a configuration file.
           await _deleteImgBBImage(widget.imgbbDeleteHash);
         }
 
-        // Delete Firestore document
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -1130,201 +1282,241 @@ class _DoseTileState extends State<DoseTile> {
         if (mounted) {
           Navigator.of(context).pop(); // Close loading dialog
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text("تم حذف الدواء بنجاح"), backgroundColor: Colors.green.shade700, behavior: SnackBarBehavior.floating), // Green for success
+            SnackBar(
+              content: const Text("تم حذف الدواء بنجاح"),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
           );
-          widget.onDataChanged(); // Refresh the list
+          widget.onDataChanged();
         }
       } catch (e) {
         if (mounted) {
           Navigator.of(context).pop(); // Close loading dialog
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("فشل حذف الدواء: $e"), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating));
+              SnackBar(
+                content: Text("فشل حذف الدواء: $e"),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ));
         }
       }
     }
   }
 
-  // ImgBB Deletion - Keep logic, add API Key warning
   Future<void> _deleteImgBBImage(String deleteHash) async {
-    // --- IMPORTANT SECURITY WARNING ---
-    // Hardcoding API keys is insecure. Use environment variables,
-    // a secrets manager, or a secure configuration method in production.
-    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a'; // Replace with your actual key securely
+    // SECURITY NOTE: API keys should be stored securely, not hardcoded
+    const String imgbbApiKey = 'YOUR_IMGBB_API_KEY'; // Replace with secure implementation
 
-    if (imgbbApiKey == 'YOUR_IMGBB_API_KEY' || imgbbApiKey.isEmpty || imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' /* Check for placeholder */) {
-      print("WARNING: ImgBB API Key not configured securely or is a placeholder. Skipping image deletion.");
-      return; // Skip deletion if key is not configured
+    if (imgbbApiKey == 'YOUR_IMGBB_API_KEY' || imgbbApiKey.isEmpty) {
+      print("WARNING: ImgBB API Key not configured. Skipping image deletion.");
+      return;
     }
 
-    // Construct the deletion URL (Using POST as per potential ImgBB API changes, verify their docs)
-    // Check ImgBB documentation for the correct deletion endpoint and method (GET/POST/DELETE)
-    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash'); // Base URL, add key later
+    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash');
 
     try {
-      // Example using POST (adjust if ImgBB uses DELETE or GET)
       final response = await http.post(
         url,
-        body: {'key': imgbbApiKey, 'action': 'delete'}, // Send key and action in body
+        body: {'key': imgbbApiKey, 'action': 'delete'},
       );
 
-      // Check ImgBB API documentation for expected success codes (might be 200 or others)
       if (response.statusCode == 200) {
-        print("ImgBB image ($deleteHash) deletion request sent successfully. Response: ${response.body}");
-        // Note: ImgBB might return success even if the image was already deleted or hash is invalid.
+        print("ImgBB image deletion successful: $deleteHash");
       } else {
-        print("Failed to delete image from ImgBB ($deleteHash). Status: ${response.statusCode}, Body: ${response.body}");
-        // Log the error, but don't necessarily block Firestore deletion
+        print("Failed to delete ImgBB image: ${response.statusCode}, ${response.body}");
       }
     } catch (e) {
-      print("Error sending delete request to ImgBB ($deleteHash): $e");
-      // Log the error
+      print("Error deleting ImgBB image: $e");
     }
   }
-  // --- End Action Handlers ---
 
   @override
   Widget build(BuildContext context) {
-    // Main content of the tile
-    Widget tileContent = ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Adjust padding
-      leading: EnlargeableImage( // Use the styled image widget
-        imageUrl: widget.imageUrl,
-        width: 55, // Slightly smaller image
-        height: 55,
-      ),
-      title: Text(
-        widget.medicationName,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600, // Bold but not too heavy
-          color: Colors.blue.shade900, // Darker blue for title
-        ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4.0),
-        child: Row( // Use Row for icon + time
-          children: [
-            Icon(Icons.access_time_rounded, size: 15, color: Colors.blue.shade700),
-            const SizedBox(width: 4),
-            Text(
-              widget.nextDose,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.blue.shade700, // Consistent blue
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-      // Trailing section for status and expand icon
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Status Indicator / Button
-          _isLoadingStatus
-              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-              : IconButton(
-            icon: Icon(
-              _doseStatus == 'taken'
-                  ? Icons.check_circle_rounded // Filled check for taken
-                  : Icons.radio_button_unchecked_rounded, // Outline for pending/missed
-              color: _doseStatus == 'taken'
-                  ? Colors.green.shade600 // Success color
-                  : Colors.grey.shade500, // Neutral color
-              size: 26, // Slightly larger icon
-            ),
-            onPressed: _toggleDoseStatus,
-            tooltip: _doseStatus == 'taken' ? "تم أخذ الجرعة" : "لم تؤخذ الجرعة",
-          ),
-          const SizedBox(width: 4), // Space before expand icon
-          // Expand Icon
-          Icon(
-            _isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-            color: Colors.grey.shade500,
-          ),
-        ],
-      ),
-      onTap: () => setState(() => _isExpanded = !_isExpanded), // Toggle expansion on tap
-    );
+    // Toggle animation when expansion state changes
+    if (_isExpanded) {
+      _animationController.forward();
+    } else {
+      _animationController.reverse();
+    }
 
-    // Action buttons shown when expanded
-    Widget actionButtons = Padding(
-      padding: const EdgeInsets.only(top: 0, bottom: 10.0, right: 16.0, left: 16.0), // Adjust padding
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildActionButton(
-            context: context,
-            icon: Icons.edit_note_rounded, // Themed icon
-            label: "تعديل",
-            color: Colors.orange.shade700, // Theme color
-            onPressed: () => _handleEdit(context),
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.event_busy_rounded, // Themed icon for finish/stop
-            label: "إنهاء",
-            color: Colors.red.shade600, // Theme color (use a distinct red)
-            onPressed: () => _handleFinishMed(context),
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.delete_forever_rounded, // Themed icon
-            label: "حذف",
-            color: Colors.red.shade800, // Darker red for delete
-            onPressed: () => _handleDelete(context),
-          ),
-        ],
-      ),
-    );
-
-    // Combine into a Card with themed border and shadow
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 0), // Adjust margin
+      elevation: 2,
+      shadowColor: kPrimaryColor.withOpacity(0.2),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12), // Consistent rounding
-        side: BorderSide( // Add border based on status
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        side: BorderSide(
           color: _doseStatus == 'taken'
-              ? Colors.green.shade200.withOpacity(0.7)
-              : Colors.grey.shade300.withOpacity(0.7),
+              ? Colors.green.shade300.withOpacity(0.5)
+              : kSecondaryColor.withOpacity(0.2),
           width: 1.5,
         ),
       ),
-      elevation: 1.5, // Softer elevation
-      shadowColor: Colors.blue.shade100.withOpacity(0.2),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => setState(() => _isExpanded = !_isExpanded), // Toggle on tap
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        onTap: () => setState(() => _isExpanded = !_isExpanded),
+        splashColor: kPrimaryColor.withOpacity(0.05),
+        highlightColor: kPrimaryColor.withOpacity(0.05),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Apply subtle background highlight if taken
+            // Main tile content
             Container(
               decoration: BoxDecoration(
-                color: _doseStatus == 'taken' ? Colors.green.shade50.withOpacity(0.5) : Colors.transparent,
+                color: _doseStatus == 'taken'
+                    ? Colors.green.shade50.withOpacity(0.3)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.vertical(
-                    top: const Radius.circular(12),
-                    // Apply bottom radius only if not expanded
-                    bottom: Radius.circular(_isExpanded ? 0 : 12)
+                  top: Radius.circular(kBorderRadius),
+                  bottom: _isExpanded ? Radius.zero : Radius.circular(kBorderRadius),
                 ),
               ),
-              child: tileContent,
-            ),
-            // Animated expansion for action buttons
-            AnimatedCrossFade(
-              firstChild: Container(), // Empty container when collapsed
-              secondChild: Container( // Container for actions with top border
-                  decoration: BoxDecoration(
-                    border: Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // Left: Dose Status Indicator
+                  _isLoadingStatus
+                      ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: kPrimaryColor,
+                    ),
+                  )
+                      : IconButton(
+                    icon: Icon(
+                      _doseStatus == 'taken'
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked,
+                      size: 28,
+                      color: _doseStatus == 'taken'
+                          ? Colors.green.shade600
+                          : Colors.grey.shade400,
+                    ),
+                    onPressed: _toggleDoseStatus,
+                    padding: EdgeInsets.zero,
+                    tooltip: _doseStatus == 'taken' ? "تم أخذ الجرعة" : "لم تؤخذ الجرعة بعد",
                   ),
-                  child: actionButtons
+                  const SizedBox(width: 12),
+
+                  // Middle: Medication Image
+                  EnlargeableImage(
+                    imageUrl: widget.imageUrl,
+                    width: 50,
+                    height: 50,
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Right: Medication Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.medicationName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: kPrimaryColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 14,
+                              color: kSecondaryColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.nextDose,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: kSecondaryColor,
+                              ),
+                            ),
+                            if (_doseStatus == 'taken')
+                              Container(
+                                margin: const EdgeInsets.only(top: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "تم",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.green.shade800,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Expand/Collapse Icon
+                  RotationTransition(
+                    turns: Tween(begin: 0.0, end: 0.5)
+                        .animate(_animationController),
+                    child: Icon(
+                      Icons.expand_more_rounded,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                ],
               ),
-              crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-              duration: const Duration(milliseconds: 200), // Faster animation
-              sizeCurve: Curves.easeInOut,
+            ),
+
+            // Expandable actions section
+            SizeTransition(
+              sizeFactor: _expandAnimation,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: kSecondaryColor.withOpacity(0.05),
+                  border: Border(
+                    top: BorderSide(
+                      color: kSecondaryColor.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(kBorderRadius),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildActionButton(
+                      label: "تعديل",
+                      icon: Icons.edit_rounded,
+                      color: kPrimaryColor,
+                      onPressed: () => _handleEdit(context),
+                    ),
+                    _buildActionButton(
+                      label: "إنهاء",
+                      icon: Icons.event_busy_rounded,
+                      color: Colors.orange.shade700,
+                      onPressed: () => _handleFinishMed(context),
+                    ),
+                    _buildActionButton(
+                      label: "حذف",
+                      icon: Icons.delete_rounded,
+                      color: Colors.red.shade700,
+                      onPressed: () => _handleDelete(context),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -1333,21 +1525,28 @@ class _DoseTileState extends State<DoseTile> {
   }
 
   Widget _buildActionButton({
-    required BuildContext context,
-    required IconData icon,
     required String label,
+    required IconData icon,
     required Color color,
     required VoidCallback onPressed,
   }) {
     return TextButton.icon(
-      icon: Icon(icon, color: color, size: 20),
-      label: Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
       onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 18),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ),
       style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
     );
   }
 }
-// --- End DoseTile Widget ---
