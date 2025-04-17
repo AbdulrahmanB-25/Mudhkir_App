@@ -15,6 +15,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:mudhkir_app/main.dart'; // Import the notification utility
 
 // Import the screens if you're reusing components
+import '../services/AlarmNotificationHelper.dart';
 import 'add_dose.dart'; // Import TimeUtils
 
 // Constants for theming
@@ -614,7 +615,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           .update(updatedMedicine);
       if (_originalNotificationIds.isNotEmpty) {
         for (int id in _originalNotificationIds) {
-          await cancelNotification(id);
+          await AlarmNotificationHelper.cancelNotification(id);
         }
       }
       List<int> newNotificationIds = [];
@@ -637,7 +638,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
             }
             final notificationId = baseNotificationId + notificationCounter++;
             newNotificationIds.add(notificationId);
-            await scheduleDailyRepeatingNotification(
+            await AlarmNotificationHelper.scheduleDailyRepeatingNotification(
               id: notificationId,
               title: 'تذكير الدواء',
               body: 'حان وقت تناول ${_nameController.text.trim()}',
@@ -654,19 +655,20 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           if (time != null) {
             final notificationId = baseNotificationId + notificationCounter++;
             newNotificationIds.add(notificationId);
-            await scheduleWeeklyRepeatingNotification(
+            await AlarmNotificationHelper.scheduleWeeklyRepeatingNotification(
               id: notificationId,
               title: 'تذكير الدواء',
               body: 'حان وقت تناول ${_nameController.text.trim()}',
               weekday: day,
               timeOfDay: time,
               payload: widget.docId,
-              startDate: _startDate,
+              startDate: _startDate ?? DateTime.now(),
               endDate: _endDate,
             );
           }
         }
       }
+
       if (newNotificationIds.isNotEmpty) {
         await FirebaseFirestore.instance
             .collection('users')
@@ -744,28 +746,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       case 7: return "الأحد";
       default: return "";
     }
-  }
-
-  Future<void> cancelNotification(int id) async {
-    // Replace with your actual notification cancellation logic
-    print("[MOCK] Cancelling notification with ID: $id");
-    await Future.delayed(const Duration(milliseconds: 50));
-  }
-
-  Future<void> scheduleDailyRepeatingNotification({
-    required int id, required String title, required String body,
-    required TimeOfDay timeOfDay, String? payload, DateTime? startDate, DateTime? endDate}) async {
-    // Replace with your actual notification scheduling logic
-    print("[MOCK] Scheduling Daily Notification: ID=$id, Title=$title, Time=${timeOfDay.format(context)}, Payload=$payload");
-    await Future.delayed(const Duration(milliseconds: 50));
-  }
-
-  Future<void> scheduleWeeklyRepeatingNotification({
-    required int id, required String title, required String body,
-    required int weekday, required TimeOfDay timeOfDay, String? payload, DateTime? startDate, DateTime? endDate}) async {
-    // Replace with your actual notification scheduling logic
-    print("[MOCK] Scheduling Weekly Notification: ID=$id, Title=$title, Weekday=$weekday, Time=${timeOfDay.format(context)}, Payload=$payload");
-    await Future.delayed(const Duration(milliseconds: 50));
   }
 
   @override

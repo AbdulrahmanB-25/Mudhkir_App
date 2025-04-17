@@ -106,4 +106,19 @@ class NotificationService {
       debugPrint('[NotificationService] Error clearing redirect data: $e');
     }
   }
+
+  Future<void> trackNotificationEvent(String eventType, String payload) async {
+    try {
+      if (!kIsWeb) {
+        await _channel.invokeMethod('trackNotificationEvent', {
+          'eventType': eventType,
+          'payload': payload,
+        });
+        debugPrint('[NotificationService] Tracked event: $eventType, Payload: $payload');
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] Error tracking notification event: $e');
+    }
+  }
 }
+

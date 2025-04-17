@@ -9,6 +9,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // If using .env
+import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
+import 'package:mudhkir_app/services/notification_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,7 +36,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // Local notifications plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+FlutterLocalNotificationsPlugin();
 
 // --- Background Message Handler (FCM) ---
 @pragma('vm:entry-point') // Ensures tree shaking doesn't remove this
@@ -98,125 +100,14 @@ Future<void> scheduleNotification({
   required DateTime scheduledTime,
   required String docId, // Payload to identify the dose/reminder
 }) async {
-  // ADDED LOG: Check received docId
-  print("[ScheduleNotification] Received call with docId: '$docId', id: $id");
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final bool vibrationEnabled = prefs.getBool('vibrationEnabled') ?? true;
-    final bool soundEnabled = prefs.getBool('soundEnabled') ?? true;
-
-    // Determine Channel ID and Name based on settings
-    String channelId = 'medication_channel';
-    String channelName = 'Medication Reminders';
-    if (soundEnabled && vibrationEnabled) {
-      channelId += '_sound_on_vib_on';
-      channelName += ' (Sound & Vibration)';
-    } else if (soundEnabled && !vibrationEnabled) {
-      channelId += '_sound_on_vib_off';
-      channelName += ' (Sound Only)';
-    } else if (!soundEnabled && vibrationEnabled) {
-      channelId += '_sound_off_vib_on';
-      channelName += ' (Vibration Only)';
-    } else {
-      channelId += '_sound_off_vib_off';
-      channelName += ' (Silent)';
-    }
-
-    // Configure Android Notification Details
-    final Int64List? vibrationPattern = vibrationEnabled
-        ? Int64List.fromList([0, 500, 100, 500, 100, 1000]) // Example pattern
-        : null;
-
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelName,
-      channelDescription: 'Channel for medication reminders based on user settings.',
-      importance: Importance.max,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      enableVibration: vibrationEnabled,
-      vibrationPattern: vibrationPattern,
-      playSound: soundEnabled,
-      sound: soundEnabled ? const RawResourceAndroidNotificationSound('alarm_sound') : null,
-      audioAttributesUsage: AudioAttributesUsage.alarm,
-      enableLights: true,
-      ledColor: Colors.red,
-      ledOnMs: 1000,
-      ledOffMs: 500,
-      autoCancel: true, // IMPORTANT: This ensures notification is dismissed on tap
-      ongoing: false,   // CHANGED: Changed from true to allow auto-cancellation
-      timeoutAfter: 120000, // 2 minutes
-      fullScreenIntent: true,
-      category: AndroidNotificationCategory.alarm,
-    );
-
-    // Configure iOS/macOS Notification Details
-    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    // Combine Platform Details
-    final NotificationDetails notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: darwinDetails,
-      macOS: darwinDetails,
-    );
-
-    // Payload Handling
-    final String payload = docId.isNotEmpty ? docId : "no_doc_id_${id}";
-    print('[ScheduleNotification] Scheduling notification ID: $id with payload: $payload for time: $scheduledTime');
-
-    // Schedule the Notification using Timezone-aware DateTime
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledTime, tz.local),
-      notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: payload,
-    );
-
-    print('[ScheduleNotification] Successfully scheduled notification $id for $scheduledTime (repeats daily). Payload: $payload');
-
-  } catch (e, stacktrace) {
-    print('[ScheduleNotification] Error scheduling notification $id: $e');
-    print('[ScheduleNotification] Stacktrace: $stacktrace');
-  }
-}
-
-// Change how notification listeners are set up
-void _setupNotificationListeners() {
-  flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails().then((details) {
-    if (details != null && details.didNotificationLaunchApp && details.notificationResponse != null) {
-      // App was launched by tapping on notification - this is already handled
-      final payload = details.notificationResponse?.payload;
-      if (payload != null && payload.isNotEmpty && payload != "no_doc_id") {
-        print("[Notification Launch] App launched by tapping notification with payload: $payload");
-      }
-    }
-  });
-
-  // Update the notification display callback implementation
-  // Note: iOS foreground notification handling is now different in v19+
-  flutterLocalNotificationsPlugin
-      .initialize(
-        InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          iOS: DarwinInitializationSettings(),
-        ),
-        onDidReceiveNotificationResponse: (NotificationResponse details) {
-          // Handle notification tap
-          final payload = details.payload;
-          if (payload != null && payload.isNotEmpty) {
-            print("[Notification Tap] User tapped notification with payload: $payload");
-            _storeNotificationRedirectData(payload);
-          }
-        },
-      );
+  // Use the AlarmNotificationHelper instead
+  await AlarmNotificationHelper.scheduleAlarmNotification(
+    id: id,
+    title: title,
+    body: body,
+    scheduledTime: scheduledTime,
+    medicationId: docId,
+  );
 }
 
 // --- Reschedule All Notifications Function ---
@@ -231,7 +122,7 @@ Future<void> rescheduleAllNotifications() async {
   try {
     // Cancel All Existing Notifications first
     print("[Reschedule] Cancelling all previous notifications...");
-    await flutterLocalNotificationsPlugin.cancelAll();
+    await AlarmNotificationHelper.cancelAllNotifications();
     print("[Reschedule] Previous notifications cancelled.");
 
     // Fetch Medications
@@ -270,8 +161,8 @@ Future<void> rescheduleAllNotifications() async {
               print("[Reschedule] Scheduling first occurrence for today: $scheduledTime");
             }
 
-            int uniqueNotificationId = (docId.hashCode ^ time.hashCode) + notificationIdCounter;
-            notificationIdCounter++;
+            // Create a more stable notification ID that doesn't depend on a counter
+            int uniqueNotificationId = (docId.hashCode ^ time.hashCode).abs() % 100000;
 
             print("[Reschedule] >>> Scheduling Check: Medication ID: $docId, Time: $timeStr, Notification ID: $uniqueNotificationId");
 
@@ -281,12 +172,12 @@ Future<void> rescheduleAllNotifications() async {
               continue; // Skip this time slot if docId is invalid
             }
 
-            await scheduleNotification(
+            await AlarmNotificationHelper.scheduleAlarmNotification(
               id: uniqueNotificationId,
               title: 'تذكير الدواء',
               body: 'حان وقت تناول $medicationName',
               scheduledTime: scheduledTime,
-              docId: docId, // Pass Firestore document ID as payload
+              medicationId: docId, // Pass Firestore document ID as payload
             );
           } else {
             print("[Reschedule] WARN: Could not parse time string: '$timeStr' for medication $docId");
@@ -348,12 +239,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        pageTransitionsTheme: PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-            TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-          },
-        ),
       ),
       home: const AuthWrapper(),
       routes: {
@@ -417,6 +302,10 @@ void main() async {
     print("[Timezone] ERROR setting local timezone: $e. Using system default.");
   }
 
+  // Initialize AlarmNotificationHelper
+  await AlarmNotificationHelper.initialize();
+  print("[AlarmHelper] Initialization complete");
+
   // Firebase Messaging Setup
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   NotificationSettings fcmSettings = await messaging.requestPermission(
@@ -424,61 +313,13 @@ void main() async {
   );
   print('[FCM] User granted permission: ${fcmSettings.authorizationStatus}');
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     print('[FCM] Got a message whilst in the foreground: ${message.messageId}');
-    // Decide if you need to handle foreground FCM messages
+    if (message.data.containsKey('payload')) {
+      final payload = message.data['payload'];
+      await NotificationService().trackNotificationEvent("received", payload);
+    }
   });
-
-  // Local Notifications Initialization
-  const AndroidInitializationSettings androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-      
-  // The DarwinInitializationSettings constructor has changed in v19
-  const DarwinInitializationSettings darwinSettings = DarwinInitializationSettings(
-    requestAlertPermission: false, 
-    requestBadgePermission: false, 
-    requestSoundPermission: false,
-  );
-  
-  const InitializationSettings initSettings = InitializationSettings(
-    android: androidSettings, 
-    iOS: darwinSettings, 
-    macOS: darwinSettings,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(
-    initSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) async {
-      // Handle notification tap
-      final String? payload = response.payload;
-      if (payload != null && payload.isNotEmpty) {
-        print("[Notification Tap] Notification tapped with payload: $payload");
-        
-        // Store the medication ID for navigation
-        await _storeNotificationRedirectData(payload);
-        
-        // Cancel the notification immediately to ensure it's removed
-        try {
-          // Fix the nullable int error by checking if id is not null
-          if (response.id != null) {
-            await flutterLocalNotificationsPlugin.cancel(response.id!);
-            print("[Notification] Cancelled notification ID: ${response.id}");
-          }
-        } catch (e) {
-          print("[Notification] Error cancelling notification: $e");
-        }
-        
-        // Handle immediate navigation if app is already running
-        if (navigatorKey.currentState != null && FirebaseAuth.instance.currentUser != null) {
-          navigatorKey.currentState!.pushNamed(
-            '/medication_detail',
-            arguments: {'docId': payload},
-          );
-          print("[Navigation] Navigated to medication detail with docId: $payload");
-        }
-      }
-    },
-  );
 
   // Add check for pending notification redirects on normal app launch
   final redirectData = await _checkNotificationRedirect();
@@ -518,22 +359,22 @@ void main() async {
   runApp(const MyApp());
 }
 
-// --- Example Test Notification Function (Optional) ---
+// --- Example Test Notification Function ---
 Future<void> _sendTestNotification(BuildContext context) async {
   print("[Test Notification] Scheduling test notification...");
   final now = DateTime.now();
-  final testTime = now.add(const Duration(seconds: 5));
-  await scheduleNotification(
+  final testTime = now.add(const Duration(seconds: 5)); // Schedule 5 seconds from now
+  await AlarmNotificationHelper.scheduleAlarmNotification(
     id: 99999, // Unique ID for test
-    title: "تذكير تجريبي",
-    body: "هذا إشعار تجريبي. اضغط للاختبار.",
+    title: "Test Notification",
+    body: "This is a test notification. Tap to test redirection.",
     scheduledTime: testTime,
-    docId: 'test_payload_123', // Use a clear test payload
+    medicationId: 'test_payload_123', // Use a clear test payload
   );
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text("تم جدولة إشعار تجريبي (سيظهر خلال 5 ثوانٍ)"),
+        content: const Text("Test notification scheduled (will appear in 5 seconds)."),
         backgroundColor: Colors.green.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

@@ -1550,3 +1550,4 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
     );
   }
 }
+
