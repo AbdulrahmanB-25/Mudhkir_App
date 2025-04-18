@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_init;
+import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
+import '../main.dart'; // Import to access navigatorKey
 
 class AlarmNotificationHelper {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -26,7 +28,7 @@ class AlarmNotificationHelper {
     // Android settings
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // iOS settings
+    // iOS settings - Updated to remove deprecated callback
     final iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -43,6 +45,8 @@ class AlarmNotificationHelper {
     bool? ok = await _notificationsPlugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
+      // Add a callback for background notifications if needed
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
     debugPrint("[AlarmHelper] Plugin initialized: $ok");
 
@@ -180,15 +184,63 @@ class AlarmNotificationHelper {
     debugPrint(
         "[AlarmHelper] Notification tapped: id=${response.id}, action=${response.actionId}, payload=${response.payload}");
     final payload = response.payload ?? '';
+
     if (response.actionId == 'TAKE_ACTION') {
-      // Mark medication taken...
+      // Mark medication taken and navigate to detail page
       debugPrint("[AlarmHelper] TAKE_ACTION for $payload");
+      _navigateToMedicationDetail(payload, markAsTaken: true);
     } else if (response.actionId == 'SNOOZE_ACTION') {
       debugPrint("[AlarmHelper] SNOOZE_ACTION for $payload");
       _handleSnooze(response.id ?? 0, payload);
     } else {
-      // Default tap
+      // Default tap - Navigate to medication detail page
       debugPrint("[AlarmHelper] Default tap for $payload");
+      _navigateToMedicationDetail(payload);
+    }
+  }
+
+  // --------------------
+  // Navigation to Medication Detail Page
+  // --------------------
+  static Future<void> _navigateToMedicationDetail(String medicationId, {bool markAsTaken = false}) async {
+    if (medicationId.isEmpty) {
+      debugPrint("[AlarmHelper] Cannot navigate: Empty medication ID");
+      return;
+    }
+
+    try {
+      // Create a confirmation key to track that we've shown this notification
+      final String timeIso = DateTime.now().toUtc().toIso8601String();
+      final String confirmationKey = 'PREF_CONFIRMATION_SHOWN_PREFIX${medicationId}_$timeIso';
+
+      // Check if we've already shown this notification
+      final prefs = await SharedPreferences.getInstance();
+      final bool alreadyShown = prefs.getBool(confirmationKey) ?? false;
+
+      if (alreadyShown) {
+        debugPrint("[AlarmHelper] Notification for $medicationId already handled, skipping navigation");
+        return;
+      }
+
+      // Mark this notification as shown
+      await prefs.setBool(confirmationKey, true);
+
+      // Use the navigator key to navigate to the medication detail page
+      navigatorKey.currentState?.pushNamed(
+        '/medication_detail',
+        arguments: {
+          'docId': medicationId,
+          'fromNotification': true,
+          'needsConfirmation': true,
+          'confirmationTimeIso': timeIso,
+          'confirmationKey': confirmationKey,
+          'autoMarkAsTaken': markAsTaken,  // Optional flag for auto-marking as taken
+        },
+      );
+
+      debugPrint("[AlarmHelper] Navigated to medication detail for $medicationId");
+    } catch (e) {
+      debugPrint("[AlarmHelper] Error navigating to medication detail: $e");
     }
   }
 
@@ -272,7 +324,7 @@ class AlarmNotificationHelper {
         tzTime,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: medicationId,
+        payload: medicationId,  // Use medicationId as payload for navigation
       );
       debugPrint("[AlarmHelper] Alarm $id scheduled");
     } catch (e) {
@@ -329,7 +381,7 @@ class AlarmNotificationHelper {
         first,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: payload,
+        payload: payload, // This should be the medication ID for navigation
         matchDateTimeComponents: DateTimeComponents.time,
       );
       debugPrint("[AlarmHelper] DAILY $id scheduled");
@@ -385,7 +437,7 @@ class AlarmNotificationHelper {
         first,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: payload,
+        payload: payload, // This should be the medication ID for navigation
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       );
       debugPrint("[AlarmHelper] WEEKLY $id scheduled");
@@ -416,6 +468,7 @@ class AlarmNotificationHelper {
     }
     return sched;
   }
+
   static int generateNotificationId(String docId, DateTime scheduledUtcTime) {
     // Combine hash codes of medication ID and the specific UTC time
     final int docHash = docId.hashCode & 0x0FFFFFFF; // Mask to keep positive and smaller range
@@ -474,4 +527,22 @@ class AlarmNotificationHelper {
 
 extension on IOSFlutterLocalNotificationsPlugin {
   setNotificationCategories(List<DarwinNotificationCategory> list) {}
+}
+
+// Required for background notification processing
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  // This function handles notification taps that happen while the app is in the background
+  final String? payload = response.payload;
+
+  // Cannot use navigatorKey directly here, so we'll store payload data in shared prefs
+  // and handle it when the app is brought to foreground
+  if (payload != null && payload.isNotEmpty) {
+    // In a real implementation, you would store this in SharedPreferences
+    // and check for it when your app launches/resumes
+    print("[Background] Notification tapped with payload: $payload");
+
+    // You'll need a mechanism to detect this when the app is opened
+    // and then navigate to the medication detail page
+  }
 }
