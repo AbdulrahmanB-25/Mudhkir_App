@@ -160,6 +160,12 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       final tz.Location local = tz.local;
       final tz.TZDateTime now = tz.TZDateTime.now(local);
 
+      // Calculate start and end of today for filtering today's doses
+      final tz.TZDateTime todayStart = tz.TZDateTime(local, now.year, now.month, now.day);
+      final tz.TZDateTime tomorrowStart = todayStart.add(const Duration(days: 1));
+
+      print("[Scheduling] Today's window: $todayStart to $tomorrowStart");
+
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
         final docId = doc.id;
@@ -209,6 +215,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               scheduledTime: doseTime.toLocal(),
               medicationId: docId,
             );
+            // Store all upcoming doses for processing, not just today's doses
             if (doseTime.isAfter(now)) {
               upcomingDoses.add({'docId': docId, 'time': doseTime});
             }
@@ -219,19 +226,33 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       }
 
       final prefs = await SharedPreferences.getInstance();
-      if (upcomingDoses.isNotEmpty) {
-        upcomingDoses.sort((a, b) => (a['time'] as tz.TZDateTime).compareTo(b['time'] as tz.TZDateTime));
-        final nextDose = upcomingDoses.first;
+
+      // Filter doses to only include today's doses for display purposes
+      List<Map<String, dynamic>> todayDoses = upcomingDoses
+          .where((dose) {
+        final doseTime = dose['time'] as tz.TZDateTime;
+        return doseTime.isAfter(now) &&
+            doseTime.isAfter(todayStart) &&
+            doseTime.isBefore(tomorrowStart);
+      }).toList();
+
+      print("[Scheduling] Found ${todayDoses.length} doses for today out of ${upcomingDoses.length} total upcoming doses");
+
+      if (todayDoses.isNotEmpty) {
+        // Sort today's doses to find the closest one
+        todayDoses.sort((a, b) => (a['time'] as tz.TZDateTime).compareTo(b['time'] as tz.TZDateTime));
+        final nextDose = todayDoses.first;
         final nextDoseTime = nextDose['time'] as tz.TZDateTime;
         final nextDoseDocId = nextDose['docId'] as String;
 
         await prefs.setString(PREF_NEXT_DOSE_DOC_ID, nextDoseDocId);
         await prefs.setString(PREF_NEXT_DOSE_TIME_ISO, nextDoseTime.toUtc().toIso8601String());
-        print("[Scheduling] Next dose stored for confirmation: $nextDoseDocId at $nextDoseTime (Local)");
+        print("[Scheduling] Next dose for today stored for confirmation: $nextDoseDocId at $nextDoseTime (Local)");
       } else {
+        // No doses for today, clear stored next dose
         await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
         await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
-        print("[Scheduling] No upcoming doses found in the schedule window.");
+        print("[Scheduling] No upcoming doses found for today.");
       }
 
     } catch (e) {
@@ -242,7 +263,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
     print("[Scheduling] Scheduling process finished.");
   }
-
   List<tz.TZDateTime> _calculateNextDoseTimes({
     required tz.TZDateTime now,
     required tz.TZDateTime scheduleUntil,
@@ -914,9 +934,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           children: [
             Icon(Icons.medication_liquid_outlined, size: 40, color: kSecondaryColor),
             SizedBox(height: 10),
-            Text("لا توجد جرعات قادمة مجدولة", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey.shade700), textAlign: TextAlign.center),
-            SizedBox(height: 4),
-            Text("أضف دواء جديد باستخدام الزر أدناه.", style: TextStyle(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.center),
+            Text("لا توجد جرعات قادمة لليوم", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey.shade700), textAlign: TextAlign.center),
           ],
         ),
       ),
