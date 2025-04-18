@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:mudhkir_app/Pages/Add_Medicaiton/Add_Dosage.dart';
 import 'package:mudhkir_app/Pages/Add_Medicaiton/Add_Name_Picture.dart';
 import 'package:mudhkir_app/Pages/Add_Medicaiton/Add_Start_&_End_Date.dart';
@@ -777,155 +778,73 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                   final currentPage = _pageController.hasClients
                       ? _pageController.page?.round() ?? 0
                       : 0;
-                  return Column(
-                    children: [
-                      // Page indicator dots
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        color: Colors.transparent,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [0, 1, 2].map((index) => Container(
-                            width: 30,
-                            height: 4,
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              color: currentPage == index
-                                  ? kPrimaryColor
-                                  : kPrimaryColor.withOpacity(0.3),
-                            ),
-                          )).toList(),
+                  return Container(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    color: Colors.transparent,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Edit mode indicator (now on the left side)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: kSecondaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: kSecondaryColor.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit, color: kSecondaryColor, size: 12),
+                              const SizedBox(width: 4),
+                              Text(
+                                "وضع التعديل",
+                                style: TextStyle(
+                                  color: kSecondaryColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+
+                        // Page indicator dots (inline with edit mode)
+                        ...List.generate(3, (index) => Container(
+                          width: 24,
+                          height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            color: currentPage == index
+                                ? kPrimaryColor
+                                : kPrimaryColor.withOpacity(0.3),
+                          ),
+                        )),
+                      ],
+                    ),
                   );
                 },
               ),
             ),
-
             // PageView with added top padding for each page
             PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 60.0),
-                  child: AddNamePicturePage(
-                    formKey: _formKeyPage1,
-                    nameController: _nameController,
-                    medicineNamesFuture: _medicineNamesFuture,
-                    capturedImage: _capturedImage,
-                    uploadedImageUrl: _hasOriginalImage ? _uploadedImageUrl : null,
-                    onPickImage: _pickImage,
-                    onNext: () {
-                      if (_formKeyPage1.currentState!.validate()) {
-                        if (_capturedImage != null && _isUploading) {
-                          _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار.");
-                        } else {
-                          _nextPage();
-                        }
-                      }
-                    },
-                    onBack: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: kCardColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(kBorderRadius),
-                          ),
-                          title: const Text("هل تريد إلغاء التعديل؟", textAlign: TextAlign.center),
-                          content: const Text("سيتم تجاهل جميع التغييرات التي قمت بها.", textAlign: TextAlign.center),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              child: const Text("متابعة التحرير"),
-                            ),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(ctx).pop();
-                                Navigator.of(context).pop();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kErrorColor,
-                              ),
-                              child: const Text("نعم، إلغاء"),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                  padding: const EdgeInsets.only(top: 50.0), // Increased for edit mode indicator
+                  child: _buildNameAndPicturePage(),
                 ),
 
                 Padding(
-                  padding: const EdgeInsets.only(top: 60.0),
-                  child: AddDosagePage(
-                    formKey: _formKeyPage2,
-                    dosageController: _dosageController,
-                    dosageUnit: _dosageUnit,
-                    dosageUnits: _dosageUnits,
-                    frequencyType: _frequencyType,
-                    frequencyTypes: _frequencyTypes,
-                    frequencyNumber: _frequencyNumber,
-                    frequencyNumbers: _frequencyNumbers,
-                    selectedTimes: _selectedTimes,
-                    isAutoGeneratedTimes: _isAutoGeneratedTimes,
-                    selectedWeekdays: _selectedWeekdays,
-                    weeklyTimes: _weeklyTimes,
-                    weeklyAutoGenerated: _weeklyAutoGenerated,
-                    onDosageUnitChanged: (value) {
-                      if (value != null && mounted) setState(() => _dosageUnit = value);
-                    },
-                    onFrequencyNumberChanged: (value) {
-                      if (value != null && value != _frequencyNumber && mounted) {
-                        setState(() => _frequencyNumber = value);
-                        _updateTimeFields();
-                      }
-                    },
-                    onFrequencyTypeChanged: (value) {
-                      if (value != null && value != _frequencyType && mounted) {
-                        setState(() {
-                          _frequencyType = value;
-                          if (value == 'يومي') {
-                            _updateTimeFields();
-                            _selectedWeekdays.clear();
-                            _weeklyTimes.clear();
-                            _weeklyAutoGenerated.clear();
-                          } else {
-                            _selectedTimes = List.filled(_frequencyNumber, null, growable: true);
-                            _isAutoGeneratedTimes = List.filled(_frequencyNumber, false, growable: true);
-                            _initializeWeeklySchedule();
-                          }
-                        });
-                      }
-                    },
-                    onSelectTime: _selectTime,
-                    onWeekdaySelected: _handleWeekdaySelected,
-                    onSelectWeeklyTime: _selectWeeklyTime,
-                    onApplySameTimeToAllWeekdays: _handleApplySameTimeToAllWeekdays,
-                    onNext: () {
-                      if (_formKeyPage2.currentState!.validate()) {
-                        bool allTimesFilled = _frequencyType == 'يومي'
-                            ? _selectedTimes.every((t) => t != null)
-                            : (_selectedWeekdays.isEmpty || _selectedWeekdays.every((day) => _weeklyTimes[day] != null));
-                        if (allTimesFilled) {
-                          _nextPage();
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('الرجاء تحديد جميع أوقات الجرعات المطلوبة.'))
-                          );
-                        }
-                      }
-                    },
-                    onBack: _previousPage,
-                    getDayName: _dayName,
-                  ),
+                  padding: const EdgeInsets.only(top: 50.0), // Increased for edit mode indicator
+                  child: _buildDosagePage(),
                 ),
 
                 Padding(
-                  padding: const EdgeInsets.only(top: 60.0),
+                  padding: const EdgeInsets.only(top: 50.0), // Increased for edit mode indicator
                   child: AddStartEndDatePage(
                     formKey: _formKeyPage3,
                     startDate: _startDate,
@@ -934,6 +853,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                     onSelectEndDate: _selectEndDate,
                     onSubmit: _updateMedication,
                     onBack: _previousPage,
+                    // Modified button text for edit mode
+                    submitButtonText: "حفظ التعديلات",
                   ),
                 ),
               ],
@@ -943,5 +864,1800 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
       ),
     );
   }
+
+  // Modified AddNamePicturePage for edit mode
+  Widget _buildNameAndPicturePage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Form(
+        key: _formKeyPage1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Page heading with gradient styling
+            Center(
+              child: ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ).createShader(bounds),
+                child: Text(
+                  "تعديل الدواء",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: MediaQuery.of(context).size.width * 0.07,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Subtitle
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                "تعديل اسم الدواء أو تحديث الصورة",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25.0),
+
+            // Image picker card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kCardColor,
+                borderRadius: BorderRadius.circular(kBorderRadius),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.camera_alt, color: kPrimaryColor),
+                      const SizedBox(width: 10),
+                      Text(
+                        "تحديث صورة الدواء",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const Divider(height: 24),
+
+                  Center(
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        height: MediaQuery.of(context).size.width * 0.45,
+                        width: MediaQuery.of(context).size.width * 0.7,
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          border: Border.all(
+                            color: _capturedImage != null || _hasOriginalImage ? kPrimaryColor : Colors.grey.shade300,
+                            width: _capturedImage != null || _hasOriginalImage ? 2.0 : 1.0,
+                          ),
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          image: _capturedImage != null
+                              ? DecorationImage(
+                            image: FileImage(_capturedImage!),
+                            fit: BoxFit.cover,
+                          )
+                              : (_hasOriginalImage && _uploadedImageUrl != null)
+                              ? DecorationImage(
+                            image: NetworkImage(_uploadedImageUrl!),
+                            fit: BoxFit.cover,
+                          )
+                              : null,
+                        ),
+                        child: (!_hasOriginalImage && _capturedImage == null)
+                            ? Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: 0.8, end: 1.0),
+                              duration: const Duration(seconds: 2),
+                              curve: Curves.easeInOut,
+                              builder: (context, value, child) {
+                                return Transform.scale(
+                                  scale: value,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: kPrimaryColor.withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.camera_alt_outlined,
+                                      color: kPrimaryColor,
+                                      size: MediaQuery.of(context).size.width * 0.1,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(),
+                            ),
+                            Positioned(
+                              bottom: MediaQuery.of(context).size.width * 0.08,
+                              child: Text(
+                                'اضغط لتغيير صورة الدواء',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: MediaQuery.of(context).size.width * 0.04,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                            : (_isUploading
+                            ? Center(
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black45,
+                              borderRadius: BorderRadius.circular(kBorderRadius),
+                            ),
+                            child: const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              strokeWidth: 3,
+                            ),
+                          ),
+                        )
+                            : Stack(
+                          children: [
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.edit,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )),
+                      ),
+                    ),
+                  ),
+
+                  // Hint text for image
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: kSecondaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(kBorderRadius / 2),
+                          border: Border.all(color: kSecondaryColor.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.info_outline, color: kSecondaryColor, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              "يمكنك الاحتفاظ بالصورة الحالية أو تحديثها",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 25.0),
+
+            // Medicine name search
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kCardColor,
+                borderRadius: BorderRadius.circular(kBorderRadius),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.medication, color: kPrimaryColor),
+                      const SizedBox(width: 10),
+                      Text(
+                        "تعديل اسم الدواء",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const Divider(height: 24),
+
+                  // Medicine name input
+                  FutureBuilder<List<String>>(
+                    future: _medicineNamesFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(color: kPrimaryColor),
+                        );
+                      } else if (snapshot.hasError) {
+                        return Text("خطأ في تحميل قائمة الأدوية");
+                      } else {
+                        final suggestions = snapshot.data ?? [];
+                        return TextFormField(
+                          controller: _nameController,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'تعديل اسم الدواء',
+                            labelStyle: TextStyle(
+                              color: kPrimaryColor.withOpacity(0.8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            hintText: 'تعديل أو تغيير اسم الدواء...',
+                            prefixIcon: Icon(Icons.search, color: kPrimaryColor),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(kBorderRadius),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(kBorderRadius),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(kBorderRadius),
+                              borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(kBorderRadius),
+                              borderSide: BorderSide(color: kErrorColor, width: 1.5),
+                            ),
+                          ),
+                          validator: (value) => (value == null || value.trim().isEmpty)
+                              ? 'الرجاء إدخال اسم الدواء'
+                              : null,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30.0),
+
+            // Next Button
+            ElevatedButton(
+              onPressed: () {
+                if (_formKeyPage1.currentState!.validate()) {
+                  if (_capturedImage != null && _isUploading) {
+                    _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار.");
+                  } else {
+                    _nextPage();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 55),
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: kPrimaryColor.withOpacity(0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(kBorderRadius),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'حفظ التغييرات والمتابعة',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.arrow_forward, size: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Modified AddDosagePage for edit mode
+  Widget _buildDosagePage() {
+    return AddDosagePage(
+      formKey: _formKeyPage2,
+      dosageController: _dosageController,
+      dosageUnit: _dosageUnit,
+      dosageUnits: _dosageUnits,
+      frequencyType: _frequencyType,
+      frequencyTypes: _frequencyTypes,
+      frequencyNumber: _frequencyNumber,
+      frequencyNumbers: _frequencyNumbers,
+      selectedTimes: _selectedTimes,
+      isAutoGeneratedTimes: _isAutoGeneratedTimes,
+      selectedWeekdays: _selectedWeekdays,
+      weeklyTimes: _weeklyTimes,
+      weeklyAutoGenerated: _weeklyAutoGenerated,
+      onDosageUnitChanged: (value) {
+        if (value != null && mounted) setState(() => _dosageUnit = value);
+      },
+      onFrequencyNumberChanged: (value) {
+        if (value != null && value != _frequencyNumber && mounted) {
+          setState(() => _frequencyNumber = value);
+          _updateTimeFields();
+        }
+      },
+      onFrequencyTypeChanged: (value) {
+        if (value != null && value != _frequencyType && mounted) {
+          setState(() {
+            _frequencyType = value;
+            if (value == 'يومي') {
+              _updateTimeFields();
+              _selectedWeekdays.clear();
+              _weeklyTimes.clear();
+              _weeklyAutoGenerated.clear();
+            } else {
+              _selectedTimes = List.filled(_frequencyNumber, null, growable: true);
+              _isAutoGeneratedTimes = List.filled(_frequencyNumber, false, growable: true);
+              _initializeWeeklySchedule();
+            }
+          });
+        }
+      },
+      onSelectTime: _selectTime,
+      onWeekdaySelected: _handleWeekdaySelected,
+      onSelectWeeklyTime: _selectWeeklyTime,
+      onApplySameTimeToAllWeekdays: _handleApplySameTimeToAllWeekdays,
+      onNext: () {
+        if (_formKeyPage2.currentState!.validate()) {
+          bool allTimesFilled = _frequencyType == 'يومي'
+              ? _selectedTimes.every((t) => t != null)
+              : (_selectedWeekdays.isEmpty || _selectedWeekdays.every((day) => _weeklyTimes[day] != null));
+          if (allTimesFilled) {
+            _nextPage();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('الرجاء إكمال تعديل جميع أوقات الجرعات المطلوبة'))
+            );
+          }
+        }
+      },
+      onBack: _previousPage,
+      getDayName: _dayName,
+      // Extra parameters for edit mode
+      pageTitle: "تعديل الجرعة والأوقات",
+      pageSubtitle: "تعديل تفاصيل جرعة الدواء وأوقات تناوله",
+      dosageTitle: "تعديل تفاصيل الجرعة",
+      timesTitle: "تعديل أوقات تناول الجرعة:",
+      weeklyScheduleTitle: "تعديل جدول الجرعات الأسبوعي",
+      weeklyScheduleInstructions: "تعديل أيام وأوقات تناول الدواء الأسبوعية",
+      nextButtonText: "حفظ التغييرات والمتابعة",
+      timeSelectionPrompt: "اضغط لتعديل الوقت",
+      applyToAllButtonText: "تعديل وتطبيق نفس الوقت لجميع الأيام",
+    );
+  }
 }
 
+// Modified AddStartEndDatePage class with support for custom button text
+class AddStartEndDatePage extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final VoidCallback onSelectStartDate;
+  final VoidCallback onSelectEndDate;
+  final VoidCallback onSubmit;
+  final VoidCallback onBack;
+  final String submitButtonText;
+
+  const AddStartEndDatePage({
+    Key? key,
+    required this.formKey,
+    required this.startDate,
+    required this.endDate,
+    required this.onSelectStartDate,
+    required this.onSelectEndDate,
+    required this.onSubmit,
+    required this.onBack,
+    this.submitButtonText = 'التالي',
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+
+    return Form(
+        key: formKey,
+        child: Container(
+        decoration: const BoxDecoration(
+        color: kBackgroundColor,
+    ),
+    child: SafeArea(
+    child: Stack(
+    children: [
+    // Back button with consistent design
+    Positioned(
+    top: 15,
+    left: 10,
+    child: Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(30),
+    child: InkWell(
+    onTap: onBack,
+    borderRadius: BorderRadius.circular(30),
+    child: Container(
+    padding: const EdgeInsets.all(8.0),
+    decoration: BoxDecoration(
+    color: Colors.white,
+    shape: BoxShape.circle,
+    boxShadow: [
+    BoxShadow(
+    color: Colors.black.withOpacity(0.05),
+    blurRadius: 8,
+    offset: const Offset(0, 2),
+    ),
+    ],
+    ),
+    child: const Icon(Icons.arrow_back, color: kPrimaryColor, size: 28),
+    ),
+    ),
+    ),
+    ),
+
+    // Main content
+    Padding(
+    padding: EdgeInsets.only(
+    left: horizontalPadding,
+    right: horizontalPadding,
+    top: verticalPadding + 35, // Add space for back button
+    bottom: verticalPadding,
+    ),
+    child: SingleChildScrollView(
+    child: Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+    // Page heading with consistent gradient styling
+    Center(
+    child: ShaderMask(
+    shaderCallback: (bounds) => LinearGradient(
+    colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    ).createShader(bounds),
+    child: Text(
+    "تعديل فترة الدواء", // Changed heading
+    textAlign: TextAlign.center,
+    style: TextStyle(
+    fontSize: screenWidth * 0.07,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+    ),
+    ),
+    ),
+    ),
+
+    const SizedBox(height: 10),
+
+    // Subtitle
+    Container(
+    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+    decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    boxShadow: [
+    BoxShadow(
+    color: Colors.grey.withOpacity(0.2),
+    blurRadius: 4,
+    offset: const Offset(0, 2),
+    ),
+    ],
+    ),
+    child: Text(
+    "تعديل تاريخ بداية ونهاية تناول الدواء", // Changed subtitle
+    textAlign: TextAlign.center,
+    style: TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    color: Colors.grey.shade700,
+    ),
+    ),
+    ),
+
+    const SizedBox(height: 25.0),
+
+    // Date Card with consistent styling
+    Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+    color: kCardColor,
+    borderRadius: BorderRadius.circular(kBorderRadius),
+    boxShadow: [
+    BoxShadow(
+    color: Colors.black.withOpacity(0.05),
+    blurRadius: 10,
+    offset: const Offset(0, 4),
+    ),
+    ],
+    border: Border.all(color: Colors.grey.shade100),
+    ),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    Row(
+    children: [
+    Icon(Icons.calendar_month, color: kPrimaryColor),
+    const SizedBox(width: 10),
+    const Text(
+    "تعديل فترة تناول الدواء", // Changed heading
+    style: TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    ),
+    ),
+    ],
+    ),
+
+    const Divider(height: 24),
+
+    // Start date picker
+    ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: Container(
+    width: 48,
+    height: 48,
+    decoration: BoxDecoration(
+    color: kPrimaryColor.withOpacity(0.1),
+    shape: BoxShape.circle,
+    ),
+    child: Icon(Icons.calendar_today, color: kPrimaryColor),
+    ),
+    title: const Text(
+    "تعديل تاريخ البدء:", // Changed title
+    style: TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    ),
+    ),
+    subtitle: Text(
+    startDate != null
+    ? DateFormat.yMMMd('ar').format(startDate!)
+        : "اختر تاريخ البدء",
+    style: TextStyle(
+    fontSize: 14,
+    color: startDate != null ? Colors.black87 : Colors.grey.shade500,
+    ),
+    ),
+    trailing: TextButton.icon(
+    icon: Icon(Icons.edit_calendar, color: kPrimaryColor),
+    label: const Text("تغيير",
+    style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
+    onPressed: onSelectStartDate,
+    ),
+    ),
+
+    const SizedBox(height: 8),
+    const Divider(height: 1),
+    const SizedBox(height: 8),
+
+    // End date picker
+    ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: Container(
+    width: 48,
+    height: 48,
+    decoration: BoxDecoration(
+    color: kPrimaryColor.withOpacity(0.1),
+    shape: BoxShape.circle,
+    ),
+    child: Icon(Icons.event_available, color: kPrimaryColor),
+    ),
+    title: const Text(
+    "تعديل تاريخ الانتهاء:", // Changed title
+    style: TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    ),
+    ),
+    subtitle: Text(
+    endDate != null
+    ? DateFormat.yMMMd('ar').format(endDate!)
+        : "(اختياري) لم يتم تحديد تاريخ انتهاء",
+    style: TextStyle(
+    fontSize: 14,
+    color: endDate != null ? Colors.black87 : Colors.grey.shade500,
+    ),
+    ),
+    trailing: TextButton.icon(
+    icon: endDate != null
+    ? Icon(Icons.edit_calendar, color: kPrimaryColor)
+        : Icon(Icons.add_circle_outline, color: kPrimaryColor),
+    label: Text(
+    endDate != null ? "تغيير" : "إضافة",
+      style: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold),
+    ),
+      onPressed: onSelectEndDate,
+    ),
+    ),
+
+      // Information about end date (optional)
+      if (endDate == null)
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kSecondaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(kBorderRadius / 2),
+              border: Border.all(color: kSecondaryColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: kSecondaryColor, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "تاريخ الانتهاء اختياري. اتركه فارغاً إذا كان الدواء للاستخدام المستمر",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+      // Last updated timestamp
+      Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Row(
+          children: [
+            Icon(Icons.update, color: Colors.grey.shade600, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              "آخر تحديث: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+    ),
+    ),
+
+      const SizedBox(height: 30.0),
+
+      // Submit Button with consistent styling
+      ElevatedButton(
+        onPressed: onSubmit,
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 55),
+          backgroundColor: kPrimaryColor,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          shadowColor: kPrimaryColor.withOpacity(0.4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kBorderRadius),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              submitButtonText,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.save, size: 16),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+    ],
+    ),
+    ),
+    ),
+    ],
+    ),
+    ),
+        ),
+    );
+  }
+}
+
+// Extension to the AddDosagePage class to support edit mode text
+class AddDosagePage extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController dosageController;
+  final String dosageUnit;
+  final List<String> dosageUnits;
+  final String frequencyType;
+  final List<String> frequencyTypes;
+  final int frequencyNumber;
+  final List<int> frequencyNumbers;
+  final List<TimeOfDay?> selectedTimes;
+  final List<bool> isAutoGeneratedTimes;
+  final Set<int> selectedWeekdays;
+  final Map<int, TimeOfDay?> weeklyTimes;
+  final Map<int, bool> weeklyAutoGenerated;
+  final Function(String?) onDosageUnitChanged;
+  final Function(int?) onFrequencyNumberChanged;
+  final Function(String?) onFrequencyTypeChanged;
+  final Function(int) onSelectTime;
+  final Function(int, bool) onWeekdaySelected;
+  final Function(int) onSelectWeeklyTime;
+  final VoidCallback onApplySameTimeToAllWeekdays;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+  final String Function(int) getDayName;
+
+  // Additional properties for edit mode
+  final String pageTitle;
+  final String pageSubtitle;
+  final String dosageTitle;
+  final String timesTitle;
+  final String weeklyScheduleTitle;
+  final String weeklyScheduleInstructions;
+  final String nextButtonText;
+  final String timeSelectionPrompt;
+  final String applyToAllButtonText;
+
+  const AddDosagePage({
+    Key? key,
+    required this.formKey,
+    required this.dosageController,
+    required this.dosageUnit,
+    required this.dosageUnits,
+    required this.frequencyType,
+    required this.frequencyTypes,
+    required this.frequencyNumber,
+    required this.frequencyNumbers,
+    required this.selectedTimes,
+    required this.isAutoGeneratedTimes,
+    required this.selectedWeekdays,
+    required this.weeklyTimes,
+    required this.weeklyAutoGenerated,
+    required this.onDosageUnitChanged,
+    required this.onFrequencyNumberChanged,
+    required this.onFrequencyTypeChanged,
+    required this.onSelectTime,
+    required this.onWeekdaySelected,
+    required this.onSelectWeeklyTime,
+    required this.onApplySameTimeToAllWeekdays,
+    required this.onNext,
+    required this.onBack,
+    required this.getDayName,
+    this.pageTitle = "الجرعة والأوقات",
+    this.pageSubtitle = "أدخل تفاصيل جرعة الدواء وأوقات تناوله",
+    this.dosageTitle = "تفاصيل الجرعة",
+    this.timesTitle = "أوقات تناول الجرعة:",
+    this.weeklyScheduleTitle = "جدول الجرعات الأسبوعي",
+    this.weeklyScheduleInstructions = "اختر الأيام التي تحتاج لتناول الدواء فيها وحدد الوقت لكل يوم",
+    this.nextButtonText = "التالي",
+    this.timeSelectionPrompt = "اضغط لاختيار الوقت",
+    this.applyToAllButtonText = "تطبيق نفس الوقت لجميع الأيام",
+  }) : super(key: key);
+
+  // --- Weekly Schedule Section UI ---
+  Widget _buildWeeklyScheduleSection(BuildContext context) {
+    // Sort the days according to the week order (Sunday to Saturday in Arabic convention)
+    // Using 1=Monday through 7=Sunday ISO standard
+    List<int> allDays = [1, 2, 3, 4, 5, 6, 7]; // Monday to Sunday
+
+    // Create a sorted list of selected days
+    List<int> sortedDays = selectedWeekdays.toList()..sort();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCardColor,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calendar_today, color: kPrimaryColor),
+              const SizedBox(width: 10),
+              Text(
+                weeklyScheduleTitle,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+
+          // Instructions text
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kSecondaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(kBorderRadius / 2),
+              border: Border.all(color: kSecondaryColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: kSecondaryColor, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    weeklyScheduleInstructions,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Day selection chips with improved styling and layout
+          const Text(
+            "أيام الأسبوع:",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Fixed to use horizontal ListView for full weekday names
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: allDays.map((day) {
+                bool selected = selectedWeekdays.contains(day);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FilterChip(
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    labelStyle: TextStyle(
+                      color: selected ? Colors.white : Colors.black87,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 14,
+                    ),
+                    label: Text(getDayName(day)), // Full day name
+                    selected: selected,
+                    onSelected: (value) => onWeekdaySelected(day, value),
+                    selectedColor: kPrimaryColor,
+                    checkmarkColor: Colors.white,
+                    backgroundColor: selected ? kPrimaryColor.withOpacity(0.1) : Colors.grey.shade100,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: selected ? kPrimaryColor : Colors.grey.shade300,
+                        width: selected ? 1.5 : 1,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    showCheckmark: false,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          if (selectedWeekdays.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "الرجاء اختيار يوم واحد على الأقل",
+                style: TextStyle(fontSize: 14, color: kErrorColor, fontWeight: FontWeight.w500),
+              ),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+
+                // Apply same time button
+                ElevatedButton.icon(
+                  onPressed: onApplySameTimeToAllWeekdays,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kSecondaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.access_time_filled),
+                  label: Text(
+                    applyToAllButtonText,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Display a time picker for each selected day with improved styling
+                Column(
+                  children: sortedDays.map((day) {
+                    final time = weeklyTimes[day];
+                    final isAuto = weeklyAutoGenerated[day] ?? false;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(kBorderRadius),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: time != null
+                              ? kPrimaryColor.withOpacity(0.3)
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(kBorderRadius),
+                        child: InkWell(
+                          onTap: () => onSelectWeeklyTime(day),
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: kPrimaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      getDayName(day).substring(0, 2),
+                                      style: TextStyle(
+                                        color: kPrimaryColor,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        getDayName(day),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            time != null
+                                                ? Icons.access_time_filled
+                                                : Icons.access_time,
+                                            size: 16,
+                                            color: time != null
+                                                ? kPrimaryColor
+                                                : Colors.grey.shade500,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            time == null
+                                                ? timeSelectionPrompt
+                                                : TimeUtils.formatTimeOfDay(context, time),
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: time != null
+                                                  ? FontWeight.w500
+                                                  : FontWeight.normal,
+                                              color: time != null
+                                                  ? Colors.black87
+                                                  : Colors.grey.shade600,
+                                            ),
+                                          ),
+                                          if (time != null && isAuto)
+                                            Padding(
+                                              padding: const EdgeInsets.only(right: 8),
+                                              child: Tooltip(
+                                                message: "وقت تم إنشاؤه تلقائيًا",
+                                                child: Icon(
+                                                  Icons.smart_toy,
+                                                  size: 14,
+                                                  color: kSecondaryColor,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.edit_calendar,
+                                  color: time != null
+                                      ? kPrimaryColor
+                                      : Colors.grey.shade400,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+
+    // Determine if all required times are selected for validation purposes
+    bool allTimesSelected = frequencyType == 'يومي'
+        ? !selectedTimes.any((t) => t == null) // Check daily times
+        : (selectedWeekdays.isEmpty || weeklyTimes.length == selectedWeekdays.length); // Check weekly times
+
+    return Form(
+      key: formKey,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: kBackgroundColor,
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Back button with consistent design
+              Positioned(
+                top: 15,
+                left: 10,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(30),
+                  child: InkWell(
+                    onTap: onBack,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.arrow_back, color: kPrimaryColor, size: 28),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Main content
+              Padding(
+                padding: EdgeInsets.only(
+                  left: horizontalPadding,
+                  right: horizontalPadding,
+                  top: verticalPadding + 35, // Add space for back button
+                  bottom: verticalPadding,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Page heading with consistent gradient styling
+                      Center(
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ).createShader(bounds),
+                          child: Text(
+                            pageTitle,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: screenWidth * 0.07,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Subtitle
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          pageSubtitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 25.0),
+
+                      // Dosage Card with consistent styling
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.grey.shade100),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.medication, color: kPrimaryColor),
+                                const SizedBox(width: 10),
+                                Text(
+                                  dosageTitle,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const Divider(height: 24),
+
+                            // Dosage Amount and Unit with improved styling
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: TextFormField(
+                                    controller: dosageController,
+                                    textAlign: TextAlign.center,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                                    ],
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'تعديل الجرعة',
+                                      labelStyle: TextStyle(
+                                        color: kPrimaryColor.withOpacity(0.8),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      prefixIcon: Icon(Icons.science_outlined, color: kPrimaryColor),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      errorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: kErrorColor),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      focusedErrorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: kErrorColor, width: 2.0),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      errorStyle: TextStyle(
+                                        color: kErrorColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                        horizontal: 16,
+                                      ),
+                                    ),
+                                    validator: (value) {
+                                      if (value == null || value.trim().isEmpty) {
+                                        return 'ادخل الجرعة';
+                                      }
+                                      if (double.tryParse(value.trim()) == null) {
+                                        return 'أدخل رقماً صحيحاً';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+
+                                const SizedBox(width: 12),
+
+                                Expanded(
+                                  flex: 2,
+                                  child: DropdownButtonFormField<String>(
+                                    value: dosageUnit,
+                                    decoration: InputDecoration(
+                                      labelText: 'الوحدة',
+                                      labelStyle: TextStyle(
+                                        color: kPrimaryColor.withOpacity(0.8),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                        horizontal: 16,
+                                      ),
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
+                                    onChanged: onDosageUnitChanged,
+                                    items: dosageUnits
+                                        .map((unit) => DropdownMenuItem(
+                                      value: unit,
+                                      child: Text(unit),
+                                    ))
+                                        .toList(),
+                                    validator: (value) => value == null ? 'اختر الوحدة' : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // Frequency section
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Frequency Type dropdown (always shown)
+                                Expanded(
+                                  flex: 1,
+                                  child: DropdownButtonFormField<String>(
+                                    value: frequencyType,
+                                    decoration: InputDecoration(
+                                      labelText: 'نوع التكرار',
+                                      labelStyle: TextStyle(
+                                        color: kPrimaryColor.withOpacity(0.8),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      prefixIcon: Icon(Icons.calendar_today, color: kPrimaryColor),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(kBorderRadius),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                        horizontal: 16,
+                                      ),
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
+                                    onChanged: onFrequencyTypeChanged,
+                                    items: frequencyTypes
+                                        .map((type) => DropdownMenuItem(
+                                      value: type,
+                                      child: Text(type),
+                                    ))
+                                        .toList(),
+                                    validator: (value) => value == null ? 'اختر النوع' : null,
+                                  ),
+                                ),
+
+                                // Only show frequency number if the frequency type is daily
+                                if (frequencyType == 'يومي') ...[
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: DropdownButtonFormField<int>(
+                                      value: frequencyNumber,
+                                      decoration: InputDecoration(
+                                        labelText: 'عدد المرات',
+                                        labelStyle: TextStyle(
+                                          color: kPrimaryColor.withOpacity(0.8),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        prefixIcon: Icon(Icons.repeat, color: kPrimaryColor),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(kBorderRadius),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                          borderRadius: BorderRadius.circular(kBorderRadius),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(kBorderRadius),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                          horizontal: 16,
+                                        ),
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.black87,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
+                                      onChanged: onFrequencyNumberChanged,
+                                      items: frequencyNumbers
+                                          .map((num) => DropdownMenuItem(
+                                        value: num,
+                                        child: Text(num.toString()),
+                                      ))
+                                          .toList(),
+                                      validator: (value) => value == null ? 'اختر العدد' : null,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 25.0),
+
+                      // Time Selection Section (Conditional)
+                      frequencyType == 'يومي'
+                          ? Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.grey.shade100),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.access_time_filled, color: kPrimaryColor),
+                                const SizedBox(width: 10),
+                                Text(
+                                  timesTitle,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const Divider(height: 24),
+
+                            // Daily time selection list with improved styling
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: frequencyNumber,
+                              itemBuilder: (context, index) {
+                                final time = selectedTimes[index];
+                                final isAuto = isAutoGeneratedTimes[index];
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: time != null
+                                        ? kPrimaryColor.withOpacity(0.05)
+                                        : Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                    border: Border.all(
+                                      color: time != null
+                                          ? kPrimaryColor.withOpacity(0.3)
+                                          : Colors.grey.shade300,
+                                      width: time != null ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                    child: InkWell(
+                                      onTap: () => onSelectTime(index),
+                                      borderRadius: BorderRadius.circular(kBorderRadius),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: time != null
+                                                    ? kPrimaryColor
+                                                    : Colors.grey.shade300,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  '${index + 1}',
+                                                  style: TextStyle(
+                                                    color: time != null
+                                                        ? Colors.white
+                                                        : Colors.grey.shade700,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    time == null
+                                                        ? 'الجرعة ${index + 1}'
+                                                        : 'الجرعة ${index + 1} (${time.format(context)})',
+                                                    style: TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight: time != null
+                                                          ? FontWeight.w600
+                                                          : FontWeight.normal,
+                                                      color: time != null
+                                                          ? Colors.black87
+                                                          : Colors.grey.shade700,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      Icon(
+                                                        time != null
+                                                            ? Icons.check_circle
+                                                            : Icons.access_time,
+                                                        size: 14,
+                                                        color: time != null
+                                                            ? Colors.green
+                                                            : Colors.grey.shade500,
+                                                      ),
+                                                      const SizedBox(width: 6),
+                                                      Text(
+                                                        time == null
+                                                            ? timeSelectionPrompt
+                                                            : TimeUtils.formatTimeOfDay(context, time),
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          color: time != null
+                                                              ? Colors.black87
+                                                              : Colors.grey.shade600,
+                                                        ),
+                                                      ),
+                                                      if (time != null && isAuto)
+                                                        Padding(
+                                                          padding: const EdgeInsets.only(right: 8),
+                                                          child: Tooltip(
+                                                            message: "وقت تم إنشاؤه تلقائيًا",
+                                                            child: Icon(
+                                                              Icons.smart_toy,
+                                                              size: 14,
+                                                              color: kSecondaryColor,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: kPrimaryColor.withOpacity(0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                Icons.edit,
+                                                color: kPrimaryColor,
+                                                size: 18,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            // Validation message if any daily time is missing
+                            if (selectedTimes.any((t) => t == null))
+                              Container(
+                                margin: const EdgeInsets.only(top: 8.0),
+                                padding: const EdgeInsets.all(8.0),
+                                decoration: BoxDecoration(
+                                  color: kErrorColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(kBorderRadius / 2),
+                                  border: Border.all(color: kErrorColor.withOpacity(0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: kErrorColor, size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'الرجاء تعديل وتحديد جميع الأوقات المطلوبة.',
+                                        style: TextStyle(
+                                          color: kErrorColor,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      )
+                          : _buildWeeklyScheduleSection(context),
+
+                      const SizedBox(height: 30.0),
+
+                      // Next Button with consistent styling
+                      ElevatedButton(
+                        onPressed: () {
+                          if (formKey.currentState!.validate() && allTimesSelected) {
+                            onNext();
+                          } else if (!allTimesSelected) {
+                            // Show snackbar if times are missing
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'الرجاء إكمال تعديل جميع أوقات الجرعات المطلوبة',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: kErrorColor,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 55),
+                          backgroundColor: kPrimaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: kPrimaryColor.withOpacity(0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kBorderRadius),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              nextButtonText,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.arrow_forward, size: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
