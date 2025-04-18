@@ -54,6 +54,7 @@ dependencies:
   flutter_local_notifications_linux: ^6.0.0
   firebase_messaging: ^15.2.5
   permission_handler: ^12.0.0+1
+  android_alarm_manager_plus: ^4.0.7
 
 dev_dependencies:
   flutter_test:

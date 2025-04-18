@@ -1147,10 +1147,14 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
   }
 
   Future<void> _handleFinishMed(BuildContext context) async {
+    // Get the selected day from the parent DoseSchedule widget
+    final _DoseScheduleState? parentState = context.findAncestorStateOfType<_DoseScheduleState>();
+    final DateTime selectedDay = parentState?._selectedDay ?? DateTime.now();
+
     final confirmed = await _showConfirmationDialog(
       context: context,
       title: "إنهاء الدواء",
-      content: "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى اليوم ولن يظهر في الأيام القادمة.",
+      content: "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى ${DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(selectedDay)} ولن يظهر في الأيام التالية.",
       confirmText: "نعم، إنهاء",
       confirmButtonColor: Colors.orange.shade700,
     );
@@ -1170,17 +1174,27 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
 
       if (user != null) {
         try {
+          // Create timestamp at end of selected day (23:59:59)
+          final DateTime endOfSelectedDay = DateTime(
+            selectedDay.year,
+            selectedDay.month,
+            selectedDay.day,
+            23,
+            59,
+            59,
+          );
+
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .collection('medicines')
               .doc(widget.docId)
-              .update({'endDate': Timestamp.now()});
+              .update({'endDate': Timestamp.fromDate(endOfSelectedDay)});
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text("تم إنهاء الدواء بنجاح"),
+                content: Text("تم إنهاء الدواء بتاريخ ${DateFormat('d MMMM', 'ar_SA').format(selectedDay)}"),
                 backgroundColor: Colors.green.shade700,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
