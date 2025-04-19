@@ -104,6 +104,9 @@ class MedicationDetailService {
         'lastUpdated': FieldValue.serverTimestamp()
       });
 
+      // Update missedDoses array for compatibility with dose_schedule
+      await _updateMissedDosesField(user.uid, docId, confirmationTime, taken ? 'taken' : 'skipped');
+
       return ServiceResult.succeeded(true);
     } catch (e) {
       print("[MedicationDetailService] Error recording confirmation: $e");
@@ -124,11 +127,22 @@ class MedicationDetailService {
         return ServiceResult.failed("مستخدم غير مسجل.");
       }
 
+      // Get original scheduled time
+      DateTime? originalTime;
+      if (originalTimeIso != null && originalTimeIso.isNotEmpty) {
+        try {
+          originalTime = DateTime.parse(originalTimeIso);
+        } catch (e) {
+          print("[MedicationDetailService] Error parsing originalTimeIso: $e");
+          // Continue with null originalTime
+        }
+      }
+
       // Use server timestamp for accurate timing
       final reschedulingData = {
         'timestamp': FieldValue.serverTimestamp(),
-        'scheduledTime': originalTimeIso != null
-            ? Timestamp.fromDate(DateTime.parse(originalTimeIso))
+        'scheduledTime': originalTime != null
+            ? Timestamp.fromDate(originalTime)
             : FieldValue.serverTimestamp(),
         'status': 'rescheduled',
         'newScheduledTime': Timestamp.fromDate(newScheduledTime),
@@ -154,12 +168,261 @@ class MedicationDetailService {
         'lastRescheduledTime': Timestamp.fromDate(newScheduledTime),
         'lastUpdated': FieldValue.serverTimestamp()
       });
-
+      
+      // Update the medication schedule if it's a daily medication
+      await _updateRescheduledTime(user.uid, docId, originalTime, newScheduledTime);
+      
+      // Mark original time as skipped and add new scheduled time
+      if (originalTime != null) {
+        // Mark the original time as skipped in missedDoses
+        await _updateMissedDosesField(user.uid, docId, originalTime, 'skipped');
+      }
+      
       return ServiceResult.succeeded(true);
     } catch (e) {
       print("[MedicationDetailService] Error recording rescheduling: $e");
       return ServiceResult.failed("خطأ في إعادة جدولة الدواء: $e");
     }
+  }
+
+  // Helper method to update missedDoses field for dose_schedule compatibility
+  Future<void> _updateMissedDosesField(String userId, String docId, DateTime scheduledTime, String status) async {
+    try {
+      final docRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('medicines')
+          .doc(docId);
+          
+      // Use transaction to safely update the missedDoses array
+      await _firestore.runTransaction((transaction) async {
+        DocumentSnapshot snapshot = await transaction.get(docRef);
+        
+        if (!snapshot.exists) {
+          throw Exception("Document does not exist!");
+        }
+        
+        Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
+        List<dynamic> missedDoses = List.from(data['missedDoses'] ?? []);
+        
+        // Check if this time already exists in the array
+        int existingIndex = -1;
+        for (int i = 0; i < missedDoses.length; i++) {
+          if (missedDoses[i] is Map && missedDoses[i].containsKey('scheduled')) {
+            Timestamp timestamp = missedDoses[i]['scheduled'] as Timestamp;
+            DateTime storedTime = timestamp.toDate();
+            if (storedTime.year == scheduledTime.year && 
+                storedTime.month == scheduledTime.month && 
+                storedTime.day == scheduledTime.day &&
+                storedTime.hour == scheduledTime.hour && 
+                storedTime.minute == scheduledTime.minute) {
+              existingIndex = i;
+              break;
+            }
+          }
+        }
+        
+        if (existingIndex >= 0) {
+          // Update existing entry
+          missedDoses[existingIndex]['status'] = status;
+          missedDoses[existingIndex]['updatedAt'] = Timestamp.now();
+        } else {
+          // Add new entry
+          missedDoses.add({
+            'scheduled': Timestamp.fromDate(scheduledTime),
+            'status': status,
+            'createdAt': Timestamp.now(),
+            'updatedAt': Timestamp.now(),
+          });
+        }
+        
+        transaction.update(docRef, {'missedDoses': missedDoses});
+      });
+      
+      print("[MedicationDetailService] Updated missedDoses for $docId at ${scheduledTime.toString()} to $status");
+      
+    } catch (e) {
+      print("[MedicationDetailService] Error updating missedDoses: $e");
+      // Don't rethrow - we don't want this to break the main flow if it fails
+    }
+  }
+  
+  // Helper method to update medication times for rescheduled doses
+  Future<void> _updateRescheduledTime(String userId, String docId, DateTime? originalTime, DateTime newScheduledTime) async {
+    try {
+      final docRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('medicines')
+          .doc(docId);
+          
+      DocumentSnapshot snapshot = await docRef.get();
+      if (!snapshot.exists) {
+        print("[MedicationDetailService] Document not found for updating times");
+        return;
+      }
+      
+      Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
+      
+      // Check if this is a daily medication with simple time format
+      if (data.containsKey('times') && data['times'] is List) {
+        List<dynamic> times = List.from(data['times']);
+        
+        // Format the new time as a string in the format the app expects (e.g. "8:00 صباحاً")
+        final int hour = newScheduledTime.hour;
+        final int minute = newScheduledTime.minute;
+        final bool isAM = hour < 12;
+        final int hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+        final String minuteStr = minute.toString().padLeft(2, '0');
+        final String period = isAM ? 'صباحاً' : 'مساءً';
+        final String formattedTime = '$hour12:$minuteStr $period';
+        
+        // First, check if we're trying to reschedule from a notification (no originalTime)
+        // In this case, we should update an existing time rather than add a new one
+        if (originalTime == null && times.isNotEmpty) {
+          // Just update the first time in the list if no original time specified
+          print("[MedicationDetailService] No original time provided, updating first time entry");
+          if (times[0] is String) {
+            times[0] = formattedTime;
+          } else if (times[0] is Map && times[0].containsKey('time')) {
+            times[0]['time'] = formattedTime;
+          }
+          
+          await docRef.update({'times': times});
+          
+          // Update timeSlots too
+          if (data.containsKey('timeSlots') && data['timeSlots'] is List) {
+            List<dynamic> timeSlots = List.from(data['timeSlots']);
+            if (timeSlots.isNotEmpty && timeSlots[0] is Map &&
+                timeSlots[0].containsKey('hour') && timeSlots[0].containsKey('minute')) {
+              timeSlots[0] = {
+                'hour': newScheduledTime.hour,
+                'minute': newScheduledTime.minute
+              };
+              await docRef.update({'timeSlots': timeSlots});
+            }
+          }
+          return;
+        }
+        
+        bool timeUpdated = false;
+        
+        // If we have an original time to replace
+        if (originalTime != null) {
+          // Try to find and replace the original time
+          for (int i = 0; i < times.length; i++) {
+            if (times[i] is String) {
+              // Simple time format
+              String timeStr = times[i] as String;
+              // Improved time comparison
+              if (_isTimeApproximatelyEqual(timeStr, originalTime)) {
+                print("[MedicationDetailService] Replacing time entry: '${times[i]}' with '$formattedTime'");
+                times[i] = formattedTime;
+                timeUpdated = true;
+                break;
+              }
+            } else if (times[i] is Map) {
+              // Complex time format
+              var timeMap = times[i] as Map;
+              if (timeMap.containsKey('time') && timeMap['time'] is String) {
+                String timeStr = timeMap['time'] as String;
+                if (_isTimeApproximatelyEqual(timeStr, originalTime)) {
+                  print("[MedicationDetailService] Replacing complex time entry: '${timeMap['time']}' with '$formattedTime'");
+                  timeMap['time'] = formattedTime;
+                  timeUpdated = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        // If we didn't update any existing time and it's intentional rescheduling
+        // In this case, we're NOT adding a new time, but replacing the first one
+        if (!timeUpdated && times.isNotEmpty) {
+          print("[MedicationDetailService] No matching time found, modifying the first time entry");
+          
+          if (times[0] is String) {
+            times[0] = formattedTime;
+          } else if (times[0] is Map && times[0].containsKey('time')) {
+            times[0]['time'] = formattedTime;
+          }
+          timeUpdated = true;
+        }
+        // Only if the times array is completely empty (should be rare), add a new entry
+        else if (!timeUpdated && times.isEmpty) {
+          print("[MedicationDetailService] Times array is empty, adding new time entry");
+          times.add(formattedTime);
+        }
+        
+        print("[MedicationDetailService] Updating document with times: $times");
+        // Update the document with the new times array
+        await docRef.update({'times': times});
+        
+        // Also update timeSlots for UI consistency
+        if (data.containsKey('timeSlots') && data['timeSlots'] is List) {
+          List<dynamic> timeSlots = List.from(data['timeSlots']);
+          
+          bool slotUpdated = false;
+          // Try to update an existing slot
+          if (originalTime != null) {
+            for (int i = 0; i < timeSlots.length; i++) {
+              if (timeSlots[i] is Map && 
+                  timeSlots[i].containsKey('hour') && 
+                  timeSlots[i].containsKey('minute')) {
+                
+                int slotHour = timeSlots[i]['hour'];
+                int slotMinute = timeSlots[i]['minute'];
+                
+                if (slotHour == originalTime.hour && slotMinute == originalTime.minute) {
+                  timeSlots[i] = {
+                    'hour': newScheduledTime.hour,
+                    'minute': newScheduledTime.minute
+                  };
+                  slotUpdated = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // If we didn't update any existing slot but there are slots available
+          if (!slotUpdated && timeSlots.isNotEmpty) {
+            // Update the first slot instead of adding a new one
+            timeSlots[0] = {
+              'hour': newScheduledTime.hour,
+              'minute': newScheduledTime.minute
+            };
+            slotUpdated = true;
+          }
+          // Only if the timeSlots array is completely empty, add a new slot
+          else if (!slotUpdated && timeSlots.isEmpty) {
+            timeSlots.add({
+              'hour': newScheduledTime.hour,
+              'minute': newScheduledTime.minute
+            });
+          }
+          
+          await docRef.update({'timeSlots': timeSlots});
+        }
+      } else {
+        print("[MedicationDetailService] Document does not have 'times' array or it's not a list");
+      }
+      
+    } catch (e) {
+      print("[MedicationDetailService] Error updating medication times: $e");
+      // Don't rethrow
+    }
+  }
+
+  // Add this improved method to check if a time string approximately equals a DateTime
+  bool _isTimeApproximatelyEqual(String timeStr, DateTime dateTime) {
+    // Parse the time string to TimeOfDay
+    TimeOfDay? parsedTime = _parseTime(timeStr);
+    if (parsedTime == null) return false;
+    
+    // Compare hour and minute components
+    return parsedTime.hour == dateTime.hour && parsedTime.minute == dateTime.minute;
   }
 
   // Generate smart rescheduling suggestions
@@ -402,3 +665,4 @@ class MedicationDetailService {
     return a.minute - b.minute;
   }
 }
+

@@ -76,13 +76,17 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     // Initialize service
     _service = MedicationDetailService();
 
-    // Initialize UI components
+    // Initialize UI components with all the needed callbacks
     _uiComponents = MedicationDetailUIComponents(
       updateState: _updateState,
       handleConfirmation: _handleConfirmation,
       handleReschedule: _handleReschedule,
       showCustomTimePickerDialog: _showCustomTimePickerDialog,
       showManualTimePickerDialog: _showManualTimePickerDialog,
+      // Add these new callbacks
+      setReschedulingModeTrue: _setReschedulingModeTrue,
+      setReschedulingModeFalse: _setReschedulingModeFalse,
+      selectSuggestedTime: _selectSuggestedTime,
     );
 
     // Initialize animation controller
@@ -126,6 +130,33 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
         callback();
       });
     }
+  }
+
+  // New methods to handle rescheduling state
+  void _setReschedulingModeTrue() {
+    setState(() {
+      _isReschedulingMode = true;
+    });
+    _logAction("Rescheduling Mode", "Activated");
+  }
+
+  void _setReschedulingModeFalse() {
+    setState(() {
+      _isReschedulingMode = false;
+      _selectedSuggestedTime = null;
+      _customSelectedTime = null;
+      _customTimeController.clear();
+    });
+    _logAction("Rescheduling Mode", "Deactivated");
+  }
+
+  void _selectSuggestedTime(TimeOfDay time) {
+    setState(() {
+      _selectedSuggestedTime = time;
+      _customSelectedTime = null; // Clear custom selection
+      _customTimeController.clear();
+    });
+    _logAction("Suggested Time Selected", "Time: ${time.hour}:${time.minute}");
   }
 
   @override
@@ -336,8 +367,15 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
       }
 
       final dateTime = TimeUtilities.timeOfDayToDateTime(selectedTime);
-
-      _logAction("Rescheduling", "New time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
+      String? originalTimeString;
+      
+      // For manual rescheduling without notification, create a timestamp string for today's date
+      if (widget.confirmationTimeIso == null && _medData != null && _medData!.containsKey('times')) {
+        // If we're manually rescheduling, log the action with more details
+        _logAction("Manual Rescheduling", "Selected new time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
+      } else {
+        _logAction("Notification Rescheduling", "New time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
+      }
 
       final result = await _service.recordMedicationRescheduling(
           widget.docId,
@@ -356,6 +394,9 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
         await prefs.remove(widget.confirmationKey!);
         _logAction("Cleared Notification Flag", "After rescheduling: ${widget.confirmationKey}");
       }
+
+      // Reload medication data to reflect changes
+      _loadMedicationData();
 
       if (mounted) {
         // Show success message

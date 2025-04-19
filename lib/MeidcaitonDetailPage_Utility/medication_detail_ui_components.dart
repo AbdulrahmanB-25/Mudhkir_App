@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'time_utilities.dart';
 
 // Constants for theming
@@ -20,12 +19,20 @@ class MedicationDetailUIComponents {
   final Function() showCustomTimePickerDialog;
   final Function() showManualTimePickerDialog;
 
+  // Add these new callbacks
+  final Function() setReschedulingModeTrue;
+  final Function() setReschedulingModeFalse;
+  final Function(TimeOfDay) selectSuggestedTime;
+
   MedicationDetailUIComponents({
     required this.updateState,
     required this.handleConfirmation,
     required this.handleReschedule,
     required this.showCustomTimePickerDialog,
     required this.showManualTimePickerDialog,
+    required this.setReschedulingModeTrue,
+    required this.setReschedulingModeFalse,
+    required this.selectSuggestedTime,
   });
 
   // Error view when loading fails
@@ -272,7 +279,8 @@ class MedicationDetailUIComponents {
                         ),
                         onPressed: isProcessingConfirmation ? null : () {
                           updateState(() {
-                            // Set rescheduling mode to true in parent
+                            // Replace with the new callback
+                            setReschedulingModeTrue();
                           });
                         },
                       ),
@@ -512,7 +520,8 @@ class MedicationDetailUIComponents {
                         ),
                         onPressed: isProcessingConfirmation ? null : () {
                           updateState(() {
-                            // Set rescheduling mode to true in parent
+                            // Replace with the new callback
+                            setReschedulingModeTrue();
                           });
                         },
                       ),
@@ -657,7 +666,8 @@ class MedicationDetailUIComponents {
                         child: InkWell(
                           onTap: isProcessingConfirmation ? null : () {
                             updateState(() {
-                              // Update selected time in parent
+                              // Replace with the new callback
+                              selectSuggestedTime(time);
                             });
                           },
                           borderRadius: BorderRadius.circular(
@@ -780,7 +790,8 @@ class MedicationDetailUIComponents {
                         ),
                         onPressed: isProcessingConfirmation ? null : () {
                           updateState(() {
-                            // Set rescheduling mode to false in parent
+                            // Replace with the new callback
+                            setReschedulingModeFalse();
                           });
                         },
                       ),
