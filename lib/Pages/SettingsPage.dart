@@ -1,52 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mudhkir_app/main.dart'; // Import notification utilities
 
-/// You can import your custom bottom navigation widget here if it is in a separate file.
+import '../Widgets/bottom_navigation.dart';
+import 'mainpage.dart'; // Import the bottom navigation bar
 
-/// For demonstration, here is a simple CustomBottomNavigationBar implementation.
-class CustomBottomNavigationBar extends StatelessWidget {
-  final int selectedIndex;
-  final Function(int) onItemTapped;
-
-  const CustomBottomNavigationBar({
-    super.key,
-    required this.selectedIndex,
-    required this.onItemTapped,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        color: Colors.white.withValues(alpha:0.8),
-        child: BottomNavigationBar(
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'الرئيسية',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'الملف الشخصي',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'الإعدادات',
-            ),
-          ],
-          currentIndex: selectedIndex,
-          selectedItemColor: Colors.blue.shade800,
-          unselectedItemColor: Colors.grey,
-          onTap: onItemTapped,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-        ),
-      ),
-    );
-  }
-}
+// Constants for theming
+// Hospital Blue Color Theme
+const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
+const Color kErrorColor = Color(0xFFFF6B6B); // Error red
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const Color kCardColor = Colors.white;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -56,95 +23,156 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // For the bottom navigation bar, we track the selected index.
-  int _selectedIndex = 2; // Set index 2 to show that we're on the "Settings" page.
+  int _selectedIndex = 2; // Index for the bottom navigation bar
+
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        automaticallyImplyLeading: false, // added to remove back button
         title: const Text(
           "الإعدادات",
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.blue.shade800,
-      ),
-      body: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade100, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              /// 🔔 Notifications Toggle
-              SettingTile(
-                icon: Icons.notifications,
-                title: "الإشعارات",
-                subtitle: "تشغيل أو إيقاف إشعارات الجرعات",
-                trailing: Switch(
-                  value: true, // Replace with your state variable if needed.
-                  onChanged: (bool value) {
-                    // Handle toggle logic.
-                  },
-                  activeColor: Colors.blue.shade800,
-                ),
-              ),
-              const SizedBox(height: 10),
-              /// 🌐 Language Settings
-              SettingTile(
-                icon: Icons.language,
-                title: "اللغة",
-                subtitle: "تغيير لغة التطبيق",
-                onTap: () {
-                  // Handle language change navigation.
-                },
-              ),
-              const SizedBox(height: 10),
-              /// 🔒 Privacy & Security
-              SettingTile(
-                icon: Icons.lock,
-                title: "الخصوصية والأمان",
-                subtitle: "إدارة بياناتك وإعدادات الأمان",
-                onTap: () {
-                  // Handle privacy settings navigation.
-                },
-              ),
-              const SizedBox(height: 10),
-              /// 📞 Contact Support
-              SettingTile(
-                icon: Icons.help,
-                title: "الدعم والمساعدة",
-                subtitle: "تواصل معنا في حال واجهتك مشكلة",
-                onTap: () {
-                  // Handle support contact navigation.
-                },
-              ),
+        centerTitle: true,
+        backgroundColor: kPrimaryColor,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
+        actions: [],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              kPrimaryColor.withOpacity(0.1),
+              kBackgroundColor,
+              Colors.white,
             ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0, 0.3, 1],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Section headers with dividers
+                _buildSectionHeader("إعدادات التطبيق"),
+
+                /// 🌐 Language Settings
+                SettingTile(
+                  icon: Icons.language,
+                  title: "اللغة",
+                  subtitle: "تغيير لغة التطبيق",
+                  onTap: () {
+                    // Handle language change navigation.
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                /// 🔒 Privacy & Security
+                SettingTile(
+                  icon: Icons.lock_outline_rounded,
+                  title: "الخصوصية والأمان",
+                  subtitle: "إدارة بياناتك وإعدادات الأمان",
+                  onTap: () {
+                    // Handle privacy settings navigation.
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                /// 📞 Contact Support
+                SettingTile(
+                  icon: Icons.help_outline_rounded,
+                  title: "الدعم والمساعدة",
+                  subtitle: "تواصل معنا في حال واجهتك مشكلة",
+                  onTap: () {
+                    // Handle support contact navigation.
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // App info section
+                _buildSectionHeader("حول التطبيق"),
+
+                SettingTile(
+                  icon: Icons.info_outline_rounded,
+                  title: "معلومات التطبيق",
+                  subtitle: "الإصدار 1.0.5",
+                  onTap: () {},
+                ),
+
+                const SizedBox(height: 12),
+
+                SettingTile(
+                  icon: Icons.star_border_rounded,
+                  title: "تقييم التطبيق",
+                  subtitle: "ساعدنا بتحسين التطبيق من خلال تقييمك",
+                  trailing: const Icon(Icons.open_in_new, size: 20, color: kSecondaryColor),
+                  onTap: () {},
+                ),
+
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),
       bottomNavigationBar: CustomBottomNavigationBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (int index) {
-          // Handle bottom navigation taps.
-          setState(() {
-            _selectedIndex = index;
-          });
-          // For example, navigate to the corresponding screen.
-          if (index == 0) {
-            Navigator.pushReplacementNamed(context, '/mainpage');
-          } else if (index == 1) {
-            Navigator.pushReplacementNamed(context, '/personal_data');
+          if (index == _selectedIndex) return;
+
+          String? routeName;
+          if (index == 0) routeName = "/mainpage";
+          if (index == 1) routeName = "/personal_data";
+
+          if (routeName != null) {
+            Navigator.pushReplacementNamed(context, routeName);
           }
-          // Do nothing for index 2 because we are on the Settings page.
         },
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              height: 24,
+              width: 4,
+              decoration: BoxDecoration(
+                color: kPrimaryColor,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 24, thickness: 1),
+      ],
     );
   }
 }
@@ -168,20 +196,75 @@ class SettingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.blue.shade800, size: 30),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(kBorderRadius),
+          splashColor: kPrimaryColor.withOpacity(0.1),
+          highlightColor: kPrimaryColor.withOpacity(0.05),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: kPrimaryColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                trailing ?? const Icon(Icons.chevron_right_rounded,
+                  size: 22,
+                  color: kPrimaryColor,
+                ),
+              ],
+            ),
+          ),
         ),
-        subtitle: Text(subtitle),
-        trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 20),
-        onTap: onTap,
       ),
     );
   }

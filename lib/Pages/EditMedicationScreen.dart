@@ -1,1374 +1,737 @@
-import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart' as intl;
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
+import 'package:mudhkir_app/Pages/Add_Medicaiton/Add_Dosage.dart';
+import 'package:mudhkir_app/Pages/Add_Medicaiton/Add_Name_Picture.dart';
+import 'package:mudhkir_app/Pages/Add_Medicaiton/Add_Start_&_End_Date.dart';
 
-/// Helper function to normalize URLs by removing extra slashes,
-/// while keeping the protocol part intact.
-String normalizeUrl(String url) {
-  // Look for the protocol portion ("http:" or "https:") followed by extra slashes.
-  final RegExp protocolRegex = RegExp(r'^(https?:)\/+');
-  final match = protocolRegex.firstMatch(url);
-  if (match != null) {
-    String scheme = match.group(1)!; // e.g., "https:"
-    // Remove the matched protocol and extra slashes.
-    String remaining = url.substring(match.end);
-    // Replace multiple slashes in the remainder with a single slash.
-    remaining = remaining.replaceAll(RegExp(r'/+'), '/');
-    return '$scheme//$remaining';
-  }
-  return url.replaceAll(RegExp(r'/+'), '/'); // Fallback.
-}
+import 'package:permission_handler/permission_handler.dart';
+import 'package:mudhkir_app/main.dart'; // Import the notification utility
 
-// ==================================================================
-// Time Utilities
-// ==================================================================
-class TimeUtils {
-  static TimeOfDay? parseTime(String timeStr) {
-    try {
-      final intl.DateFormat ampmFormat = intl.DateFormat('h:mm a', 'en_US');
-      DateTime parsedDt = ampmFormat.parseStrict(timeStr);
-      return TimeOfDay.fromDateTime(parsedDt);
-    } catch (_) {}
-    try {
-      String normalizedTime =
-      timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
-      final intl.DateFormat arabicAmpmFormat =
-      intl.DateFormat('h:mm a', 'en_US');
-      DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
-      return TimeOfDay.fromDateTime(parsedDt);
-    } catch (_) {}
-    try {
-      final parts = timeStr.split(':');
-      if (parts.length == 2) {
-        int hour = int.parse(parts[0]);
-        int minute =
-        int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-        if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-          return TimeOfDay(hour: hour, minute: minute);
-        }
-      }
-    } catch (_) {}
-    print("Failed to parse time string: $timeStr");
-    return null;
-  }
+// Import the screens if you're reusing components
+import 'add_dose.dart'; // Import TimeUtils
 
-  static String formatTimeOfDay(BuildContext context, TimeOfDay time) {
-    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    final String minute = time.minute.toString().padLeft(2, '0');
-    final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
-    return '$hour:$minute $period';
-  }
-}
+// Constants for theming
+const Color kPrimaryColor = Color(0xFF1A5CFF); // Primary blue
+const Color kSecondaryColor = Color(0xFF4ECDC4); // Teal accent
+const Color kErrorColor = Color(0xFFFF6B6B); // Error red
+const Color kBackgroundColor = Color(0xFFF7F9FC); // Light background
+const Color kCardColor = Colors.white;
+const double kBorderRadius = 16.0;
+const double kSpacing = 18.0;
 
-// ==================================================================
-// EnlargeableImage Widget
-// ==================================================================
-class EnlargeableImage extends StatefulWidget {
-  final String imageUrl;
-  final double width;
-  final double height;
-  const EnlargeableImage({
-    super.key,
-    required this.imageUrl,
-    required this.width,
-    required this.height,
-  });
-  @override
-  _EnlargeableImageState createState() => _EnlargeableImageState();
-}
-
-class _EnlargeableImageState extends State<EnlargeableImage> {
-  late Future<File?> _imageFileFuture;
-  @override
-  void initState() {
-    super.initState();
-    _imageFileFuture = _downloadAndSaveImage(widget.imageUrl);
-  }
-  @override
-  void didUpdateWidget(covariant EnlargeableImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrl != widget.imageUrl) {
-      _imageFileFuture = _downloadAndSaveImage(widget.imageUrl);
-    }
-  }
-  Future<File?> _downloadAndSaveImage(String url) async {
-    // Normalize the URL to remove extra slashes.
-    String normalizedUrl = normalizeUrl(url);
-    final uri = Uri.tryParse(normalizedUrl);
-    if (normalizedUrl.isEmpty || uri == null || !uri.isAbsolute) {
-      print("Invalid or empty URL for download: $normalizedUrl");
-      return null;
-    }
-    try {
-      final response = await http.get(uri);
-      if (response.statusCode == 200) {
-        final Directory directory = await getTemporaryDirectory();
-        final String filePath = '${directory.path}/${normalizedUrl.hashCode}.png';
-        File file = File(filePath);
-        await file.writeAsBytes(response.bodyBytes);
-        return file;
-      } else {
-        print("Failed to download image ($normalizedUrl). Status: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Error downloading image ($normalizedUrl): $e");
-    }
-    return null;
-  }
-  void _openEnlargedImage(BuildContext context, File imageFile) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) {
-          return Scaffold(
-            backgroundColor: Colors.black87,
-            appBar: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Colors.white),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                panEnabled: true,
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.file(imageFile),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-  @override
-  Widget build(BuildContext context) {
-    final uri = Uri.tryParse(widget.imageUrl);
-    if (widget.imageUrl.isEmpty || uri == null || !uri.isAbsolute) {
-      return _buildPlaceholder(showErrorText: false);
-    }
-    return FutureBuilder<File?>(
-      future: _imageFileFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Container(
-            width: widget.width,
-            height: widget.height,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          );
-        } else if (snapshot.hasData && snapshot.data != null) {
-          return GestureDetector(
-            onTap: () => _openEnlargedImage(context, snapshot.data!),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(
-                snapshot.data!,
-                width: widget.width,
-                height: widget.height,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  print("Error displaying file image: $error");
-                  return _buildPlaceholder(showErrorText: true);
-                },
-              ),
-            ),
-          );
-        } else {
-          return _buildPlaceholder(showErrorText: true);
-        }
-      },
-    );
-  }
-  Widget _buildPlaceholder({required bool showErrorText}) {
-    return Container(
-      width: widget.width,
-      height: widget.height,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        showErrorText ? Icons.broken_image : Icons.image_not_supported,
-        color: Colors.grey.shade600,
-        size: widget.width * 0.6,
-      ),
-    );
-  }
-}
-
-// ==================================================================
-// DoseSchedule Widget (Calendar & Dose List)
-// ==================================================================
-class DoseSchedule extends StatefulWidget {
-  const DoseSchedule({super.key});
-  @override
-  _DoseScheduleState createState() => _DoseScheduleState();
-}
-class _DoseScheduleState extends State<DoseSchedule> {
-  late User _user;
-  CalendarFormat _calendarFormat = CalendarFormat.month;
-  Map<DateTime, List<Map<String, dynamic>>> _doses = {};
-  DateTime _selectedDay = DateTime.now();
-  DateTime _focusedDay = DateTime.now();
-  bool _isLoading = true;
-  @override
-  void initState() {
-    super.initState();
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      print("Error: User not logged in for DoseSchedule.");
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          if (Navigator.canPop(context)) Navigator.of(context).pop();
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text("الرجاء تسجيل الدخول أولاً")));
-        }
-      });
-      _isLoading = false;
-    } else {
-      _user = currentUser;
-      _fetchDoses();
-    }
-  }
-  Future<void> _fetchDoses() async {
-    if (!mounted) return;
-    setState(() { _isLoading = true; });
-    final Map<DateTime, List<Map<String, dynamic>>> newDoses = {};
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      setState(() { _isLoading = false; _doses = {}; });
-      return;
-    }
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('medicines')
-          .get();
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final String medicationName = data['name'] ?? 'دواء غير مسمى';
-        final String dosage = data['dosage'] ?? 'غير محددة';
-        final Timestamp? startTimestamp = data['startDate'];
-        final Timestamp? endTimestamp = data['endDate'];
-        final String frequency = data['frequency'] ?? '1 يومي';
-        final List<dynamic> timesRaw = data['times'] ?? [];
-        final String imageUrl = data['imageUrl'] ?? '';
-        final String imgbbDeleteHash = data['imgbbDeleteHash'] ?? '';
-        if (startTimestamp == null) continue;
-        final DateTime startDate = startTimestamp.toDate();
-        final DateTime? endDateDt = endTimestamp?.toDate();
-        final List<String> parts = frequency.split(" ");
-        final String frequencyType = parts.length > 1 ? parts[1] : 'يومي';
-        DateTime currentDate = startDate;
-        while (true) {
-          final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
-          bool shouldAddDose = false;
-          List<Map<String, dynamic>> dosesForDay = [];
-          if (frequencyType == 'يومي') {
-            List<TimeOfDay> timesParsed = [];
-            if (timesRaw.isNotEmpty && timesRaw.first is Map) {
-              timesParsed = timesRaw
-                  .whereType<Map>()
-                  .map((m) => TimeUtils.parseTime(m['time'].toString()))
-                  .whereType<TimeOfDay>()
-                  .toList();
-            } else {
-              timesParsed = timesRaw
-                  .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null)
-                  .whereType<TimeOfDay>()
-                  .toList();
-            }
-            for (var time in timesParsed) {
-              dosesForDay.add({
-                'medicationName': medicationName,
-                'dosage': dosage,
-                'timeOfDay': time,
-                'timeString': TimeUtils.formatTimeOfDay(context, time),
-                'docId': doc.id,
-                'imageUrl': imageUrl,
-                'imgbbDeleteHash': imgbbDeleteHash,
-              });
-            }
-            shouldAddDose = dosesForDay.isNotEmpty;
-          } else if (frequencyType == 'اسبوعي') {
-            for (var map in timesRaw.whereType<Map>()) {
-              final int? day = map['day'];
-              final String? timeStr = map['time']?.toString();
-              if (day != null && day == currentDate.weekday && timeStr != null) {
-                final time = TimeUtils.parseTime(timeStr);
-                if (time != null) {
-                  dosesForDay.add({
-                    'medicationName': medicationName,
-                    'dosage': dosage,
-                    'timeOfDay': time,
-                    'timeString': TimeUtils.formatTimeOfDay(context, time),
-                    'docId': doc.id,
-                    'imageUrl': imageUrl,
-                    'imgbbDeleteHash': imgbbDeleteHash,
-                  });
-                }
-              }
-            }
-            shouldAddDose = dosesForDay.isNotEmpty;
-          }
-          if (shouldAddDose) {
-            newDoses.putIfAbsent(normalizedDate, () => []);
-            newDoses[normalizedDate]!.addAll(dosesForDay);
-          }
-          // Increment day and break conditions.
-          currentDate = currentDate.add(const Duration(days: 1));
-          if (endDateDt != null && currentDate.isAfter(endDateDt)) break;
-          if (endDateDt == null && currentDate.year > DateTime.now().year + 10) break;
-        }
-      }
-      newDoses.forEach((date, meds) {
-        meds.sort((a, b) {
-          final TimeOfDay timeA = a['timeOfDay'];
-          final TimeOfDay timeB = b['timeOfDay'];
-          final cmp = timeA.hour != timeB.hour
-              ? timeA.hour.compareTo(timeB.hour)
-              : timeA.minute.compareTo(timeB.minute);
-          if (cmp != 0) return cmp;
-          return a['medicationName'].compareTo(b['medicationName']);
-        });
-      });
-      if (mounted) {
-        setState(() {
-          _doses = newDoses;
-          _isLoading = false;
-        });
-      }
-    } catch (e, stackTrace) {
-      print('Error fetching doses: $e\n$stackTrace');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _doses = {};
-        });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("حدث خطأ أثناء تحميل جدول الأدوية.")));
-      }
-    }
-  }
-  List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
-    final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
-    return _doses[normalizedDay] ?? [];
-  }
-  @override
-  Widget build(BuildContext context) {
-    if (!_isLoading && FirebaseAuth.instance.currentUser == null) {
-      return Scaffold(
-        body: Center(
-          child: Text("الرجاء تسجيل الدخول لعرض الجدول.", style: TextStyle(color: Colors.red.shade800)),
-        ),
-      );
-    }
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new, color: Colors.blue.shade800, size: 24),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Text(
-                      "جدول الأدوية",
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-              ),
-              // Content Area
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 10),
-                        Card(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 3,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: TableCalendar<Map<String, dynamic>>(
-                              locale: 'ar_SA',
-                              focusedDay: _focusedDay,
-                              firstDay: DateTime.utc(DateTime.now().year - 2, 1, 1),
-                              lastDay: DateTime.utc(DateTime.now().year + 5, 12, 31),
-                              calendarFormat: _calendarFormat,
-                              availableCalendarFormats: const {
-                                CalendarFormat.month: 'شهر',
-                                CalendarFormat.twoWeeks: 'اسبوعين',
-                                CalendarFormat.week: 'أسبوع',
-                              },
-                              eventLoader: _getEventsForDay,
-                              headerStyle: HeaderStyle(
-                                formatButtonVisible: true,
-                                titleCentered: true,
-                                titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                                leftChevronIcon: Icon(Icons.chevron_left, color: Colors.blue.shade600),
-                                rightChevronIcon: Icon(Icons.chevron_right, color: Colors.blue.shade600),
-                              ),
-                              calendarStyle: CalendarStyle(
-                                outsideDaysVisible: false,
-                                todayDecoration: BoxDecoration(
-                                  color: Colors.blue.shade700,
-                                  shape: BoxShape.circle,
-                                ),
-                                selectedDecoration: BoxDecoration(
-                                  color: Colors.lightBlueAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                                weekendTextStyle: TextStyle(color: Colors.red[600]),
-                              ),
-                              onFormatChanged: (format) {
-                                if (_calendarFormat != format) {
-                                  setState(() => _calendarFormat = format);
-                                }
-                              },
-                              onPageChanged: (focusedDay) {
-                                _focusedDay = focusedDay;
-                              },
-                              onDaySelected: (selectedDay, focusedDay) {
-                                if (!isSameDay(_selectedDay, selectedDay)) {
-                                  setState(() {
-                                    _selectedDay = selectedDay;
-                                    _focusedDay = focusedDay;
-                                  });
-                                }
-                              },
-                              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                          child: Text(
-                            "جرعات يوم: ${intl.DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay)}",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        _buildDoseList(),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  Widget _buildDoseList() {
-    final events = _getEventsForDay(_selectedDay);
-    if (events.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40.0),
-        child: Center(
-          child: Text("لا توجد جرعات لهذا اليوم",
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
-        ),
-      );
-    } else {
-      return ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: events.length,
-        itemBuilder: (context, index) {
-          final dose = events[index];
-          final String docId = dose['docId'] ?? 'missing_doc_id_$index';
-          final String timeString = dose['timeString'] ?? '??:??';
-          return DoseTile(
-            key: ValueKey(docId + timeString),
-            medicationName: dose['medicationName'] ?? 'غير مسمى',
-            nextDose: timeString,
-            docId: docId,
-            imageUrl: dose['imageUrl'] ?? '',
-            imgbbDeleteHash: dose['imgbbDeleteHash'] ?? '',
-            onDataChanged: _fetchDoses,
-          );
-        },
-      );
-    }
-  }
-}
-
-// ==================================================================
-// DoseTile Widget
-// ==================================================================
-class DoseTile extends StatefulWidget {
-  final String medicationName;
-  final String nextDose;
-  final String docId;
-  final String imageUrl;
-  final String imgbbDeleteHash;
-  final VoidCallback onDataChanged;
-  const DoseTile({
-    super.key,
-    required this.medicationName,
-    required this.nextDose,
-    required this.docId,
-    required this.imageUrl,
-    required this.imgbbDeleteHash,
-    required this.onDataChanged,
-  });
-  @override
-  _DoseTileState createState() => _DoseTileState();
-}
-class _DoseTileState extends State<DoseTile> {
-  bool _isExpanded = false;
-  Future<bool?> _showConfirmationDialog({
-    required BuildContext context,
-    required String title,
-    required String content,
-    required String confirmText,
-    Color confirmButtonColor = Colors.red,
-  }) async {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(title, style: TextStyle(color: Colors.blue.shade800)),
-        content: Text(content),
-        actionsAlignment: MainAxisAlignment.spaceBetween,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("إلغاء"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: confirmButtonColor,
-              foregroundColor: Colors.white,
-            ),
-            child: Text(confirmText),
-          ),
-        ],
-      ),
-    );
-  }
-  Future<void> _handleEdit(BuildContext context) async {
-    final confirmed = await _showConfirmationDialog(
-      context: context,
-      title: "تعديل الدواء",
-      content: "هل تريد الانتقال إلى شاشة تعديل بيانات هذا الدواء؟",
-      confirmText: "نعم، تعديل",
-      confirmButtonColor: Colors.orange.shade700,
-    );
-    if (confirmed == true && mounted) {
-      print("Navigating to edit screen for docId: ${widget.docId}");
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EditMedicationScreen(docId: widget.docId),
-        ),
-      ).then((_) {
-        print("Returned from Edit screen, refreshing data...");
-        widget.onDataChanged();
-      });
-    }
-  }
-  Future<void> _handleFinishMed(BuildContext context) async {
-    final confirmed = await _showConfirmationDialog(
-      context: context,
-      title: "إنهاء الدواء",
-      content:
-      "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى اليوم ولن يظهر في الأيام القادمة.",
-      confirmText: "نعم، إنهاء",
-      confirmButtonColor: Colors.red.shade700,
-    );
-    if (confirmed == true) {
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null && mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("خطأ: المستخدم غير مسجل.")));
-        return;
-      }
-      if (user != null) {
-        try {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('medicines')
-              .doc(widget.docId)
-              .update({'endDate': Timestamp.now()});
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("تم إنهاء الدواء بنجاح"), backgroundColor: Colors.orange),
-            );
-            widget.onDataChanged();
-          }
-        } catch (e) {
-          print("Error finishing medication (${widget.docId}): $e");
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("فشل إنهاء الدواء: $e"), backgroundColor: Colors.red),
-            );
-          }
-        }
-      }
-    }
-  }
-  Future<void> _handleDelete(BuildContext context) async {
-    final confirmed = await _showConfirmationDialog(
-      context: context,
-      title: "تأكيد الحذف",
-      content: "هل أنت متأكد من حذف هذا الدواء؟ سيتم حذف صورته أيضاً إذا كانت مرتبطة (لا يمكن التراجع عن هذا الإجراء).",
-      confirmText: "نعم، حذف",
-      confirmButtonColor: Colors.red.shade700,
-    );
-    if (confirmed == true) {
-      await _deleteMedication(context);
-    }
-  }
-  Future<void> _deleteMedication(BuildContext context) async {
-    final User? user = FirebaseAuth.instance.currentUser;
-    if (user == null && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("خطأ: المستخدم غير مسجل.")));
-      return;
-    }
-    if (user != null) {
-      try {
-        if (widget.imgbbDeleteHash.isNotEmpty) {
-          await _deleteImgBBImage(widget.imgbbDeleteHash);
-        }
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('medicines')
-            .doc(widget.docId)
-            .delete();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("تم حذف الدواء بنجاح"), backgroundColor: Colors.green),
-          );
-          widget.onDataChanged();
-        }
-      } catch (e) {
-        print("Error deleting medication (${widget.docId}): $e");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("فشل حذف الدواء: $e"), backgroundColor: Colors.red),
-          );
-        }
-      }
-    }
-  }
-  Future<void> _deleteImgBBImage(String deleteHash) async {
-    final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
-
-    // Basic validation
-    if (imgbbApiKey.isEmpty) {
-      print("ERROR: ImgBB API Key not found in .env. Cannot delete image.");
-      return;
-    }
-    if (deleteHash.isEmpty) {
-      print("WARNING: Attempted to delete ImgBB image with an empty deleteHash.");
-      return; // Don't proceed with an empty hash
-    }
-
-    // Construct the URL: API key in query parameter, delete hash in the path
-    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
-
-    print("Attempting ImgBB deletion via DELETE. Hash: $deleteHash, URL: $url");
-
-    try {
-      final response = await http.delete(url); // Using DELETE method
-
-      // Check status code FIRST
-      if (response.statusCode == 200) {
-        // Even with 200, check response body for success confirmation if possible
-        try {
-          final responseBody = jsonDecode(response.body);
-          if (responseBody is Map &&
-              ((responseBody.containsKey('success') && responseBody['success'] == true) ||
-                  (responseBody.containsKey('status_code') && responseBody['status_code'] == 200))) {
-            print("ImgBB image ($deleteHash) deleted successfully via DELETE. Response: ${response.body}");
-          } else {
-            // Status 200 but response body indicates potential failure
-            print("ImgBB image ($deleteHash) deletion via DELETE returned status 200 but response suggests failure: ${response.body}");
-          }
-        } catch (e) {
-          // Status 200 but couldn't parse body or unknown format
-          print("ImgBB image ($deleteHash) deletion via DELETE returned status 200 but response body parsing failed or format unknown: ${response.body}. Error: $e");
-        }
-      } else {
-        // Log the failure details clearly
-        print("Failed to delete image from ImgBB ($deleteHash) using DELETE. Status: ${response.statusCode}, Body: ${response.body}");
-        // If this fails with "Invalid API Action", the POST method might be needed.
-      }
-    } catch (e) {
-      print("Error occurred during ImgBB image ($deleteHash) DELETE deletion attempt: $e");
-    }
-  }
-  @override
-  Widget build(BuildContext context) {
-    Widget tileContent = ListTile(
-      leading: EnlargeableImage(
-        imageUrl: widget.imageUrl,
-        width: 60,
-        height: 60,
-      ),
-      title: Text(
-        widget.medicationName,
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        "الوقت: ${widget.nextDose}",
-        style: TextStyle(fontSize: 14, color: Colors.blue.shade600),
-      ),
-      trailing: Icon(
-        _isExpanded ? Icons.expand_less : Icons.expand_more,
-        color: Colors.grey.shade500,
-      ),
-    );
-    Widget actionButtons = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildActionButton(
-            context: context,
-            icon: Icons.edit_note,
-            label: "تعديل",
-            color: Colors.orange.shade700,
-            onPressed: () => _handleEdit(context),
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.check_circle_outline,
-            label: "إنهاء",
-            color: Colors.red.shade700,
-            onPressed: () => _handleFinishMed(context),
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.delete_forever_outlined,
-            label: "حذف",
-            color: Colors.red.shade700,
-            onPressed: () => _handleDelete(context),
-          ),
-        ],
-      ),
-    );
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      elevation: 2,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => setState(() => _isExpanded = !_isExpanded),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            tileContent,
-            AnimatedCrossFade(
-              firstChild: Container(),
-              secondChild: actionButtons,
-              crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-              duration: const Duration(milliseconds: 250),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  Widget _buildActionButton({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
-    return TextButton.icon(
-      icon: Icon(icon, color: color, size: 20),
-      label: Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-    );
-  }
-}
-
-// ==================================================================
-// EditMedicationScreen Widget (Updated Daily & Weekly UI)
-// ==================================================================
 class EditMedicationScreen extends StatefulWidget {
   final String docId;
-  const EditMedicationScreen({super.key, required this.docId});
+
+  const EditMedicationScreen({Key? key, required this.docId}) : super(key: key);
+
   @override
   _EditMedicationScreenState createState() => _EditMedicationScreenState();
 }
+
 class _EditMedicationScreenState extends State<EditMedicationScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final ImagePicker _picker = ImagePicker();
+  final String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+
+  final PageController _pageController = PageController();
+  final GlobalKey<FormState> _formKeyPage1 = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKeyPage2 = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKeyPage3 = GlobalKey<FormState>();
+
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _dosageController = TextEditingController();
+  String _dosageUnit = 'ملغم';
+  List<TimeOfDay?> _selectedTimes = [];
+  List<bool> _isAutoGeneratedTimes = [];
+  String _frequencyType = 'يومي';
+  int _frequencyNumber = 1;
+  DateTime? _startDate;
+  DateTime? _endDate;
+  late Future<List<String>> _medicineNamesFuture;
+
+  File? _capturedImage;
+  String? _uploadedImageUrl;
+  bool _isUploading = false;
   bool _isLoading = true;
-  bool _isSaving = false;
-  String? _errorMessage;
-  DateTime? _selectedStartDate;
-  DateTime? _selectedEndDate;
-  // Daily mode: list of dose times.
-  List<TimeOfDay> _selectedTimes = [];
-  // For tracking whether each daily time was auto-generated.
-  List<bool> _dailyAutoGenerated = [];
-  // Frequency selection – default set to daily.
-  String _selectedFrequency = 'يومي';
-  // For weekly mode only:
-  Set<int> _selectedWeekdays = {};
-  Map<int, TimeOfDay> _weeklyTimes = {};
+  bool _hasOriginalImage = false;
+
+  final List<String> _dosageUnits = ['ملغم', 'غرام', 'مل', 'وحدة'];
+  final List<String> _frequencyTypes = ['يومي', 'اسبوعي'];
+  final List<int> _frequencyNumbers = [1, 2, 3, 4, 5, 6];
+
+  Map<int, TimeOfDay?> _weeklyTimes = {};
   Map<int, bool> _weeklyAutoGenerated = {};
-  String? _currentImageUrl;
-  String? _currentImgbbDeleteHash;
-  File? _newImageFile;
-  bool _imageRemoved = false;
-  User? _user;
+  Set<int> _selectedWeekdays = {};
+  List<int> _originalNotificationIds = [];
 
   @override
   void initState() {
     super.initState();
-    _user = FirebaseAuth.instance.currentUser;
-    if (_user == null) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = "المستخدم غير مسجل الدخول.";
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && Navigator.canPop(context)) Navigator.of(context).pop();
-      });
-    } else {
-      _loadMedicationData();
-    }
+    _medicineNamesFuture = _loadMedicineNames();
+    _loadMedicationData();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _dosageController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMedicationData() async {
-    if (_user == null) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = "خطأ: المستخدم غير متوفر.";
-        });
-      }
-      return;
-    }
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<List<String>> _loadMedicineNames() async {
     try {
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_user!.uid)
-          .collection('medicines')
-          .doc(widget.docId)
-          .get();
-      if (!mounted) return;
-      if (docSnapshot.exists) {
-        final data = docSnapshot.data()!;
-        _nameController.text = data['name'] as String? ?? '';
-        _selectedStartDate = (data['startDate'] as Timestamp?)?.toDate();
-        _selectedEndDate = (data['endDate'] as Timestamp?)?.toDate();
-        // Determine frequency mode:
-        String? storedFrequency = data['frequencyType'] as String?;
-        // If frequencyType is weekly or the "times" field is a list of maps, use weekly UI.
-        if (storedFrequency == 'اسبوعي' ||
-            (data['times'] is List &&
-                (data['times'] as List).isNotEmpty &&
-                (data['times'][0] is Map))) {
-          _selectedFrequency = 'اسبوعي';
-          _weeklyTimes = {};
-          List<dynamic> timesList = data['times'] as List<dynamic>? ?? [];
-          for (var item in timesList) {
-            if (item is Map) {
-              int? day = item['day'];
-              String? timeStr = item['time']?.toString();
-              if (day != null && timeStr != null) {
-                final time = TimeUtils.parseTime(timeStr);
-                if (time != null) {
-                  _weeklyTimes[day] = time;
+      final String jsonString = await rootBundle.loadString(
+        'assets/Mediciens/trade_names.json',
+      );
+      final List<dynamic> jsonList = json.decode(jsonString);
+      return jsonList.map((item) => item.toString()).toList();
+    } catch (e) {
+      print('Error loading medicine names: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ أثناء تحميل قائمة الأدوية')),
+        );
+      }
+      return [];
+    }
+  }
+
+  Future<void> _loadMedicationData() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showBlockingAlert("خطأ", "المستخدم غير مسجل الدخول.");
+        Navigator.pop(context);
+        return;
+      }
+      final medicineDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('medicines')
+              .doc(widget.docId)
+              .get();
+      if (!medicineDoc.exists || !mounted) {
+        _showBlockingAlert("خطأ", "لم يتم العثور على بيانات الدواء.");
+        Navigator.pop(context);
+        return;
+      }
+      final medicineData = medicineDoc.data()!;
+      _nameController.text = medicineData['name'] ?? '';
+      final String? dosageStr = medicineData['dosage'];
+      if (dosageStr != null) {
+        final dosageParts = dosageStr.split(' ');
+        if (dosageParts.length >= 2) {
+          _dosageController.text = dosageParts[0];
+          final unit = dosageParts.sublist(1).join(' ');
+          if (_dosageUnits.contains(unit)) {
+            _dosageUnit = unit;
+          }
+        }
+      }
+      _frequencyType = medicineData['frequencyType'] ?? 'يومي';
+      if (_frequencyType == 'يومي') {
+        final frequencyDetails = medicineData['frequencyDetails'];
+        if (frequencyDetails != null &&
+            frequencyDetails is Map<String, dynamic>) {
+          _frequencyNumber = frequencyDetails['timesPerDay'] ?? 1;
+        }
+        final List<dynamic>? timesList = medicineData['times'];
+        if (timesList != null) {
+          _selectedTimes = List.filled(_frequencyNumber, null, growable: true);
+          _isAutoGeneratedTimes = List.filled(
+            _frequencyNumber,
+            false,
+            growable: true,
+          );
+          for (int i = 0; i < timesList.length && i < _frequencyNumber; i++) {
+            final String timeStr = timesList[i] ?? '';
+            _selectedTimes[i] = TimeUtils.parseTime(timeStr);
+          }
+        }
+      } else {
+        final frequencyDetails = medicineData['frequencyDetails'];
+        if (frequencyDetails != null &&
+            frequencyDetails is Map<String, dynamic>) {
+          final List<dynamic>? weekdaysList =
+              frequencyDetails['selectedWeekdays'];
+          if (weekdaysList != null) {
+            _selectedWeekdays = Set<int>.from(weekdaysList);
+            final List<dynamic>? timesList = medicineData['times'];
+            if (timesList != null) {
+              for (final timeData in timesList) {
+                if (timeData is Map<String, dynamic>) {
+                  final int day = timeData['day'] ?? 0;
+                  final String timeStr = timeData['time'] ?? '';
+                  if (day != 0 && timeStr.isNotEmpty) {
+                    _weeklyTimes[day] = TimeUtils.parseTime(timeStr);
+                    _weeklyAutoGenerated[day] = false;
+                  }
                 }
               }
             }
           }
-          _selectedWeekdays = _weeklyTimes.keys.toSet();
-          _weeklyAutoGenerated = { for (var day in _selectedWeekdays) day: false };
-        } else {
-          _selectedFrequency = 'يومي';
-          var rawTimes = data['times'];
-          if (rawTimes is List<dynamic> && rawTimes.isNotEmpty) {
-            if (rawTimes.first is Map) {
-              _selectedTimes = rawTimes
-                  .where((element) => element is Map)
-                  .map((m) => TimeUtils.parseTime(m['time'].toString()))
-                  .whereType<TimeOfDay>()
-                  .toList();
-            } else {
-              _selectedTimes = rawTimes
-                  .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null)
-                  .whereType<TimeOfDay>()
-                  .toList();
-            }
-          } else {
-            _selectedTimes = [];
-          }
-          // Initialize daily auto-generated flags.
-          _dailyAutoGenerated = List<bool>.filled(_selectedTimes.length, false, growable: true);
         }
-        _currentImageUrl = data['imageUrl'] as String?;
-        _currentImgbbDeleteHash = data['imgbbDeleteHash'] as String?;
-        _newImageFile = null;
-        _imageRemoved = false;
-      } else {
-        _errorMessage = "لم يتم العثور على بيانات الدواء.";
       }
-    } catch (e, stackTrace) {
-      print("Error loading medication data: $e\n$stackTrace");
-      if (mounted) _errorMessage = "حدث خطأ أثناء تحميل البيانات.";
-    } finally {
-      if (mounted) setState(() { _isLoading = false; });
+      final startDateTimestamp = medicineData['startDate'];
+      if (startDateTimestamp != null && startDateTimestamp is Timestamp) {
+        _startDate = startDateTimestamp.toDate();
+      } else {
+        _startDate = DateTime.now();
+      }
+      final endDateTimestamp = medicineData['endDate'];
+      if (endDateTimestamp != null && endDateTimestamp is Timestamp) {
+        _endDate = endDateTimestamp.toDate();
+      }
+      final String? imageUrl = medicineData['imageUrl'];
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        _uploadedImageUrl = imageUrl;
+        _hasOriginalImage = true;
+      }
+      final List<dynamic>? notificationIds = medicineData['notificationIds'];
+      if (notificationIds != null) {
+        _originalNotificationIds = List<int>.from(notificationIds);
+      }
+      setState(() => _isLoading = false);
+    } catch (e) {
+      print("Error loading medication data: $e");
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showBlockingAlert("خطأ", "حدث خطأ أثناء تحميل بيانات الدواء: $e");
+      }
     }
   }
 
-  Future<void> _pickDate(BuildContext context, bool isStartDate) async {
-    final initialDate = (isStartDate ? _selectedStartDate : _selectedEndDate) ?? DateTime.now();
-    final firstDate = DateTime(DateTime.now().year - 5);
-    final lastDate = DateTime(DateTime.now().year + 20);
-    final pickedDate = await showDatePicker(
+  void _updateTimeFields() {
+    setState(() {
+      List<TimeOfDay?> oldTimes = List.from(_selectedTimes);
+      List<bool> oldAutoGenerated = List.from(_isAutoGeneratedTimes);
+      _selectedTimes = List.generate(
+        _frequencyNumber,
+        (index) => index < oldTimes.length ? oldTimes[index] : null,
+        growable: true,
+      );
+      _isAutoGeneratedTimes = List.generate(
+        _frequencyNumber,
+        (index) =>
+            index < oldAutoGenerated.length ? oldAutoGenerated[index] : false,
+        growable: true,
+      );
+      if (_frequencyType == 'يومي' &&
+          _selectedTimes.isNotEmpty &&
+          _selectedTimes[0] != null) {
+        _autoFillDosageTimes();
+      }
+    });
+  }
+
+  void _autoFillDosageTimes() {
+    if (_frequencyType != 'يومي' ||
+        _selectedTimes.isEmpty ||
+        _selectedTimes[0] == null ||
+        _frequencyNumber <= 1) {
+      return;
+    }
+    final firstDose = _selectedTimes[0]!;
+    DateTime base = DateTime(2000, 1, 1, firstDose.hour, firstDose.minute);
+    int intervalMinutes = (24 * 60 / _frequencyNumber).round();
+    List<TimeOfDay?> newTimes = List.from(_selectedTimes);
+    List<bool> newAutoGenerated = List.from(_isAutoGeneratedTimes);
+    bool changed = false;
+    for (int i = 1; i < _frequencyNumber; i++) {
+      if (newTimes[i] == null || newAutoGenerated[i]) {
+        DateTime newTime = base.add(Duration(minutes: intervalMinutes * i));
+        TimeOfDay newTimeOfDay = TimeOfDay(
+          hour: newTime.hour,
+          minute: newTime.minute,
+        );
+        if (newTimes[i] != newTimeOfDay || !newAutoGenerated[i]) {
+          newTimes[i] = newTimeOfDay;
+          newAutoGenerated[i] = true;
+          changed = true;
+        }
+      }
+    }
+    if (changed && mounted) {
+      setState(() {
+        _selectedTimes = newTimes;
+        _isAutoGeneratedTimes = newAutoGenerated;
+      });
+    }
+  }
+
+  void _initializeWeeklySchedule() {
+    setState(() {
+      Map<int, TimeOfDay?> updatedWeeklyTimes = {};
+      Map<int, bool> updatedWeeklyAutoGenerated = {};
+      for (int day in _selectedWeekdays) {
+        updatedWeeklyTimes[day] = _weeklyTimes[day];
+        updatedWeeklyAutoGenerated[day] = _weeklyAutoGenerated[day] ?? false;
+      }
+      _weeklyTimes = updatedWeeklyTimes;
+      _weeklyAutoGenerated = updatedWeeklyAutoGenerated;
+    });
+  }
+
+  Future<void> _selectStartDate() async {
+    final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-      locale: const Locale('ar', 'SA'),
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(DateTime.now().year + 10),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: Colors.blue.shade700,
-              onPrimary: Colors.white,
+            colorScheme: ColorScheme.light(
+              primary: kPrimaryColor,
+              secondary: kSecondaryColor,
             ),
           ),
           child: child!,
         );
       },
     );
-    if (pickedDate != null) {
+    if (picked != null && picked != _startDate && mounted) {
       setState(() {
-        if (isStartDate) {
-          _selectedStartDate = pickedDate;
-          if (_selectedEndDate != null && _selectedEndDate!.isBefore(_selectedStartDate!)) {
-            _selectedEndDate = null;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("تم مسح تاريخ الانتهاء لأنه كان قبل تاريخ البدء الجديد."),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        } else {
-          if (_selectedStartDate != null && pickedDate.isBefore(_selectedStartDate!)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("تاريخ الانتهاء لا يمكن أن يكون قبل تاريخ البدء.")),
-            );
-          } else {
-            _selectedEndDate = pickedDate;
-          }
+        _startDate = picked;
+        if (_endDate != null && _endDate!.isBefore(picked)) {
+          _endDate = null;
         }
       });
     }
   }
 
-  Future<void> _getImage(ImageSource source) async {
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: source,
-        imageQuality: 80,
-      );
-      if (image != null) {
-        setState(() {
-          _newImageFile = File(image.path);
-          _imageRemoved = false;
-        });
-      }
-    } catch (e) {
-      print("Error getting image from $source: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("حدث خطأ أثناء ${source == ImageSource.camera ? 'التقاط الصورة' : 'اختيار الصورة'}."),
-        ),
-      );
+  Future<void> _selectEndDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? _startDate ?? DateTime.now(),
+      firstDate: _startDate ?? DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime(DateTime.now().year + 10),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: kPrimaryColor,
+              secondary: kSecondaryColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _endDate && mounted) {
+      setState(() => _endDate = picked);
     }
   }
 
-  void _removeImage() {
+  Future<void> _selectTime(int index) async {
+    final TimeOfDay initialTime =
+        _selectedTimes.length > index && _selectedTimes[index] != null
+            ? _selectedTimes[index]!
+            : TimeOfDay.now();
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: kPrimaryColor,
+              secondary: kSecondaryColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        if (index < _selectedTimes.length) {
+          _selectedTimes[index] = picked;
+          _isAutoGeneratedTimes[index] = false;
+          if (index == 0 && _frequencyType == 'يومي') _autoFillDosageTimes();
+        }
+      });
+    }
+  }
+
+  Future<void> _selectWeeklyTime(int day) async {
+    final TimeOfDay initialTime = _weeklyTimes[day] ?? TimeOfDay.now();
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: kPrimaryColor,
+              secondary: kSecondaryColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _weeklyTimes[day] = picked;
+        _weeklyAutoGenerated[day] = false;
+      });
+    }
+  }
+
+  void _handleWeekdaySelected(int day, bool isSelected) {
     setState(() {
-      _newImageFile = null;
-      _imageRemoved = true;
+      if (isSelected) {
+        if (_selectedWeekdays.length < 6) {
+          _selectedWeekdays.add(day);
+          if (!_weeklyTimes.containsKey(day)) {
+            _weeklyTimes[day] = null;
+            _weeklyAutoGenerated[day] = false;
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('يمكنك اختيار 6 أيام فقط كحد أقصى')),
+          );
+        }
+      } else {
+        _selectedWeekdays.remove(day);
+        _weeklyTimes.remove(day);
+        _weeklyAutoGenerated.remove(day);
+      }
     });
   }
 
-  /// Uploads an image file to ImgBB and returns the image URL and delete hash.
-  Future<Map<String, String>?> _uploadImageToImgBB(BuildContext context, File imageFile) async {
-    final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
-
-    // Validate API Key
-    if (imgbbApiKey.isEmpty) {
-      print("ERROR: ImgBB API Key not found in .env. Cannot upload image.");
-      // Use mounted check if this is inside a StatefulWidget's State class
-      // if (mounted) {
+  void _handleApplySameTimeToAllWeekdays() {
+    List<int> sortedDays = _selectedWeekdays.toList()..sort();
+    if (sortedDays.isEmpty || _weeklyTimes[sortedDays.first] == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("خطأ في إعدادات رفع الصور.")),
-      );
-      // }
-      return null;
-    }
-
-    // Prepare the upload request
-    final url = Uri.parse('https://api.imgbb.com/1/upload?key=$imgbbApiKey');
-    print("Attempting ImgBB upload to: $url");
-
-    try {
-      var request = http.MultipartRequest('POST', url);
-      // Attach the file to the request
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'image', // API expects the file field name to be 'image'
-          imageFile.path,
-          // You might want to specify filename and content type if needed by API
-          // filename: imageFile.path.split('/').last,
-          // contentType: MediaType('image', 'jpeg'), // Or png, etc.
+        const SnackBar(
+          content: Text("الرجاء تحديد وقت لليوم الأول في القائمة أولاً"),
         ),
       );
-
-      // Send the request and get the streamed response
-      var streamedResponse = await request.send();
-
-      // Get the full response body
-      final response = await http.Response.fromStream(streamedResponse);
-
-      // Check the status code
-      if (response.statusCode == 200) {
-        print("ImgBB upload successful (Status 200). Parsing response...");
-        // Parse the JSON response body robustly
-        try {
-          final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
-
-          // Check if the response indicates success and contains data
-          if (jsonResponse['success'] == true && jsonResponse.containsKey('data')) {
-            final Map<String, dynamic> data = jsonResponse['data'];
-            final String? imageUrl = data['url']; // URL of the displayed image
-            final String? deleteUrl = data['delete_url']; // URL to delete the image
-
-            if (imageUrl != null && deleteUrl != null) {
-              // Extract the delete hash from the delete_url
-              final deleteHash = deleteUrl.split('/').last;
-              print("ImgBB parsing successful. ImageURL: $imageUrl, DeleteHash: $deleteHash");
-              return {
-                'imageUrl': imageUrl,
-                'imgbbDeleteHash': deleteHash,
-              };
-            } else {
-              print("Failed to parse ImgBB response: 'url' or 'delete_url' missing in data. Body: ${response.body}");
-              return null;
-            }
-          } else {
-            print("Failed to parse ImgBB response: 'success' not true or 'data' missing. Body: ${response.body}");
-            return null;
+      return;
+    }
+    final firstTime = _weeklyTimes[sortedDays.first]!;
+    bool changed = false;
+    setState(() {
+      for (int day in sortedDays.skip(1)) {
+        if (_weeklyTimes[day] == null || (_weeklyAutoGenerated[day] ?? false)) {
+          if (_weeklyTimes[day] != firstTime ||
+              !(_weeklyAutoGenerated[day] ?? false)) {
+            _weeklyTimes[day] = firstTime;
+            _weeklyAutoGenerated[day] = true;
+            changed = true;
           }
-        } catch (e) {
-          print("Error decoding ImgBB JSON response: $e. Body: ${response.body}");
-          return null;
         }
-      } else {
-        // Log upload failure
-        print("ImgBB upload failed. Status: ${response.statusCode}, Reason: ${response.body}");
-        // Optionally show specific error to user based on status code/body
-        // if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("فشل رفع الصورة. الرمز: ${response.statusCode}")),
+      }
+    });
+    if (changed) {
+      print("Applied same time to other weekdays.");
+    }
+  }
+
+  Future<void> _pickImage() async {
+    File? tempImage;
+    bool wasUploading = _isUploading;
+    try {
+      var status = await Permission.camera.request();
+      if (status.isGranted) {
+        final pickedFile = await ImagePicker().pickImage(
+          source: ImageSource.camera,
         );
-        // }
-        return null;
-      }
-    } catch (e) {
-      // Handle network errors or other exceptions during upload
-      print("Error uploading to ImgBB: $e");
-      // if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("حدث خطأ في الشبكة أثناء رفع الصورة.")),
-      );
-      // }
-      return null;
-    }
-  }
-
-  Future<void> _deleteOldImgBBImage(String deleteHash) async {
-    final String imgbbApiKey = dotenv.env['IMGBB_API_KEY'] ?? '';
-    if (imgbbApiKey.isEmpty) {
-      print("WARNING: ImgBB API Key not configured securely. Skipping old image deletion.");
-      return;
-    }
-    final url = Uri.parse('https://api.imgbb.com/1/delete?key=$imgbbApiKey&delete_hash=$deleteHash');
-    try {
-      final response = await http.get(url); // Changed from http.delete(url)
-      if (response.statusCode == 200) {
-        print("Old ImgBB image deleted successfully. Response: ${response.body}");
-      } else {
-        print("Failed to delete image from ImgBB ($deleteHash). Status: ${response.statusCode}, Body: ${response.body}");
-      }
-    } catch (e) {
-      print("Error deleting image from ImgBB ($deleteHash): $e");
-    }
-  }
-
-  Future<void> _saveChanges() async {
-    if (_user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("خطأ: المستخدم غير متوفر لحفظ البيانات.")),
-      );
-      return;
-    }
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedStartDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء تحديد تاريخ البدء.")));
-      return;
-    }
-    if (_selectedFrequency == 'يومي' && _selectedTimes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء إضافة وقت واحد على الأقل للجرعة.")));
-      return;
-    }
-    if (_selectedFrequency == 'اسبوعي' && _selectedWeekdays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء اختيار يوم واحد على الأقل وضبط الوقت له.")));
-      return;
-    }
-    setState(() { _isSaving = true; });
-    String? finalImageUrl = _currentImageUrl;
-    String? finalDeleteHash = _currentImgbbDeleteHash;
-    bool deleteOldImage = false;
-    if (_newImageFile != null) {
-      final uploadResult = await _uploadImageToImgBB(context, _newImageFile!);
-      if (uploadResult != null) {
-        finalImageUrl = uploadResult['imageUrl'];
-        finalDeleteHash = uploadResult['imgbbDeleteHash'];
-        deleteOldImage = _currentImgbbDeleteHash != null && _currentImgbbDeleteHash!.isNotEmpty;
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("فشل رفع الصورة الجديدة. لم يتم حفظ التغييرات.")));
-        setState(() { _isSaving = false; });
-        return;
-      }
-    } else if (_imageRemoved) {
-      deleteOldImage = _currentImgbbDeleteHash != null && _currentImgbbDeleteHash!.isNotEmpty;
-      finalImageUrl = null;
-      finalDeleteHash = null;
-    }
-    if (deleteOldImage && _currentImgbbDeleteHash != null) {
-      await _deleteOldImgBBImage(_currentImgbbDeleteHash!);
-    }
-    var timesField;
-    if (_selectedFrequency == 'اسبوعي') {
-      timesField = _selectedWeekdays.toList()
-          .map((day) => {
-        'day': day,
-        'time': _weeklyTimes[day] != null ? TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!) : ''
-      })
-          .toList();
-    } else {
-      timesField = _selectedTimes
-          .map((time) => TimeUtils.formatTimeOfDay(context, time))
-          .toList();
-    }
-    final Map<String, dynamic> updatedData = {
-      'name': _nameController.text.trim(),
-      'startDate': Timestamp.fromDate(_selectedStartDate!),
-      'endDate': _selectedEndDate != null ? Timestamp.fromDate(_selectedEndDate!) : null,
-      'times': timesField,
-      'frequency': '${_selectedTimes.length} $_selectedFrequency', // Ensure consistency
-      'frequencyType': _selectedFrequency, // Update frequencyType
-      'weeklyDays': _selectedFrequency == 'اسبوعي' ? _selectedWeekdays.toList() : FieldValue.delete(),
-      'imageUrl': finalImageUrl,
-      'imgbbDeleteHash': finalDeleteHash,
-    };
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_user!.uid)
-          .collection('medicines')
-          .doc(widget.docId)
-          .update(updatedData);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("تم حفظ التغييرات بنجاح"), backgroundColor: Colors.green),
-      );
-      Navigator.of(context).pop();
-    } catch (e) {
-      print("Error saving medication changes: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("فشل حفظ التغييرات: $e"), backgroundColor: Colors.red),
-      );
-    } finally {
-      setState(() { _isSaving = false; });
-    }
-  }
-
-  // ----------------------
-  // Daily Time Picker UI (Card-based, similar to weekly UI)
-  // ----------------------
-  Widget _buildDailyTimePickerSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "أوقات الجرعات اليومية:",
-          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 10),
-        if (_selectedTimes.isNotEmpty && _selectedTimes[0] != null)
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                for (int i = 1; i < _selectedTimes.length; i++) {
-                  _selectedTimes[i] = _selectedTimes[0];
-                  _dailyAutoGenerated[i] = true;
+        if (pickedFile != null) {
+          tempImage = File(pickedFile.path);
+          if (mounted) {
+            setState(() {
+              _capturedImage = tempImage;
+              _uploadedImageUrl = null;
+              _hasOriginalImage = false;
+              _isUploading = true;
+            });
+          }
+          _uploadImageToImgBB(tempImage)
+              .then((url) {
+                if (mounted) {
+                  setState(() {
+                    _uploadedImageUrl = url;
+                    _isUploading = false;
+                  });
+                }
+              })
+              .catchError((e) {
+                if (mounted) {
+                  setState(() => _isUploading = false);
+                  _showBlockingAlert(
+                    "خطأ تحميل",
+                    "فشل تحميل الصورة. الرجاء المحاولة مرة أخرى.",
+                  );
                 }
               });
-            },
-            child: const Text("تطبيق نفس الوقت لجميع الجرعات"),
-          ),
-        const SizedBox(height: 10),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _selectedTimes.length,
-          itemBuilder: (context, index) {
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 6.0),
-              elevation: 1.0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              child: ListTile(
-                leading: Icon(Icons.access_time_filled, color: Colors.blue.shade700),
-                title: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('${index + 1}. ', style: const TextStyle(fontSize: 16)),
-                    Text(
-                      _selectedTimes[index] == null
-                          ? 'اضغط لاختيار الوقت'
-                          : TimeUtils.formatTimeOfDay(context, _selectedTimes[index]),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: _selectedTimes[index] == null ? FontWeight.normal : FontWeight.bold,
-                        color: _selectedTimes[index] == null ? Colors.grey.shade600 : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    if (_selectedTimes[index] != null && index > 0)
-                      Icon(
-                        _dailyAutoGenerated[index] ? Icons.smart_toy : Icons.person,
-                        size: 16,
-                        color: Colors.grey,
-                      ),
-                  ],
-                ),
-                trailing: const Icon(Icons.edit_calendar_outlined),
-                onTap: () async {
-                  final TimeOfDay? picked = await showTimePicker(
-                    context: context,
-                    initialTime: _selectedTimes[index] ?? TimeOfDay.now(),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _selectedTimes[index] = picked;
-                      _dailyAutoGenerated[index] = false;
-                    });
-                  }
-                },
-              ),
-            );
-          },
-        ),
-        ElevatedButton.icon(
-          icon: Icon(Icons.add_alarm, color: Colors.white),
-          label: const Text("إضافة جرعة جديدة"),
-          onPressed: () async {
-            final TimeOfDay? picked = await showTimePicker(
-              context: context,
-              initialTime: TimeOfDay.now(),
-            );
-            if (picked != null) {
-              setState(() {
-                _selectedTimes.add(picked);
-                _dailyAutoGenerated.add(false);
-              });
-            }
-          },
-        ),
-        if (_selectedTimes.any((t) => t == null))
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(
-              'الرجاء تحديد جميع أوقات الجرعات المطلوبة.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
-            ),
-          ),
-      ],
+        } else {
+          if (mounted && wasUploading) setState(() => _isUploading = false);
+        }
+      } else if (status.isPermanentlyDenied) {
+        _showBlockingAlert(
+          "الإذن مطلوب",
+          "تم رفض الوصول إلى الكاميرا بشكل دائم. يرجى تمكين الإذن من إعدادات التطبيق.",
+          onOk: openAppSettings,
+        );
+        if (mounted && wasUploading) setState(() => _isUploading = false);
+      } else {
+        _showBlockingAlert(
+          "الإذن مطلوب",
+          "يجب السماح بالوصول إلى الكاميرا لالتقاط صورة.",
+        );
+        if (mounted && wasUploading) setState(() => _isUploading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploading = false);
+        _showBlockingAlert("خطأ", "حدث خطأ أثناء التقاط الصورة.");
+      }
+    }
+  }
+
+  Future<String?> _uploadImageToImgBB(File imageFile) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      final url = Uri.parse('https://api.imgbb.com/1/upload?key=$imgbbApiKey');
+      final response = await http
+          .post(url, body: {'image': base64Image})
+          .timeout(const Duration(seconds: 60));
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        final imageUrl = jsonResponse['data']?['url'] as String?;
+        return imageUrl;
+      } else {
+        throw Exception("فشل تحميل الصورة. رمز الحالة: ${response.statusCode}");
+      }
+    } on TimeoutException {
+      throw Exception("فشل تحميل الصورة: انتهت مهلة الطلب.");
+    } catch (e) {
+      throw Exception("حدث خطأ غير متوقع أثناء تحميل الصورة: $e");
+    }
+  }
+
+  void _nextPage() {
+    if (!_pageController.hasClients) return;
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 500), // updated duration
+      curve: Curves.easeInOutCubic, // updated curve
     );
   }
 
-  // ----------------------
-  // Weekly Schedule UI (as before)
-  // ----------------------
-  // Helper to return Arabic name for weekday.
+  void _previousPage() {
+    if (!_pageController.hasClients) return;
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 500), // updated duration
+      curve: Curves.easeInOutCubic, // updated curve
+    );
+  }
+
+  Future<void> _updateMedication() async {
+    if (!_formKeyPage3.currentState!.validate()) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showBlockingAlert("خطأ", "المستخدم غير مسجل الدخول.");
+      return;
+    }
+    if (_capturedImage != null && _isUploading) {
+      _showBlockingAlert(
+        "انتظار",
+        "يتم تحميل الصورة حالياً. الرجاء الانتظار لحظات ثم المحاولة مرة أخرى.",
+      );
+      return;
+    }
+    if (_frequencyType == 'اسبوعي') {
+      if (_selectedWeekdays.isEmpty) {
+        _showBlockingAlert(
+          "خطأ",
+          "الرجاء تحديد يوم واحد على الأقل للجدول الأسبوعي.",
+        );
+        return;
+      }
+      bool allWeeklyTimesSet = _selectedWeekdays.every(
+        (day) => _weeklyTimes[day] != null,
+      );
+      if (!allWeeklyTimesSet) {
+        _showBlockingAlert(
+          "خطأ",
+          "الرجاء تحديد وقت لكل يوم تم اختياره في الجدول الأسبوعي.",
+        );
+        return;
+      }
+    }
+    List<String> dailyTimesFormatted = [];
+    List<Map<String, dynamic>> weeklyScheduleFormatted = [];
+    List<Map<String, dynamic>> missedDoses = [];
+    if (_frequencyType == 'يومي') {
+      dailyTimesFormatted =
+          _selectedTimes
+              .where((t) => t != null)
+              .map((t) => TimeUtils.formatTimeOfDay(context, t!))
+              .toList();
+      if (_startDate != null) {
+        for (var time in _selectedTimes) {
+          if (time != null) {
+            DateTime doseDateTime = DateTime(
+              _startDate!.year,
+              _startDate!.month,
+              _startDate!.day,
+              time.hour,
+              time.minute,
+            );
+            missedDoses.add({
+              'scheduled': Timestamp.fromDate(doseDateTime),
+              'status': 'pending',
+            });
+          }
+        }
+      }
+    } else {
+      List<int> sortedDays = _selectedWeekdays.toList()..sort();
+      weeklyScheduleFormatted =
+          sortedDays.map((day) {
+            final time = _weeklyTimes[day];
+            return {
+              'day': day,
+              'time':
+                  time != null ? TimeUtils.formatTimeOfDay(context, time) : '',
+            };
+          }).toList();
+      if (_startDate != null) {
+        DateTime currentCheckDate = _startDate!;
+        DateTime firstWeekEndDate = _startDate!.add(const Duration(days: 7));
+        DateTime effectiveEndDate =
+            _endDate != null && _endDate!.isBefore(firstWeekEndDate)
+                ? _endDate!.add(const Duration(days: 1))
+                : firstWeekEndDate;
+        while (currentCheckDate.isBefore(effectiveEndDate)) {
+          if (_selectedWeekdays.contains(currentCheckDate.weekday)) {
+            final time = _weeklyTimes[currentCheckDate.weekday];
+            if (time != null) {
+              DateTime doseDateTime = DateTime(
+                currentCheckDate.year,
+                currentCheckDate.month,
+                currentCheckDate.day,
+                time.hour,
+                time.minute,
+              );
+              missedDoses.add({
+                'scheduled': Timestamp.fromDate(doseDateTime),
+                'status': 'pending',
+              });
+            }
+          }
+          currentCheckDate = currentCheckDate.add(const Duration(days: 1));
+        }
+      }
+    }
+    final updatedMedicine = <String, dynamic>{
+      'name': _nameController.text.trim(),
+      'dosage': '${_dosageController.text.trim()} $_dosageUnit',
+      'frequencyType': _frequencyType,
+      'frequencyDetails':
+          _frequencyType == 'يومي'
+              ? {'timesPerDay': _frequencyNumber}
+              : {'selectedWeekdays': _selectedWeekdays.toList()..sort()},
+      'times':
+          _frequencyType == 'يومي'
+              ? dailyTimesFormatted
+              : weeklyScheduleFormatted,
+      'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+      'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+      'missedDoses': missedDoses,
+      'lastUpdated': Timestamp.now(),
+    };
+    if (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty) {
+      updatedMedicine['imageUrl'] = _uploadedImageUrl;
+    } else if (_hasOriginalImage) {
+      // Keep original image
+    } else {
+      updatedMedicine['imageUrl'] = null;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(widget.docId)
+          .update(updatedMedicine);
+      debugPrint(
+        "Notification rescheduling skipped (notification system removed).",
+      );
+      if (mounted) {
+        _showBlockingAlert(
+          "نجاح",
+          "تم تحديث الدواء بنجاح!",
+          onOk: () {
+            if (mounted) Navigator.pop(context, true);
+          },
+        );
+      }
+    } catch (e, s) {
+      print("❌ Firestore update error: $e");
+      print("❌ Stack trace: $s");
+      if (mounted) {
+        _showBlockingAlert("خطأ", "حدث خطأ أثناء تحديث بيانات الدواء: $e");
+      }
+    }
+  }
+
+  void _showBlockingAlert(String title, String message, {VoidCallback? onOk}) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: kCardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kBorderRadius),
+          ),
+          title: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold),
+          ),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              child: const Text(
+                "حسناً",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                onOk?.call();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String _dayName(int day) {
     switch (day) {
       case 1:
@@ -1390,307 +753,1599 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     }
   }
 
-  // Ensure weekly maps exist for selected days.
-  void _initializeWeeklySchedule() {
-    if (_selectedWeekdays.isEmpty && _weeklyTimes.isNotEmpty) {
-      _selectedWeekdays = _weeklyTimes.keys.toSet();
-    }
-    for (int day in _selectedWeekdays) {
-      _weeklyAutoGenerated.putIfAbsent(day, () => false);
-    }
+  Widget _buildStartEndDatePage() {
+    return AddStartEndDatePage(
+      formKey: _formKeyPage3,
+      startDate: _startDate,
+      endDate: _endDate,
+      onSelectStartDate: _selectStartDate,
+      onSelectEndDate: _selectEndDate,
+      onSubmit: _updateMedication,
+      onBack: _previousPage,
+      onRemoveEndDate: () {
+        setState(() => _endDate = null);
+      },
+      submitButtonText: "حفظ التعديلات",
+    );
   }
 
-  Future<void> _selectWeeklyTime(int day) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _weeklyTimes[day] ?? TimeOfDay.now(),
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: kBackgroundColor,
+        appBar: AppBar(
+          title: const Text(
+            'تعديل الدواء',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+          backgroundColor: kPrimaryColor,
+          foregroundColor: Colors.white,
+          elevation: 1,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+          ),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder:
+                    (ctx) => AlertDialog(
+                      backgroundColor: kCardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kBorderRadius),
+                      ),
+                      title: const Text(
+                        "هل تريد إلغاء التعديل؟",
+                        textAlign: TextAlign.center,
+                      ),
+                      content: const Text(
+                        "سيتم تجاهل جميع التغييرات التي قمت بها.",
+                        textAlign: TextAlign.center,
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text("متابعة التحرير"),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            Navigator.of(context).pop();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kErrorColor,
+                          ),
+                          child: const Text("نعم، إلغاء"),
+                        ),
+                      ],
+                    ),
+              );
+            },
+          ),
+        ),
+        body:
+            _isLoading
+                ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(color: kPrimaryColor),
+                      const SizedBox(height: 20),
+                      Text(
+                        "جاري تحميل بيانات الدواء...",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+                : Stack(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 400),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            kPrimaryColor.withOpacity(0.10),
+                            kBackgroundColor,
+                            Colors.white,
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0, 0.3, 1],
+                        ),
+                      ),
+                    ),
+
+                    // Page indicator with edit mode indicator
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: AnimatedBuilder(
+                        animation: _pageController,
+                        builder: (context, _) {
+                          final currentPage =
+                              _pageController.hasClients
+                                  ? _pageController.page?.round() ?? 0
+                                  : 0;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            color: Colors.transparent,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Edit mode indicator (now on the left side)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: kSecondaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: kSecondaryColor.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.edit,
+                                        color: kSecondaryColor,
+                                        size: 12,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "وضع التعديل",
+                                        style: TextStyle(
+                                          color: kSecondaryColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Page indicator dots (inline with edit mode)
+                                ...List.generate(
+                                  3,
+                                  (index) => Container(
+                                    width: 24,
+                                    height: 3,
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                      color:
+                                          currentPage == index
+                                              ? kPrimaryColor
+                                              : kPrimaryColor.withOpacity(0.3),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // PageView with added top padding for each page
+                    PageView(
+                      controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 50.0),
+                          // Increased for edit mode indicator
+                          child: _buildNameAndPicturePage(),
+                        ),
+
+                        Padding(
+                          padding: const EdgeInsets.only(top: 50.0),
+                          // Increased for edit mode indicator
+                          child: _buildDosagePage(),
+                        ),
+
+                        Padding(
+                          padding: const EdgeInsets.only(top: 50.0),
+                          child: _buildStartEndDatePage(),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+      ),
     );
-    if (picked != null) {
-      setState(() {
-        _weeklyTimes[day] = picked;
-        _weeklyAutoGenerated[day] = false;
-        List<int> sortedDays = _selectedWeekdays.toList()..sort();
-        if (sortedDays.isNotEmpty && day == sortedDays.first) {
-          for (int otherDay in sortedDays.skip(1)) {
-            if (_weeklyTimes[otherDay] == null) {
-              _weeklyTimes[otherDay] = picked;
-              _weeklyAutoGenerated[otherDay] = true;
+  }
+
+  // Modified AddNamePicturePage for edit mode
+  Widget _buildNameAndPicturePage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Form(
+        key: _formKeyPage1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Page heading with gradient styling
+            Center(
+              child: ShaderMask(
+                shaderCallback:
+                    (bounds) => LinearGradient(
+                      colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                child: Text(
+                  "تعديل الدواء",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: MediaQuery.of(context).size.width * 0.07,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Subtitle
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                "تعديل اسم الدواء أو تحديث الصورة",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25.0),
+
+            // Image picker card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kCardColor,
+                borderRadius: BorderRadius.circular(kBorderRadius),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.camera_alt, color: kPrimaryColor),
+                      const SizedBox(width: 10),
+                      Text(
+                        "تحديث صورة الدواء",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const Divider(height: 24),
+
+                  Center(
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        height: MediaQuery.of(context).size.width * 0.45,
+                        width: MediaQuery.of(context).size.width * 0.7,
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          border: Border.all(
+                            color:
+                                _capturedImage != null || _hasOriginalImage
+                                    ? kPrimaryColor
+                                    : Colors.grey.shade300,
+                            width:
+                                _capturedImage != null || _hasOriginalImage
+                                    ? 2.0
+                                    : 1.0,
+                          ),
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          image:
+                              _capturedImage != null
+                                  ? DecorationImage(
+                                    image: FileImage(_capturedImage!),
+                                    fit: BoxFit.cover,
+                                  )
+                                  : (_hasOriginalImage &&
+                                      _uploadedImageUrl != null)
+                                  ? DecorationImage(
+                                    image: NetworkImage(_uploadedImageUrl!),
+                                    fit: BoxFit.cover,
+                                  )
+                                  : null,
+                        ),
+                        child:
+                            (!_hasOriginalImage && _capturedImage == null)
+                                ? Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    TweenAnimationBuilder<double>(
+                                      tween: Tween<double>(
+                                        begin: 0.8,
+                                        end: 1.0,
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                      curve: Curves.easeInOut,
+                                      builder: (context, value, child) {
+                                        return Transform.scale(
+                                          scale: value,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: kPrimaryColor.withOpacity(
+                                                0.1,
+                                              ),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              Icons.camera_alt_outlined,
+                                              color: kPrimaryColor,
+                                              size:
+                                                  MediaQuery.of(
+                                                    context,
+                                                  ).size.width *
+                                                  0.1,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(),
+                                    ),
+                                    Positioned(
+                                      bottom:
+                                          MediaQuery.of(context).size.width *
+                                          0.08,
+                                      child: Text(
+                                        'اضغط لتغيير صورة الدواء',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.grey.shade700,
+                                          fontSize:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.width *
+                                              0.04,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                                : (_isUploading
+                                    ? Center(
+                                      child: Container(
+                                        width: 48,
+                                        height: 48,
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black45,
+                                          borderRadius: BorderRadius.circular(
+                                            kBorderRadius,
+                                          ),
+                                        ),
+                                        child: const CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                          strokeWidth: 3,
+                                        ),
+                                      ),
+                                    )
+                                    : Stack(
+                                      children: [
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              Icons.edit,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )),
+                      ),
+                    ),
+                  ),
+
+                  // Hint text for image
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: kSecondaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(
+                            kBorderRadius / 2,
+                          ),
+                          border: Border.all(
+                            color: kSecondaryColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: kSecondaryColor,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "يمكنك الاحتفاظ بالصورة الحالية أو تحديثها",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 25.0),
+
+            // Medicine name search
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kCardColor,
+                borderRadius: BorderRadius.circular(kBorderRadius),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.medication, color: kPrimaryColor),
+                      const SizedBox(width: 10),
+                      Text(
+                        "تعديل اسم الدواء",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const Divider(height: 24),
+
+                  // Medicine name input
+                  FutureBuilder<List<String>>(
+                    future: _medicineNamesFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: kPrimaryColor,
+                          ),
+                        );
+                      } else if (snapshot.hasError) {
+                        return Text("خطأ في تحميل قائمة الأدوية");
+                      } else {
+                        final suggestions = snapshot.data ?? [];
+                        return TextFormField(
+                          controller: _nameController,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'تعديل اسم الدواء',
+                            labelStyle: TextStyle(
+                              color: kPrimaryColor.withOpacity(0.8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            hintText: 'تعديل أو تغيير اسم الدواء...',
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: kPrimaryColor,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                kBorderRadius,
+                              ),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                kBorderRadius,
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                kBorderRadius,
+                              ),
+                              borderSide: BorderSide(
+                                color: kPrimaryColor,
+                                width: 2.0,
+                              ),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                kBorderRadius,
+                              ),
+                              borderSide: BorderSide(
+                                color: kErrorColor,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                          validator:
+                              (value) =>
+                                  (value == null || value.trim().isEmpty)
+                                      ? 'الرجاء إدخال اسم الدواء'
+                                      : null,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30.0),
+
+            // Next Button
+            ElevatedButton(
+              onPressed: () {
+                if (_formKeyPage1.currentState!.validate()) {
+                  if (_capturedImage != null && _isUploading) {
+                    _showBlockingAlert(
+                      "انتظار",
+                      "يتم تحميل الصورة حالياً. الرجاء الانتظار.",
+                    );
+                  } else {
+                    _nextPage();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 55),
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: kPrimaryColor.withOpacity(0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(kBorderRadius),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'حفظ التغييرات والمتابعة',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.arrow_forward, size: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Modified AddDosagePage for edit mode
+  Widget _buildDosagePage() {
+    return AddDosagePage(
+      formKey: _formKeyPage2,
+      dosageController: _dosageController,
+      dosageUnit: _dosageUnit,
+      dosageUnits: _dosageUnits,
+      frequencyType: _frequencyType,
+      frequencyTypes: _frequencyTypes,
+      frequencyNumber: _frequencyNumber,
+      frequencyNumbers: _frequencyNumbers,
+      selectedTimes: _selectedTimes,
+      isAutoGeneratedTimes: _isAutoGeneratedTimes,
+      selectedWeekdays: _selectedWeekdays,
+      weeklyTimes: _weeklyTimes,
+      weeklyAutoGenerated: _weeklyAutoGenerated,
+      onDosageUnitChanged: (value) {
+        if (value != null && mounted) setState(() => _dosageUnit = value);
+      },
+      onFrequencyNumberChanged: (value) {
+        if (value != null && value != _frequencyNumber && mounted) {
+          setState(() => _frequencyNumber = value);
+          _updateTimeFields();
+        }
+      },
+      onFrequencyTypeChanged: (value) {
+        if (value != null && value != _frequencyType && mounted) {
+          setState(() {
+            _frequencyType = value;
+            if (value == 'يومي') {
+              _updateTimeFields();
+              _selectedWeekdays.clear();
+              _weeklyTimes.clear();
+              _weeklyAutoGenerated.clear();
+            } else {
+              _selectedTimes = List.filled(
+                _frequencyNumber,
+                null,
+                growable: true,
+              );
+              _isAutoGeneratedTimes = List.filled(
+                _frequencyNumber,
+                false,
+                growable: true,
+              );
+              _initializeWeeklySchedule();
             }
+          });
+        }
+      },
+      onSelectTime: _selectTime,
+      onWeekdaySelected: _handleWeekdaySelected,
+      onSelectWeeklyTime: _selectWeeklyTime,
+      onApplySameTimeToAllWeekdays: _handleApplySameTimeToAllWeekdays,
+      onNext: () {
+        if (_formKeyPage2.currentState!.validate()) {
+          bool allTimesFilled =
+              _frequencyType == 'يومي'
+                  ? _selectedTimes.every((t) => t != null)
+                  : (_selectedWeekdays.isEmpty ||
+                      _selectedWeekdays.every(
+                        (day) => _weeklyTimes[day] != null,
+                      ));
+          if (allTimesFilled) {
+            _nextPage();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('الرجاء إكمال تعديل جميع أوقات الجرعات المطلوبة'),
+              ),
+            );
           }
         }
-      });
-    }
+      },
+      onBack: _previousPage,
+      getDayName: _dayName,
+      // Extra parameters for edit mode
+      pageTitle: "تعديل الجرعة والأوقات",
+      pageSubtitle: "تعديل تفاصيل جرعة الدواء وأوقات تناوله",
+      dosageTitle: "تعديل تفاصيل الجرعة",
+      timesTitle: "تعديل أوقات تناول الجرعة:",
+      weeklyScheduleTitle: "تعديل جدول الجرعات الأسبوعي",
+      weeklyScheduleInstructions: "تعديل أيام وأوقات تناول الدواء الأسبوعية",
+      nextButtonText: "حفظ التغييرات والمتابعة",
+      timeSelectionPrompt: "اضغط لتعديل الوقت",
+      applyToAllButtonText: "تعديل وتطبيق نفس الوقت لجميع الأيام",
+    );
   }
+}
 
-  Widget _buildWeeklyScheduleSection() {
-    _initializeWeeklySchedule();
-    List<int> sortedDays = _selectedWeekdays.toList()..sort();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "جدول الجرعات الأسبوعي",
-          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8.0,
-          children: List.generate(7, (index) {
-            int day = index + 1;
-            bool selected = _selectedWeekdays.contains(day);
-            return FilterChip(
-              label: Text(_dayName(day)),
-              selected: selected,
-              onSelected: (value) {
-                setState(() {
-                  if (value) {
-                    if (_selectedWeekdays.length < 6) {
-                      _selectedWeekdays.add(day);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('يمكنك اختيار 6 أيام فقط')),
-                      );
-                    }
-                  } else {
-                    _selectedWeekdays.remove(day);
-                    _weeklyTimes.remove(day);
-                    _weeklyAutoGenerated.remove(day);
-                  }
-                });
-              },
-              selectedColor: Colors.blue.shade300,
-              checkmarkColor: Colors.white,
-              backgroundColor: Colors.grey.shade200,
-            );
-          }),
-        ),
-        if (_selectedWeekdays.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              "الرجاء اختيار يوم واحد على الأقل",
-              style: TextStyle(fontSize: 12, color: Colors.red.shade700),
-            ),
-          )
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+// Modified AddStartEndDatePage class with support for custom button text
+class AddStartEndDatePage extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final VoidCallback onSelectStartDate;
+  final VoidCallback onSelectEndDate;
+  final VoidCallback onSubmit;
+  final VoidCallback onBack;
+  final String submitButtonText;
+  final VoidCallback onRemoveEndDate; // Add this callback for removing end date
+
+  const AddStartEndDatePage({
+    Key? key,
+    required this.formKey,
+    required this.startDate,
+    required this.endDate,
+    required this.onSelectStartDate,
+    required this.onSelectEndDate,
+    required this.onSubmit,
+    required this.onBack,
+    this.submitButtonText = 'التالي',
+    required this.onRemoveEndDate, // Make this required
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
+
+    return Form(
+      key: formKey,
+      child: Container(
+        decoration: const BoxDecoration(color: kBackgroundColor),
+        child: SafeArea(
+          child: Stack(
             children: [
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () {
-                  List<int> sortedDays = _selectedWeekdays.toList()..sort();
-                  if (sortedDays.isNotEmpty && _weeklyTimes[sortedDays.first] != null) {
-                    setState(() {
-                      for (int day in sortedDays.skip(1)) {
-                        _weeklyTimes[day] = _weeklyTimes[sortedDays.first]!;
-                        _weeklyAutoGenerated[day] = true;
-                      }
-                    });
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("حدد وقت اليوم الأول أولاً")));
-                  }
-                },
-                child: const Text("تطبيق نفس الوقت لجميع الأيام"),
-              ),
-              const SizedBox(height: 10),
-              Column(
-                children: sortedDays.map((day) {
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 6.0),
-                    elevation: 1.0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: ListTile(
-                      leading: Text(
-                        _dayName(day),
-                        style: const TextStyle(fontSize: 16),
+              // Back button with consistent design
+              Positioned(
+                top: 15,
+                left: 10,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(30),
+                  child: InkWell(
+                    onTap: onBack,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      title: InkWell(
-                        onTap: () async {
-                          await _selectWeeklyTime(day);
-                        },
-                        child: Text(
-                          _weeklyTimes[day] == null
-                              ? "اضغط لاختيار الوقت"
-                              : TimeUtils.formatTimeOfDay(context, _weeklyTimes[day]!),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: _weeklyTimes[day] == null ? Colors.grey.shade600 : Colors.black87,
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: kPrimaryColor,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Main content
+              Padding(
+                padding: EdgeInsets.only(
+                  left: horizontalPadding,
+                  right: horizontalPadding,
+                  top: verticalPadding + 35, // Add space for back button
+                  bottom: verticalPadding,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Page heading with consistent gradient styling
+                      Center(
+                        child: ShaderMask(
+                          shaderCallback:
+                              (bounds) => LinearGradient(
+                                colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ).createShader(bounds),
+                          child: Text(
+                            "تعديل فترة الدواء", // Changed heading
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: screenWidth * 0.07,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
-                      trailing: Icon(
-                        _weeklyTimes[day] == null
-                            ? Icons.edit_calendar_outlined
-                            : ((_weeklyAutoGenerated[day] ?? false)
-                            ? Icons.smart_toy
-                            : Icons.person),
-                        size: 16,
-                        color: Colors.grey,
+
+                      const SizedBox(height: 10),
+
+                      // Subtitle
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          "تعديل تاريخ بداية ونهاية تناول الدواء",
+                          // Changed subtitle
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
+
+                      const SizedBox(height: 25.0),
+
+                      // Date Card with consistent styling
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.grey.shade100),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_month,
+                                  color: kPrimaryColor,
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(
+                                  "تعديل فترة تناول الدواء", // Changed heading
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const Divider(height: 24),
+
+                            // Start date picker
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: kPrimaryColor.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.calendar_today,
+                                  color: kPrimaryColor,
+                                ),
+                              ),
+                              title: const Text(
+                                "تعديل تاريخ البدء:", // Changed title
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                startDate != null
+                                    ? DateFormat.yMMMd('ar').format(startDate!)
+                                    : "اختر تاريخ البدء",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color:
+                                      startDate != null
+                                          ? Colors.black87
+                                          : Colors.grey.shade500,
+                                ),
+                              ),
+                              trailing: TextButton.icon(
+                                icon: Icon(
+                                  Icons.edit_calendar,
+                                  color: kPrimaryColor,
+                                ),
+                                label: const Text(
+                                  "تغيير",
+                                  style: TextStyle(
+                                    color: kPrimaryColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                onPressed: onSelectStartDate,
+                              ),
+                            ),
+
+                            const SizedBox(height: 8),
+                            const Divider(height: 1),
+                            const SizedBox(height: 8),
+
+                            // End date picker
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: kPrimaryColor.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.event_available,
+                                  color: kPrimaryColor,
+                                ),
+                              ),
+                              title: const Text(
+                                "تعديل تاريخ الانتهاء:",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                endDate != null
+                                    ? DateFormat.yMMMd('ar').format(endDate!)
+                                    : "(اختياري) لم يتم تحديد تاريخ انتهاء",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: endDate != null ? Colors.black87 : Colors.grey.shade500,
+                                ),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (endDate != null)
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: kErrorColor,
+                                      ),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text("إزالة تاريخ الانتهاء"),
+                                            content: const Text("هل تريد إزالة تاريخ انتهاء الدواء؟"),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context),
+                                                child: const Text("إلغاء"),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  // Replace setState call with the callback
+                                                  onRemoveEndDate();
+                                                  Navigator.pop(context);
+                                                },
+                                                style: TextButton.styleFrom(foregroundColor: kErrorColor),
+                                                child: const Text("إزالة"),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                      tooltip: "إزالة تاريخ الانتهاء",
+                                    ),
+                                  TextButton.icon(
+                                    icon: endDate != null
+                                        ? Icon(
+                                      Icons.edit_calendar,
+                                      color: kPrimaryColor,
+                                    )
+                                        : Icon(
+                                      Icons.add_circle_outline,
+                                      color: kPrimaryColor,
+                                    ),
+                                    label: Text(
+                                      endDate != null ? "تغيير" : "إضافة",
+                                      style: const TextStyle(
+                                        color: kPrimaryColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    onPressed: onSelectEndDate,
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Day counter between start and end dates
+                            if (startDate != null && endDate != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    color: kPrimaryColor.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(kBorderRadius / 2),
+                                    border: Border.all(color: kPrimaryColor.withOpacity(0.2)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.date_range,
+                                        color: kPrimaryColor,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        "مدة العلاج: ${endDate!.difference(startDate!).inDays + 1} يوم",
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: kPrimaryColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                            // Information about end date (optional)
+                            if (endDate == null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: kSecondaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(
+                                      kBorderRadius / 2,
+                                    ),
+                                    border: Border.all(
+                                      color: kSecondaryColor.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        color: kSecondaryColor,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          "تاريخ الانتهاء اختياري. اتركه فارغاً إذا كان الدواء للاستخدام المستمر",
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                            // Last updated timestamp
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.update,
+                                    color: Colors.grey.shade600,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "آخر تحديث: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 30.0),
+
+                      // Submit Button with consistent styling
+                      ElevatedButton(
+                        onPressed: onSubmit,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 55),
+                          backgroundColor: kPrimaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: kPrimaryColor.withOpacity(0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kBorderRadius),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              submitButtonText,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.save, size: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
-      ],
-    );
-  }
-
-  Widget _buildFrequencySection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("التكرار:",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-        Row(
-          children: [
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text('يومي'),
-                value: 'يومي',
-                groupValue: _selectedFrequency,
-                onChanged: (value) {
-                  if (value != null) setState(() {
-                    _selectedFrequency = value;
-                    if (value == 'يومي') {
-                      // Reset daily schedule.
-                      _selectedTimes = _selectedTimes.isNotEmpty ? _selectedTimes : [];
-                      _dailyAutoGenerated = List<bool>.filled(_selectedTimes.length, false, growable: true);
-                    } else {
-                      // Reset weekly schedule.
-                      _selectedWeekdays = {};
-                      _weeklyTimes = {};
-                      _weeklyAutoGenerated = {};
-                    }
-                  });
-                },
-                activeColor: Colors.blue.shade700,
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text('اسبوعي'),
-                value: 'اسبوعي',
-                groupValue: _selectedFrequency,
-                onChanged: (value) {
-                  if (value != null) setState(() {
-                    _selectedFrequency = value;
-                    _selectedWeekdays = {};
-                    _weeklyTimes = {};
-                    _weeklyAutoGenerated = {};
-                  });
-                },
-                activeColor: Colors.blue.shade700,
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildImageSection(BuildContext context) {
-    Widget imageDisplay;
-    if (_newImageFile != null) {
-      imageDisplay = ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.file(
-          _newImageFile!,
-          height: 150,
-          width: double.infinity,
-          fit: BoxFit.cover,
-        ),
-      );
-    } else if (!_imageRemoved && _currentImageUrl != null && _currentImageUrl!.isNotEmpty) {
-      try {
-        imageDisplay = EnlargeableImage(
-          key: ValueKey(_currentImageUrl!),
-          imageUrl: _currentImageUrl!,
-          width: double.infinity,
-          height: 150,
-        );
-      } catch (e) {
-        print("EnlargeableImage not available, falling back to Image.network.");
-        imageDisplay = ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(
-            _currentImageUrl!,
-            height: 150,
-            width: double.infinity,
-            fit: BoxFit.cover,
-            errorBuilder: (ctx, err, st) => _buildImagePlaceholder(context),
-            loadingBuilder: (ctx, child, progress) =>
-            progress == null ? child : Center(child: CircularProgressIndicator()),
-          ),
-        );
-      }
-    } else {
-      imageDisplay = _buildImagePlaceholder(context);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("صورة الدواء (اختياري):",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-        const SizedBox(height: 10),
-        imageDisplay,
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            TextButton.icon(
-              icon: Icon(Icons.photo_library_outlined, color: Colors.blue.shade700),
-              label: Text("اختر من المعرض", style: TextStyle(color: Colors.blue.shade700)),
-              onPressed: () => _getImage(ImageSource.gallery),
-              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10)),
-            ),
-            TextButton.icon(
-              icon: Icon(Icons.camera_alt_outlined, color: Colors.blue.shade700),
-              label: Text("التقط صورة", style: TextStyle(color: Colors.blue.shade700)),
-              onPressed: () => _getImage(ImageSource.camera),
-              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10)),
-            ),
-          ],
-        ),
-        if (((_currentImageUrl != null && _currentImageUrl!.isNotEmpty && !_imageRemoved) || _newImageFile != null))
-          Center(
-            child: TextButton.icon(
-              icon: Icon(Icons.delete_outline, color: Colors.red, size: 20),
-              label: Text("إزالة الصورة", style: TextStyle(color: Colors.red)),
-              onPressed: _removeImage,
-              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10)),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildImagePlaceholder(BuildContext context) {
-    return Container(
-      height: 150,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade400),
       ),
-      alignment: Alignment.center,
+    );
+  }
+}
+
+// Extension to the AddDosagePage class to support edit mode text
+class AddDosagePage extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController dosageController;
+  final String dosageUnit;
+  final List<String> dosageUnits;
+  final String frequencyType;
+  final List<String> frequencyTypes;
+  final int frequencyNumber;
+  final List<int> frequencyNumbers;
+  final List<TimeOfDay?> selectedTimes;
+  final List<bool> isAutoGeneratedTimes;
+  final Set<int> selectedWeekdays;
+  final Map<int, TimeOfDay?> weeklyTimes;
+  final Map<int, bool> weeklyAutoGenerated;
+  final Function(String?) onDosageUnitChanged;
+  final Function(int?) onFrequencyNumberChanged;
+  final Function(String?) onFrequencyTypeChanged;
+  final Function(int) onSelectTime;
+  final Function(int, bool) onWeekdaySelected;
+  final Function(int) onSelectWeeklyTime;
+  final VoidCallback onApplySameTimeToAllWeekdays;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+  final String Function(int) getDayName;
+
+  // Additional properties for edit mode
+  final String pageTitle;
+  final String pageSubtitle;
+  final String dosageTitle;
+  final String timesTitle;
+  final String weeklyScheduleTitle;
+  final String weeklyScheduleInstructions;
+  final String nextButtonText;
+  final String timeSelectionPrompt;
+  final String applyToAllButtonText;
+
+  const AddDosagePage({
+    Key? key,
+    required this.formKey,
+    required this.dosageController,
+    required this.dosageUnit,
+    required this.dosageUnits,
+    required this.frequencyType,
+    required this.frequencyTypes,
+    required this.frequencyNumber,
+    required this.frequencyNumbers,
+    required this.selectedTimes,
+    required this.isAutoGeneratedTimes,
+    required this.selectedWeekdays,
+    required this.weeklyTimes,
+    required this.weeklyAutoGenerated,
+    required this.onDosageUnitChanged,
+    required this.onFrequencyNumberChanged,
+    required this.onFrequencyTypeChanged,
+    required this.onSelectTime,
+    required this.onWeekdaySelected,
+    required this.onSelectWeeklyTime,
+    required this.onApplySameTimeToAllWeekdays,
+    required this.onNext,
+    required this.onBack,
+    required this.getDayName,
+    this.pageTitle = "الجرعة والأوقات",
+    this.pageSubtitle = "أدخل تفاصيل جرعة الدواء وأوقات تناوله",
+    this.dosageTitle = "تفاصيل الجرعة",
+    this.timesTitle = "أوقات تناول الجرعة:",
+    this.weeklyScheduleTitle = "جدول الجرعات الأسبوعي",
+    this.weeklyScheduleInstructions =
+        "اختر الأيام التي تحتاج لتناول الدواء فيها وحدد الوقت لكل يوم",
+    this.nextButtonText = "التالي",
+    this.timeSelectionPrompt = "اضغط لاختيار الوقت",
+    this.applyToAllButtonText = "تطبيق نفس الوقت لجميع الأيام",
+  }) : super(key: key);
+
+  // --- Weekly Schedule Section UI ---
+  Widget _buildWeeklyScheduleSection(BuildContext context) {
+    // Sort the days according to the week order (Sunday to Saturday in Arabic convention)
+    // Using 1=Monday through 7=Sunday ISO standard
+    List<int> allDays = [1, 2, 3, 4, 5, 6, 7]; // Monday to Sunday
+
+    // Create a sorted list of selected days
+    List<int> sortedDays = selectedWeekdays.toList()..sort();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCardColor,
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.image_not_supported_outlined, color: Colors.grey.shade600, size: 50),
+          Row(
+            children: [
+              Icon(Icons.calendar_today, color: kPrimaryColor),
+              const SizedBox(width: 10),
+              Text(
+                weeklyScheduleTitle,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+
+          // Instructions text
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kSecondaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(kBorderRadius / 2),
+              border: Border.all(color: kSecondaryColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: kSecondaryColor, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    weeklyScheduleInstructions,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Day selection chips with improved styling and layout
+          const Text(
+            "أيام الأسبوع:",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text("لا توجد صورة", style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+
+          // Fixed to use horizontal ListView for full weekday names
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children:
+                  allDays.map((day) {
+                    bool selected = selectedWeekdays.contains(day);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: FilterChip(
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                        labelStyle: TextStyle(
+                          color: selected ? Colors.white : Colors.black87,
+                          fontWeight:
+                              selected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 14,
+                        ),
+                        label: Text(getDayName(day)),
+                        // Full day name
+                        selected: selected,
+                        onSelected: (value) => onWeekdaySelected(day, value),
+                        selectedColor: kPrimaryColor,
+                        checkmarkColor: Colors.white,
+                        backgroundColor:
+                            selected
+                                ? kPrimaryColor.withOpacity(0.1)
+                                : Colors.grey.shade100,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color:
+                                selected ? kPrimaryColor : Colors.grey.shade300,
+                            width: selected ? 1.5 : 1,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        showCheckmark: false,
+                      ),
+                    );
+                  }).toList(),
+            ),
+          ),
+
+          if (selectedWeekdays.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "الرجاء اختيار يوم واحد على الأقل",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: kErrorColor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+
+                // Apply same time button
+                ElevatedButton.icon(
+                  onPressed: onApplySameTimeToAllWeekdays,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kSecondaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.access_time_filled),
+                  label: Text(
+                    applyToAllButtonText,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Display a time picker for each selected day with improved styling
+                Column(
+                  children:
+                      sortedDays.map((day) {
+                        final time = weeklyTimes[day];
+                        final isAuto = weeklyAutoGenerated[day] ?? false;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(kBorderRadius),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                            border: Border.all(
+                              color:
+                                  time != null
+                                      ? kPrimaryColor.withOpacity(0.3)
+                                      : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(kBorderRadius),
+                            child: InkWell(
+                              onTap: () => onSelectWeeklyTime(day),
+                              borderRadius: BorderRadius.circular(
+                                kBorderRadius,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: kPrimaryColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          getDayName(day).substring(0, 2),
+                                          style: TextStyle(
+                                            color: kPrimaryColor,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            getDayName(day),
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                time != null
+                                                    ? Icons.access_time_filled
+                                                    : Icons.access_time,
+                                                size: 16,
+                                                color:
+                                                    time != null
+                                                        ? kPrimaryColor
+                                                        : Colors.grey.shade500,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                time == null
+                                                    ? timeSelectionPrompt
+                                                    : TimeUtils.formatTimeOfDay(
+                                                      context,
+                                                      time,
+                                                    ),
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight:
+                                                      time != null
+                                                          ? FontWeight.w500
+                                                          : FontWeight.normal,
+                                                  color:
+                                                      time != null
+                                                          ? Colors.black87
+                                                          : Colors
+                                                              .grey
+                                                              .shade600,
+                                                ),
+                                              ),
+                                              if (time != null && isAuto)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        right: 8,
+                                                      ),
+                                                  child: Tooltip(
+                                                    message:
+                                                        "وقت تم إنشاؤه تلقائيًا",
+                                                    child: Icon(
+                                                      Icons.smart_toy,
+                                                      size: 14,
+                                                      color: kSecondaryColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.edit_calendar,
+                                      color:
+                                          time != null
+                                              ? kPrimaryColor
+                                              : Colors.grey.shade400,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -1698,144 +2353,832 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new, color: Colors.blue.shade800, size: 24),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Text(
-                      "تعديل الدواء",
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16.0),
-                  child: _buildForm(),
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth * 0.06;
+    const verticalPadding = 20.0;
 
-  Widget _buildForm() {
+    // Determine if all required times are selected for validation purposes
+    bool allTimesSelected =
+        frequencyType == 'يومي'
+            ? !selectedTimes.any((t) => t == null) // Check daily times
+            : (selectedWeekdays.isEmpty ||
+                weeklyTimes.length ==
+                    selectedWeekdays.length); // Check weekly times
+
     return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text("اسم الدواء", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _nameController,
-            decoration: InputDecoration(
-              hintText: "مثال: بنادول أدفانس",
-              border: const OutlineInputBorder(),
-              prefixIcon: Icon(Icons.medication_liquid, color: Colors.blue.shade800),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return "الرجاء إدخال اسم الدواء";
-              return null;
-            },
-          ),
-          const SizedBox(height: 24),
-          Text("فترة الاستخدام", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-          const SizedBox(height: 8),
-          Row(
+      key: formKey,
+      child: Container(
+        decoration: const BoxDecoration(color: kBackgroundColor),
+        child: SafeArea(
+          child: Stack(
             children: [
-              Expanded(child: _buildDateButton(context, "تاريخ البدء", true)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildDateButton(context, "الانتهاء (اختياري)", false)),
+              // Back button with consistent design
+              Positioned(
+                top: 15,
+                left: 10,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(30),
+                  child: InkWell(
+                    onTap: onBack,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: kPrimaryColor,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Main content
+              Padding(
+                padding: EdgeInsets.only(
+                  left: horizontalPadding,
+                  right: horizontalPadding,
+                  top: verticalPadding + 35, // Add space for back button
+                  bottom: verticalPadding,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Page heading with consistent gradient styling
+                      Center(
+                        child: ShaderMask(
+                          shaderCallback:
+                              (bounds) => LinearGradient(
+                                colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ).createShader(bounds),
+                          child: Text(
+                            pageTitle,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: screenWidth * 0.07,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Subtitle
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          pageSubtitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.normal,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 25.0),
+
+                      // Dosage Card with consistent styling
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.grey.shade100),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.medication, color: kPrimaryColor),
+                                const SizedBox(width: 10),
+                                Text(
+                                  dosageTitle,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const Divider(height: 24),
+
+                            // Dosage Amount and Unit with improved styling
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: TextFormField(
+                                    controller: dosageController,
+                                    textAlign: TextAlign.center,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'^\d*\.?\d*'),
+                                      ),
+                                    ],
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'تعديل الجرعة',
+                                      labelStyle: TextStyle(
+                                        color: kPrimaryColor.withOpacity(0.8),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      prefixIcon: Icon(
+                                        Icons.science_outlined,
+                                        color: kPrimaryColor,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: kPrimaryColor,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      errorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: kErrorColor,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      focusedErrorBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: kErrorColor,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      errorStyle: TextStyle(
+                                        color: kErrorColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                            horizontal: 16,
+                                          ),
+                                    ),
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return 'ادخل الجرعة';
+                                      }
+                                      if (double.tryParse(value.trim()) ==
+                                          null) {
+                                        return 'أدخل رقماً صحيحاً';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+
+                                const SizedBox(width: 12),
+
+                                Expanded(
+                                  flex: 2,
+                                  child: DropdownButtonFormField<String>(
+                                    value: dosageUnit,
+                                    decoration: InputDecoration(
+                                      labelText: 'الوحدة',
+                                      labelStyle: TextStyle(
+                                        color: kPrimaryColor.withOpacity(0.8),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: kPrimaryColor,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                            horizontal: 16,
+                                          ),
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    icon: Icon(
+                                      Icons.arrow_drop_down,
+                                      color: kPrimaryColor,
+                                    ),
+                                    onChanged: onDosageUnitChanged,
+                                    items:
+                                        dosageUnits
+                                            .map(
+                                              (unit) => DropdownMenuItem(
+                                                value: unit,
+                                                child: Text(unit),
+                                              ),
+                                            )
+                                            .toList(),
+                                    validator:
+                                        (value) =>
+                                            value == null
+                                                ? 'اختر الوحدة'
+                                                : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // Frequency section
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Frequency Type dropdown (always shown)
+                                Expanded(
+                                  flex: 1,
+                                  child: DropdownButtonFormField<String>(
+                                    value: frequencyType,
+                                    decoration: InputDecoration(
+                                      labelText: 'نوع التكرار',
+                                      labelStyle: TextStyle(
+                                        color: kPrimaryColor.withOpacity(0.8),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      prefixIcon: Icon(
+                                        Icons.calendar_today,
+                                        color: kPrimaryColor,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: kPrimaryColor,
+                                          width: 2.0,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                            horizontal: 16,
+                                          ),
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    icon: Icon(
+                                      Icons.arrow_drop_down,
+                                      color: kPrimaryColor,
+                                    ),
+                                    onChanged: onFrequencyTypeChanged,
+                                    items:
+                                        frequencyTypes
+                                            .map(
+                                              (type) => DropdownMenuItem(
+                                                value: type,
+                                                child: Text(type),
+                                              ),
+                                            )
+                                            .toList(),
+                                    validator:
+                                        (value) =>
+                                            value == null ? 'اختر النوع' : null,
+                                  ),
+                                ),
+
+                                // Only show frequency number if the frequency type is daily
+                                if (frequencyType == 'يومي') ...[
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: DropdownButtonFormField<int>(
+                                      value: frequencyNumber,
+                                      decoration: InputDecoration(
+                                        labelText: 'عدد المرات',
+                                        labelStyle: TextStyle(
+                                          color: kPrimaryColor.withOpacity(0.8),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        prefixIcon: Icon(
+                                          Icons.repeat,
+                                          color: kPrimaryColor,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            kBorderRadius,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: kPrimaryColor,
+                                            width: 2.0,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            kBorderRadius,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            kBorderRadius,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              vertical: 16,
+                                              horizontal: 16,
+                                            ),
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.black87,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      icon: Icon(
+                                        Icons.arrow_drop_down,
+                                        color: kPrimaryColor,
+                                      ),
+                                      onChanged: onFrequencyNumberChanged,
+                                      items:
+                                          frequencyNumbers
+                                              .map(
+                                                (num) => DropdownMenuItem(
+                                                  value: num,
+                                                  child: Text(num.toString()),
+                                                ),
+                                              )
+                                              .toList(),
+                                      validator:
+                                          (value) =>
+                                              value == null
+                                                  ? 'اختر العدد'
+                                                  : null,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 25.0),
+
+                      // Time Selection Section (Conditional)
+                      frequencyType == 'يومي'
+                          ? Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: kCardColor,
+                              borderRadius: BorderRadius.circular(
+                                kBorderRadius,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                              border: Border.all(color: Colors.grey.shade100),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.access_time_filled,
+                                      color: kPrimaryColor,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      timesTitle,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const Divider(height: 24),
+
+                                // Daily time selection list with improved styling
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: frequencyNumber,
+                                  itemBuilder: (context, index) {
+                                    final time = selectedTimes[index];
+                                    final isAuto = isAutoGeneratedTimes[index];
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            time != null
+                                                ? kPrimaryColor.withOpacity(
+                                                  0.05,
+                                                )
+                                                : Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                        border: Border.all(
+                                          color:
+                                              time != null
+                                                  ? kPrimaryColor.withOpacity(
+                                                    0.3,
+                                                  )
+                                                  : Colors.grey.shade300,
+                                          width: time != null ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        borderRadius: BorderRadius.circular(
+                                          kBorderRadius,
+                                        ),
+                                        child: InkWell(
+                                          onTap: () => onSelectTime(index),
+                                          borderRadius: BorderRadius.circular(
+                                            kBorderRadius,
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        time != null
+                                                            ? kPrimaryColor
+                                                            : Colors
+                                                                .grey
+                                                                .shade300,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      '${index + 1}',
+                                                      style: TextStyle(
+                                                        color:
+                                                            time != null
+                                                                ? Colors.white
+                                                                : Colors
+                                                                    .grey
+                                                                    .shade700,
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        time == null
+                                                            ? 'الجرعة ${index + 1}'
+                                                            : 'الجرعة ${index + 1} (${time.format(context)})',
+                                                        style: TextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              time != null
+                                                                  ? FontWeight
+                                                                      .w600
+                                                                  : FontWeight
+                                                                      .normal,
+                                                          color:
+                                                              time != null
+                                                                  ? Colors
+                                                                      .black87
+                                                                  : Colors
+                                                                      .grey
+                                                                      .shade700,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                            time != null
+                                                                ? Icons
+                                                                    .check_circle
+                                                                : Icons
+                                                                    .access_time,
+                                                            size: 14,
+                                                            color:
+                                                                time != null
+                                                                    ? Colors
+                                                                        .green
+                                                                    : Colors
+                                                                        .grey
+                                                                        .shade500,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 6,
+                                                          ),
+                                                          Text(
+                                                            time == null
+                                                                ? timeSelectionPrompt
+                                                                : TimeUtils.formatTimeOfDay(
+                                                                  context,
+                                                                  time,
+                                                                ),
+                                                            style: TextStyle(
+                                                              fontSize: 14,
+                                                              color:
+                                                                  time != null
+                                                                      ? Colors
+                                                                          .black87
+                                                                      : Colors
+                                                                          .grey
+                                                                          .shade600,
+                                                            ),
+                                                          ),
+                                                          if (time != null &&
+                                                              isAuto)
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    right: 8,
+                                                                  ),
+                                                              child: Tooltip(
+                                                                message:
+                                                                    "وقت تم إنشاؤه تلقائيًا",
+                                                                child: Icon(
+                                                                  Icons
+                                                                      .smart_toy,
+                                                                  size: 14,
+                                                                  color:
+                                                                      kSecondaryColor,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color: kPrimaryColor
+                                                        .withOpacity(0.1),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.edit,
+                                                    color: kPrimaryColor,
+                                                    size: 18,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+
+                                // Validation message if any daily time is missing
+                                if (selectedTimes.any((t) => t == null))
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 8.0),
+                                    padding: const EdgeInsets.all(8.0),
+                                    decoration: BoxDecoration(
+                                      color: kErrorColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(
+                                        kBorderRadius / 2,
+                                      ),
+                                      border: Border.all(
+                                        color: kErrorColor.withOpacity(0.3),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline,
+                                          color: kErrorColor,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'الرجاء تعديل وتحديد جميع الأوقات المطلوبة.',
+                                            style: TextStyle(
+                                              color: kErrorColor,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          )
+                          : _buildWeeklyScheduleSection(context),
+
+                      const SizedBox(height: 30.0),
+
+                      // Next Button with consistent styling
+                      ElevatedButton(
+                        onPressed: () {
+                          if (formKey.currentState!.validate() &&
+                              allTimesSelected) {
+                            onNext();
+                          } else if (!allTimesSelected) {
+                            // Show snackbar if times are missing
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'الرجاء إكمال تعديل جميع أوقات الجرعات المطلوبة',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: kErrorColor,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 55),
+                          backgroundColor: kPrimaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: kPrimaryColor.withOpacity(0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kBorderRadius),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              nextButtonText,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.arrow_forward, size: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
-          if (_selectedEndDate != null)
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: TextButton.icon(
-                onPressed: () => setState(() => _selectedEndDate = null),
-                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                label: Text("مسح تاريخ الانتهاء", style: TextStyle(color: Colors.red, fontSize: 12)),
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 30)),
-              ),
-            ),
-          const SizedBox(height: 16),
-          const Divider(height: 24),
-          _buildFrequencySection(context),
-          const SizedBox(height: 16),
-          _selectedFrequency == 'يومي'
-              ? _buildDailyTimePickerSection(context)
-              : _buildWeeklyScheduleSection(),
-          const SizedBox(height: 16),
-          const Divider(height: 24),
-          _buildImageSection(context),
-          const SizedBox(height: 30),
-          ElevatedButton.icon(
-            icon: _isSaving
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            )
-                : const Icon(Icons.save_alt_outlined),
-            label: Text(_isSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"),
-            onPressed: _isSaving ? null : _saveChanges,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade700,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildDateButton(BuildContext context, String label, bool isStartDate) {
-    final DateTime? dateToShow = isStartDate ? _selectedStartDate : _selectedEndDate;
-    final String buttonText = dateToShow == null ? label : intl.DateFormat('yyyy/MM/dd', 'ar_SA').format(dateToShow);
-    return OutlinedButton.icon(
-      icon: Icon(
-        isStartDate ? Icons.calendar_today_outlined : Icons.event_available_outlined,
-        size: 20,
-        color: dateToShow == null ? Colors.grey.shade600 : Colors.blue.shade800,
-      ),
-      label: Text(buttonText,
-          style: TextStyle(
-            color: dateToShow == null ? Colors.grey.shade600 : Colors.blue.shade800,
-          )),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-        side: BorderSide(color: dateToShow == null && isStartDate ? Colors.red : Colors.grey.shade400, width: 1.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      onPressed: () => _pickDate(context, isStartDate),
     );
   }
 }

@@ -6,13 +6,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:intl/intl.dart'; // For time parsing and date formatting
+import 'package:intl/intl.dart';
+import 'dart:ui' as ui;
 
+// Import your Edit screen
+import 'package:mudhkir_app/pages/EditMedicationScreen.dart';
+import '../main.dart';
+import 'mainpage.dart';
 
-// --- Import your Edit screen ---
-import 'package:mudhkir_app/pages/EditMedicationScreen.dart'; // <-- ADJUST PATH AS NEEDED
+// --- Theme constants ---
+const Color kPrimaryColor = Color(0xFF2E86C1); // Hospital blue (primary)
+const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
+const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const double kBorderRadius = 16.0; // Consistent border radius
+const double kSpacing = 16.0; // Base spacing unit
 
-// --- Time Utilities (Ideally move to a separate utils file) ---
+// --- Time Utilities ---
 class TimeUtils {
   static TimeOfDay? parseTime(String timeStr) {
     try {
@@ -50,10 +59,8 @@ class TimeUtils {
     return '$hour:$minute $period';
   }
 }
-// --- End Time Utilities ---
 
-
-// --- EnlargeableImage Widget (Keep here or import if moved) ---
+// --- EnlargeableImage Widget (Styled to match theme) ---
 class EnlargeableImage extends StatefulWidget {
   final String imageUrl;
   final double width;
@@ -88,7 +95,6 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
   }
 
   Future<File?> _downloadAndSaveImage(String url) async {
-    // Use tryParse for better handling of invalid URLs
     final uri = Uri.tryParse(url);
     if (url.isEmpty || uri == null || !uri.isAbsolute) {
       print("Invalid or empty URL for download: $url");
@@ -113,22 +119,42 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
 
   void _openEnlargedImage(BuildContext context, File imageFile) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) {
-          return Scaffold(
-            backgroundColor: Colors.black87,
-            appBar: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Colors.white),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                panEnabled: true,
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.file(imageFile),
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (_, animation, __) {
+          return FadeTransition(
+            opacity: animation,
+            child: Directionality(
+              textDirection: ui.TextDirection.rtl,
+              child: Scaffold(
+                backgroundColor: Colors.black.withOpacity(0.85),
+                appBar: AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  iconTheme: IconThemeData(color: kSecondaryColor),
+                  leading: IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+                body: Center(
+                  child: Hero(
+                    tag: 'medication_image_${widget.imageUrl.hashCode}',
+                    child: InteractiveViewer(
+                      panEnabled: true,
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.file(imageFile),
+                    ),
+                  ),
+                ),
               ),
             ),
           );
@@ -152,25 +178,49 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
             width: widget.width,
             height: widget.height,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(10),
+              color: kSecondaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(kBorderRadius),
             ),
-            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: kPrimaryColor,
+                ),
+              ),
+            ),
           );
         } else if (snapshot.hasData && snapshot.data != null) {
-          return GestureDetector(
-            onTap: () => _openEnlargedImage(context, snapshot.data!),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(
-                snapshot.data!,
-                width: widget.width,
-                height: widget.height,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  print("Error displaying file image: $error");
-                  return _buildPlaceholder(showErrorText: true);
-                },
+          return Hero(
+            tag: 'medication_image_${widget.imageUrl.hashCode}',
+            child: GestureDetector(
+              onTap: () => _openEnlargedImage(context, snapshot.data!),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(kBorderRadius),
+                  boxShadow: [
+                    BoxShadow(
+                      color: kPrimaryColor.withOpacity(0.15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(kBorderRadius),
+                  child: Image.file(
+                    snapshot.data!,
+                    width: widget.width,
+                    height: widget.height,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print("Error displaying file image: $error");
+                      return _buildPlaceholder(showErrorText: true);
+                    },
+                  ),
+                ),
               ),
             ),
           );
@@ -186,22 +236,35 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
       width: widget.width,
       height: widget.height,
       decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(10),
+        color: kSecondaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        border: Border.all(color: kSecondaryColor.withOpacity(0.2)),
       ),
-      alignment: Alignment.center,
-      child: Icon(
-        showErrorText ? Icons.broken_image : Icons.image_not_supported,
-        color: Colors.grey.shade600,
-        size: widget.width * 0.6,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            showErrorText ? Icons.broken_image_rounded : Icons.medication_rounded,
+            color: kSecondaryColor.withOpacity(0.5),
+            size: widget.width * 0.4,
+          ),
+          if (showErrorText) const SizedBox(height: 4),
+          if (showErrorText)
+            Text(
+              "لا توجد صورة",
+              style: TextStyle(
+                fontSize: 10,
+                color: kSecondaryColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+        ],
       ),
     );
   }
 }
-// --- End EnlargeableImage Widget ---
 
-
-// --- DoseSchedule Widget ---
+// --- DoseSchedule Main Widget ---
 class DoseSchedule extends StatefulWidget {
   const DoseSchedule({super.key});
 
@@ -210,7 +273,7 @@ class DoseSchedule extends StatefulWidget {
 }
 
 class _DoseScheduleState extends State<DoseSchedule> {
-  late User _user;
+  User? _user;
   CalendarFormat _calendarFormat = CalendarFormat.month;
   Map<DateTime, List<Map<String, dynamic>>> _doses = {};
   DateTime _selectedDay = DateTime.now();
@@ -220,40 +283,36 @@ class _DoseScheduleState extends State<DoseSchedule> {
   @override
   void initState() {
     super.initState();
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
+    _user = FirebaseAuth.instance.currentUser;
+    if (_user == null) {
       print("Error: User not logged in for DoseSchedule.");
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          if (Navigator.canPop(context)) {
-            Navigator.of(context).pop();
-          }
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("الرجاء تسجيل الدخول أولاً")),
+            SnackBar(
+              content: const Text("الرجاء تسجيل الدخول أولاً لعرض الجدول"),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              margin: const EdgeInsets.all(10),
+            ),
           );
         }
       });
-      _isLoading = false;
+      setState(() => _isLoading = false);
     } else {
-      _user = currentUser;
-      _fetchDoses(); // Fetch doses only if user is logged in
+      _fetchDoses();
     }
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  // Fetch doses from Firestore; adjust parsing based on the data format created in add_dose.dart.
   Future<void> _fetchDoses() async {
-    if (!mounted) return;
+    if (!mounted || _user == null) return;
     setState(() {
       _isLoading = true;
     });
 
     final Map<DateTime, List<Map<String, dynamic>>> newDoses = {};
-    final String userId = _user.uid;
+    final String userId = _user!.uid;
 
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -269,23 +328,15 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final Timestamp? startTimestamp = data['startDate'] as Timestamp?;
         final Timestamp? endTimestamp = data['endDate'] as Timestamp?;
 
-        // If no start date, skip document.
         if (startTimestamp == null) {
           print('Document ${doc.id} missing start date. Skipping.');
           continue;
         }
 
-        // Determine frequency type from the 'frequency' field (e.g. "2 يومي" or "2 اسبوعي")
         final String frequencyRaw = data['frequency'] as String? ?? '1 يومي';
         final List<String> frequencyParts = frequencyRaw.split(" ");
         final String frequencyType = frequencyParts.length > 1 ? frequencyParts[1] : 'يومي';
 
-        // Ensure consistency between frequencyType and frequency field
-        if (frequencyType != data['frequencyType']) {
-          print("Warning: Inconsistent frequencyType for ${doc.id}. Using frequency field.");
-        }
-
-        // Use frequencyType from frequency field for logic
         final String resolvedFrequencyType = frequencyType;
 
         final List<dynamic> timesRaw = data['times'] ?? [];
@@ -296,21 +347,18 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final DateTime? endDate = endTimestamp?.toDate();
 
         DateTime currentDate = startDate;
-        // Iterate through dates relevant to the medication schedule.
         while (endDate == null || !currentDate.isAfter(endDate)) {
           final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
           bool shouldAddDoseToday = false;
           List<TimeOfDay> timesParsed = [];
 
           if (resolvedFrequencyType == 'يومي') {
-            // For daily, timesRaw is a list of strings.
             timesParsed = timesRaw
                 .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null)
                 .whereType<TimeOfDay>()
                 .toList();
             shouldAddDoseToday = timesParsed.isNotEmpty;
           } else if (resolvedFrequencyType == 'اسبوعي') {
-            // For weekly, timesRaw is a list of maps with keys "day" and "time"
             timesParsed = timesRaw
                 .whereType<Map>()
                 .where((map) => map['day'] == currentDate.weekday)
@@ -326,7 +374,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
               newDoses[normalizedDate]!.add({
                 'medicationName': medicationName,
                 'dosage': dosage,
-                'timeOfDay': time, // Store for sorting
+                'timeOfDay': time,
                 'timeString': TimeUtils.formatTimeOfDay(context, time),
                 'docId': doc.id,
                 'imageUrl': imageUrl,
@@ -337,14 +385,13 @@ class _DoseScheduleState extends State<DoseSchedule> {
 
           currentDate = currentDate.add(const Duration(days: 1));
           if (endDate != null && currentDate.isAfter(endDate)) break;
-          if (endDate == null && currentDate.year > DateTime.now().year + 10) {
-            print("Warning: Medication ${doc.id} seems to have no end date; stopping iteration after 10 years.");
+          if (endDate == null && currentDate.difference(startDate).inDays > (365 * 10)) {
+            print("Warning: Medication ${doc.id} seems to have no end date or a very long duration; stopping iteration after 10 years.");
             break;
           }
         }
       }
 
-      // Sort doses within each day by time and then by medication name.
       newDoses.forEach((date, meds) {
         meds.sort((a, b) {
           final TimeOfDay timeA = a['timeOfDay'];
@@ -353,7 +400,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
               ? timeA.hour.compareTo(timeB.hour)
               : timeA.minute.compareTo(timeB.minute);
           if (cmp != 0) return cmp;
-          return a['medicationName'].compareTo(b['medicationName']);
+          return (a['medicationName'] as String).compareTo(b['medicationName'] as String);
         });
       });
 
@@ -372,13 +419,18 @@ class _DoseScheduleState extends State<DoseSchedule> {
           _doses = {};
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("حدث خطأ أثناء تحميل جدول الأدوية.")),
+          SnackBar(
+            content: const Text("حدث خطأ أثناء تحميل جدول الأدوية."),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(10),
+          ),
         );
       }
     }
   }
 
-  // Get events for a specific day (used by TableCalendar).
   List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
     final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
     return _doses[normalizedDay] ?? [];
@@ -386,210 +438,416 @@ class _DoseScheduleState extends State<DoseSchedule> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoading && FirebaseAuth.instance.currentUser == null) {
+    if (!_isLoading && _user == null) {
       return Scaffold(
-        body: Center(
-          child: Text("الرجاء تسجيل الدخول لعرض الجدول.",
-              style: TextStyle(color: Colors.red.shade800)),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kPrimaryColor.withOpacity(0.2),
+                kBackgroundColor,
+                Colors.white,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.login_rounded, size: 60, color: kPrimaryColor.withOpacity(0.7)),
+                const SizedBox(height: 20),
+                Text(
+                  "الرجاء تسجيل الدخول لعرض الجدول",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: kPrimaryColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text("العودة"),
+                  onPressed: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+    return Directionality(
+      textDirection: ui.TextDirection.rtl,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text(
+            "جدول الأدوية",
+            style: TextStyle(
+              color: kPrimaryColor,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Colors.white.withOpacity(0.7),
+                  blurRadius: 15,
+                )
+              ],
+            ),
+          ),
+          centerTitle: true,
+          iconTheme: IconThemeData(
+            color: kPrimaryColor,
+            size: 28,
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom Header.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new,
-                          color: Colors.blue.shade800, size: 24),
-                      onPressed: () => Navigator.pop(context),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kPrimaryColor.withOpacity(0.2),
+                kBackgroundColor,
+                Colors.white,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: SafeArea(
+            child: _isLoading
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: kPrimaryColor),
+                  const SizedBox(height: 16),
+                  Text(
+                    "جاري تحميل الجدول...",
+                    style: TextStyle(
+                      color: kPrimaryColor,
+                      fontWeight: FontWeight.w500,
                     ),
-                    Text(
-                      "جدول الأدوية",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(width: 48), // Balance the row.
-                  ],
-                ),
+                  ),
+                ],
               ),
-              // Scrollable Content Area.
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 10),
-                        // Calendar Card.
-                        Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 3,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: TableCalendar<Map<String, dynamic>>(
-                              locale: 'ar_SA', // Arabic locale.
-                              focusedDay: _focusedDay,
-                              firstDay: DateTime.utc(DateTime.now().year - 2, 1, 1),
-                              lastDay: DateTime.utc(DateTime.now().year + 5, 12, 31),
-                              calendarFormat: _calendarFormat,
-                              availableCalendarFormats: const {
-                                CalendarFormat.month: 'أسبوع',
-                                CalendarFormat.twoWeeks: 'شهر',
-                                CalendarFormat.week: 'اسبوعين',
+            )
+                : RefreshIndicator(
+              onRefresh: _fetchDoses,
+              color: kPrimaryColor,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.all(kSpacing),
+                  child: Column(
+                    children: [
+                      // Calendar Card with shadow and rounded corners
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: kPrimaryColor.withOpacity(0.1),
+                              blurRadius: 10,
+                              spreadRadius: 0,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(kBorderRadius),
+                          child: TableCalendar<Map<String, dynamic>>(
+                            locale: 'ar_SA',
+                            firstDay: DateTime.utc(DateTime.now().year - 1, 1, 1),
+                            lastDay: DateTime.utc(DateTime.now().year + 2, 12, 31),
+                            focusedDay: _focusedDay,
+                            calendarFormat: _calendarFormat,
+                            eventLoader: _getEventsForDay,
+                            selectedDayPredicate: (day) =>
+                                isSameDay(_selectedDay, day),
+                            onDaySelected: (selectedDay, focusedDay) {
+                              if (!isSameDay(_selectedDay, selectedDay)) {
+                                setState(() {
+                                  _selectedDay = selectedDay;
+                                  _focusedDay = focusedDay;
+                                });
+                              }
+                            },
+                            onFormatChanged: (format) {
+                              if (_calendarFormat != format) {
+                                setState(() => _calendarFormat = format);
+                              }
+                            },
+                            onPageChanged: (focusedDay) {
+                              _focusedDay = focusedDay;
+                            },
+                            availableCalendarFormats: const {
+                              CalendarFormat.month: 'شهر',
+                              CalendarFormat.week: 'أسبوع',
+                            },
+
+                            // Styled Calendar Header
+                            headerStyle: HeaderStyle(
+                              titleCentered: true,
+                              formatButtonVisible: true,
+                              formatButtonDecoration: BoxDecoration(
+                                color: kSecondaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              formatButtonTextStyle: TextStyle(
+                                color: kPrimaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              titleTextStyle: TextStyle(
+                                color: kPrimaryColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              leftChevronIcon: Icon(Icons.chevron_left, color: kPrimaryColor),
+                              rightChevronIcon: Icon(Icons.chevron_right, color: kPrimaryColor),
+                              headerPadding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: kSecondaryColor.withOpacity(0.1),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // Styled Calendar Days
+                            daysOfWeekStyle: DaysOfWeekStyle(
+                              weekdayStyle: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              weekendStyle: TextStyle(
+                                color: Colors.red.shade300,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              decoration: BoxDecoration(
+                                color: kSecondaryColor.withOpacity(0.05),
+                              ),
+                            ),
+
+                            // Styled Calendar
+                            calendarStyle: CalendarStyle(
+                              outsideDaysVisible: false,
+                              defaultDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.transparent,
+                              ),
+                              weekendDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.transparent,
+                              ),
+                              todayDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: kPrimaryColor,
+                              ),
+                              selectedDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: kSecondaryColor,
+                              ),
+                              markerDecoration: BoxDecoration(
+                                color: Colors.orange.shade400,
+                                shape: BoxShape.circle,
+                              ),
+                              markerSize: 5,
+                              markersMaxCount: 3,
+                              cellMargin: const EdgeInsets.all(6),
+                              todayTextStyle: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              selectedTextStyle: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            // Custom builders for more control
+                            calendarBuilders: CalendarBuilders(
+                              markerBuilder: (context, date, events) {
+                                if (events.isEmpty) return const SizedBox();
+
+                                return Positioned(
+                                  bottom: 1,
+                                  child: Container(
+                                    width: events.length > 2 ? 16 : 12,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: events.any((e) => e['isImportant'] == true)
+                                          ? Colors.orange.shade400
+                                          : kSecondaryColor,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                );
                               },
-                              eventLoader: _getEventsForDay,
-                              headerStyle: HeaderStyle(
-                                formatButtonVisible: true,
-                                titleCentered: true,
-                                titleTextStyle: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade800,
-                                ),
-                                leftChevronIcon: Icon(Icons.chevron_left,
-                                    color: Colors.blue.shade600),
-                                rightChevronIcon: Icon(Icons.chevron_right,
-                                    color: Colors.blue.shade600),
-                              ),
-                              calendarBuilders: CalendarBuilders(
-                                markerBuilder: (context, date, events) =>
-                                const SizedBox.shrink(),
-                              ),
-                              calendarStyle: CalendarStyle(
-                                outsideDaysVisible: false,
-                                todayDecoration: BoxDecoration(
-                                  color: Colors.blue.shade700,
-                                  shape: BoxShape.circle,
-                                ),
-                                selectedDecoration: BoxDecoration(
-                                  color: Colors.lightBlueAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                                weekendTextStyle: TextStyle(
-                                  color: Colors.red[600],
-                                ),
-                              ),
-                              onFormatChanged: (format) {
-                                if (_calendarFormat != format) {
-                                  setState(() => _calendarFormat = format);
+
+                              // Add subtle fills to days with events
+                              defaultBuilder: (context, day, focusedDay) {
+                                final events = _getEventsForDay(day);
+                                if (events.isNotEmpty) {
+                                  return Container(
+                                    margin: const EdgeInsets.all(5),
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: kSecondaryColor.withOpacity(0.08),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '${day.day}',
+                                      style: TextStyle(
+                                        color: kPrimaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  );
                                 }
+                                return null;
                               },
-                              onPageChanged: (focusedDay) {
-                                _focusedDay = focusedDay;
-                              },
-                              onDaySelected: (selectedDay, focusedDay) {
-                                if (!isSameDay(_selectedDay, selectedDay)) {
-                                  setState(() {
-                                    _selectedDay = selectedDay;
-                                    _focusedDay = focusedDay;
-                                  });
-                                }
-                              },
-                              selectedDayPredicate: (day) =>
-                                  isSameDay(_selectedDay, day),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        // Dose List Section Title.
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0, vertical: 8.0),
-                          child: Text(
-                            "جرعات يوم: ${DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay)}",
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87),
-                            textAlign: TextAlign.center,
-                          ),
+                      ),
+
+                      // Date display with styled container
+                      Container(
+                        margin: const EdgeInsets.only(top: 24, bottom: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: kPrimaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        // Dose List.
-                        _buildDoseList(),
-                        const SizedBox(height: 20), // Bottom Padding.
-                      ],
-                    ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.event_note_rounded,
+                              color: kPrimaryColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: kPrimaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Dose list with improved spacing
+                      _buildDoseList(),
+
+                      // Add bottom padding for scrolling
+                      const SizedBox(height: 30),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Helper widget to build the list of doses for the selected day.
   Widget _buildDoseList() {
     final events = _getEventsForDay(_selectedDay);
+
     if (events.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40.0),
-        child: Center(
-          child: Text(
-            "لا توجد جرعات لهذا اليوم",
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 30),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kSecondaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.medication_liquid_outlined,
+                size: 48,
+                color: kSecondaryColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "لا توجد جرعات لهذا اليوم",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kPrimaryColor.withOpacity(0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "أضف دواءً جديدًا باستخدام زر الإضافة",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
-    } else {
-      return ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: events.length,
-        itemBuilder: (context, index) {
-          final dose = events[index];
-          final String docId = dose['docId'] ?? 'missing_doc_id_$index';
-          final String timeString = dose['timeString'] ?? '??:??';
-
-          return DoseTile(
-            key: ValueKey(docId + timeString),
-            medicationName: dose['medicationName'] ?? 'غير مسمى',
-            nextDose: timeString,
-            docId: docId,
-            imageUrl: dose['imageUrl'] ?? '',
-            imgbbDeleteHash: dose['imgbbDeleteHash'] ?? '',
-            onDataChanged: _fetchDoses,
-          );
-        },
-      );
     }
+
+    return Column(
+      children: [
+        for (int index = 0; index < events.length; index++) ...[
+          DoseTile(
+            key: ValueKey('${events[index]['docId']}_${events[index]['timeString']}'),
+            medicationName: events[index]['medicationName'],
+            nextDose: events[index]['timeString'],
+            docId: events[index]['docId'],
+            imageUrl: events[index]['imageUrl'],
+            imgbbDeleteHash: events[index]['imgbbDeleteHash'],
+            onDataChanged: _fetchDoses,
+          ),
+          // Add space between tiles except for the last one
+          if (index < events.length - 1) const SizedBox(height: 12),
+        ],
+      ],
+    );
   }
 }
-// --- End DoseSchedule Widget ---
 
-
-// --- MODIFIED DoseTile Widget ---
 class DoseTile extends StatefulWidget {
   final String medicationName;
-  final String nextDose;
+  final String nextDose; // formatted time string
   final String docId;
   final String imageUrl;
   final String imgbbDeleteHash;
-  final VoidCallback onDataChanged;
+  final VoidCallback onDataChanged; // Callback to refresh DoseSchedule
 
   const DoseTile({
     super.key,
@@ -605,8 +863,220 @@ class DoseTile extends StatefulWidget {
   _DoseTileState createState() => _DoseTileState();
 }
 
-class _DoseTileState extends State<DoseTile> {
+class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
+  String _doseStatus = 'pending';
+  bool _isLoadingStatus = true;
+  late AnimationController _animationController;
+  late Animation<double> _expandAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    _checkDoseStatus();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant DoseTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.docId != widget.docId || oldWidget.nextDose != widget.nextDose) {
+      _checkDoseStatus();
+    }
+  }
+
+  Future<void> _checkDoseStatus() async {
+    if (!mounted) return;
+    setState(() => _isLoadingStatus = true);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoadingStatus = false);
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(widget.docId)
+          .get();
+
+      if (!doc.exists || !mounted) {
+        if (mounted) setState(() => _isLoadingStatus = false);
+        return;
+      }
+
+      final data = doc.data()!;
+      final missedDoses = data['missedDoses'] as List<dynamic>? ?? [];
+      final selectedDay = context.findAncestorStateOfType<_DoseScheduleState>()?._selectedDay ?? DateTime.now();
+      final normalizedSelectedDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+
+      final doseTime = TimeUtils.parseTime(widget.nextDose);
+      if (doseTime == null) {
+        if (mounted) setState(() => _isLoadingStatus = false);
+        return;
+      }
+
+      String currentStatus = 'pending'; // Default to pending
+      for (var dose in missedDoses) {
+        if (dose is Map<String, dynamic> && dose.containsKey('scheduled') && dose.containsKey('status')) {
+          final scheduledTimestamp = dose['scheduled'] as Timestamp?;
+          if (scheduledTimestamp != null) {
+            final scheduledDate = scheduledTimestamp.toDate();
+            final normalizedScheduledDate = DateTime(scheduledDate.year, scheduledDate.month, scheduledDate.day);
+
+            // Check if the dose time and date match the current tile's time and selected day
+            if (scheduledDate.hour == doseTime.hour &&
+                scheduledDate.minute == doseTime.minute &&
+                isSameDay(normalizedScheduledDate, normalizedSelectedDay)) {
+              currentStatus = dose['status'] as String? ?? 'pending';
+              break; // Found the status for this specific dose instance
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _doseStatus = currentStatus;
+          _isLoadingStatus = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking dose status for ${widget.docId}: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingStatus = false;
+          _doseStatus = 'pending';
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleDoseStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || !mounted) return;
+
+    final selectedDay = context.findAncestorStateOfType<_DoseScheduleState>()?._selectedDay ?? DateTime.now();
+    final normalizedSelectedDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+    final doseTime = TimeUtils.parseTime(widget.nextDose);
+
+    if (doseTime == null) {
+      print("Error: Could not parse dose time for toggling status.");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("خطأ في تحديث حالة الجرعة."),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    final targetDateTime = DateTime(
+      normalizedSelectedDay.year,
+      normalizedSelectedDay.month,
+      normalizedSelectedDay.day,
+      doseTime.hour,
+      doseTime.minute,
+    );
+    final targetTimestamp = Timestamp.fromDate(targetDateTime);
+    final newStatus = _doseStatus == 'taken' ? 'pending' : 'taken';
+
+    setState(() => _isLoadingStatus = true);
+
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(widget.docId);
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          throw Exception("Medication document does not exist!");
+        }
+
+        final data = snapshot.data()!;
+        final missedDosesRaw = data['missedDoses'] as List<dynamic>? ?? [];
+        final List<Map<String, dynamic>> missedDoses = List<Map<String, dynamic>>.from(
+            missedDosesRaw.whereType<Map<String, dynamic>>()
+        );
+
+        int foundIndex = -1;
+        for (int i = 0; i < missedDoses.length; i++) {
+          final dose = missedDoses[i];
+          final scheduledTimestamp = dose['scheduled'] as Timestamp?;
+          if (scheduledTimestamp != null && scheduledTimestamp == targetTimestamp) {
+            foundIndex = i;
+            break;
+          }
+        }
+
+        if (foundIndex != -1) {
+          missedDoses[foundIndex]['status'] = newStatus;
+          missedDoses[foundIndex]['updatedAt'] = Timestamp.now();
+        } else {
+          missedDoses.add({
+            'scheduled': targetTimestamp,
+            'status': newStatus,
+            'createdAt': Timestamp.now(),
+          });
+        }
+
+        transaction.update(docRef, {
+          'missedDoses': missedDoses,
+          'lastUpdated': Timestamp.now(),
+        });
+      });
+
+      if (mounted) {
+        setState(() {
+          _doseStatus = newStatus;
+          _isLoadingStatus = false;
+        });
+        widget.onDataChanged();
+
+        if (newStatus == 'taken') {
+          final notificationId = widget.docId.hashCode + doseTime.hour * 100 + doseTime.minute;
+          debugPrint("Rescheduling notification skipped (notification system removed).");
+        }
+      }
+
+    } catch (e) {
+      print('Error toggling dose status: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingStatus = false;
+          _checkDoseStatus();
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("فشل تحديث حالة الجرعة: $e"),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ));
+        });
+      }
+    }
+  }
 
   Future<bool?> _showConfirmationDialog({
     required BuildContext context,
@@ -619,12 +1089,26 @@ class _DoseTileState extends State<DoseTile> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text(title, style: TextStyle(color: Colors.blue.shade800)),
-        content: Text(content),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: kPrimaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.right,
+        ),
+        content: Text(
+          content,
+          style: const TextStyle(color: Colors.black87),
+          textAlign: TextAlign.right,
+        ),
         actionsAlignment: MainAxisAlignment.spaceBetween,
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(foregroundColor: Colors.grey.shade700),
             child: const Text("إلغاء"),
           ),
           ElevatedButton(
@@ -632,6 +1116,8 @@ class _DoseTileState extends State<DoseTile> {
             style: ElevatedButton.styleFrom(
               backgroundColor: confirmButtonColor,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             child: Text(confirmText),
           ),
@@ -646,58 +1132,85 @@ class _DoseTileState extends State<DoseTile> {
       title: "تعديل الدواء",
       content: "هل تريد الانتقال إلى شاشة تعديل بيانات هذا الدواء؟",
       confirmText: "نعم، تعديل",
-      confirmButtonColor: Colors.orange.shade700,
+      confirmButtonColor: Colors.blue.shade700,
     );
 
     if (confirmed == true && mounted) {
-      Navigator.push(
+      final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => EditMedicationScreen(docId: widget.docId),
         ),
-      ).then((_) {
-        widget.onDataChanged();
-      });
+      );
+      widget.onDataChanged();
     }
   }
 
   Future<void> _handleFinishMed(BuildContext context) async {
+    // Get the selected day from the parent DoseSchedule widget
+    final _DoseScheduleState? parentState = context.findAncestorStateOfType<_DoseScheduleState>();
+    final DateTime selectedDay = parentState?._selectedDay ?? DateTime.now();
+
     final confirmed = await _showConfirmationDialog(
       context: context,
       title: "إنهاء الدواء",
-      content:
-      "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى اليوم ولن يظهر في الأيام القادمة.",
+      content: "هل أنت متأكد من إنهاء جدول هذا الدواء؟ سيتم تحديد تاريخ الانتهاء إلى ${DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(selectedDay)} ولن يظهر في الأيام التالية.",
       confirmText: "نعم، إنهاء",
-      confirmButtonColor: Colors.red.shade700,
+      confirmButtonColor: Colors.orange.shade700,
     );
 
     if (confirmed == true) {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("خطأ: المستخدم غير مسجل.")));
+            SnackBar(
+              content: const Text("خطأ: المستخدم غير مسجل."),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ));
         return;
       }
 
       if (user != null) {
         try {
+          // Create timestamp at end of selected day (23:59:59)
+          final DateTime endOfSelectedDay = DateTime(
+            selectedDay.year,
+            selectedDay.month,
+            selectedDay.day,
+            23,
+            59,
+            59,
+          );
+
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .collection('medicines')
               .doc(widget.docId)
-              .update({'endDate': Timestamp.now()});
+              .update({'endDate': Timestamp.fromDate(endOfSelectedDay)});
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("تم إنهاء الدواء بنجاح"), backgroundColor: Colors.orange),
+              SnackBar(
+                content: Text("تم إنهاء الدواء بتاريخ ${DateFormat('d MMMM', 'ar_SA').format(selectedDay)}"),
+                backgroundColor: Colors.green.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             );
             widget.onDataChanged();
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("فشل إنهاء الدواء: $e"), backgroundColor: Colors.red));
+                SnackBar(
+                  content: Text("فشل إنهاء الدواء: $e"),
+                  backgroundColor: Colors.red.shade700,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ));
           }
         }
       }
@@ -708,8 +1221,7 @@ class _DoseTileState extends State<DoseTile> {
     final confirmed = await _showConfirmationDialog(
       context: context,
       title: "تأكيد الحذف",
-      content:
-      "هل أنت متأكد من حذف هذا الدواء؟ سيتم حذف صورته أيضاً إذا كانت مرتبطة (لا يمكن التراجع عن هذا الإجراء).",
+      content: "هل أنت متأكد من حذف هذا الدواء؟ سيتم حذف صورته أيضاً إذا كانت مرتبطة (لا يمكن التراجع عن هذا الإجراء).",
       confirmText: "نعم، حذف",
       confirmButtonColor: Colors.red.shade700,
     );
@@ -723,11 +1235,38 @@ class _DoseTileState extends State<DoseTile> {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("خطأ: المستخدم غير مسجل.")));
+          SnackBar(
+            content: const Text("خطأ: المستخدم غير مسجل."),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ));
       return;
     }
 
     if (user != null) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: kPrimaryColor),
+                const SizedBox(height: 16),
+                const Text("جاري حذف الدواء..."),
+              ],
+            ),
+          ),
+        ),
+      );
+
       try {
         if (widget.imgbbDeleteHash.isNotEmpty) {
           await _deleteImgBBImage(widget.imgbbDeleteHash);
@@ -741,119 +1280,243 @@ class _DoseTileState extends State<DoseTile> {
             .delete();
 
         if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("تم حذف الدواء بنجاح"), backgroundColor: Colors.green),
+            SnackBar(
+              content: const Text("تم حذف الدواء بنجاح"),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
           );
           widget.onDataChanged();
         }
       } catch (e) {
         if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("فشل حذف الدواء: $e"), backgroundColor: Colors.red));
+              SnackBar(
+                content: Text("فشل حذف الدواء: $e"),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ));
         }
       }
     }
   }
 
   Future<void> _deleteImgBBImage(String deleteHash) async {
-    const String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
-    if (imgbbApiKey == '2b30d3479663bc30a70c916363b07c4a' || imgbbApiKey.isEmpty) {
-      print("WARNING: ImgBB API Key not configured securely. Skipping image deletion.");
+    // SECURITY NOTE: API keys should be stored securely, not hardcoded
+    const String imgbbApiKey = 'YOUR_IMGBB_API_KEY'; // Replace with secure implementation
+
+    if (imgbbApiKey == 'YOUR_IMGBB_API_KEY' || imgbbApiKey.isEmpty) {
+      print("WARNING: ImgBB API Key not configured. Skipping image deletion.");
       return;
     }
 
-    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash?key=$imgbbApiKey');
+    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash');
+
     try {
-      final response = await http.delete(url);
+      final response = await http.post(
+        url,
+        body: {'key': imgbbApiKey, 'action': 'delete'},
+      );
+
       if (response.statusCode == 200) {
-        print("ImgBB image deleted successfully. Response: ${response.body}");
+        print("ImgBB image deletion successful: $deleteHash");
       } else {
-        print("Failed to delete image from ImgBB ($deleteHash). Status: ${response.statusCode}, Body: ${response.body}");
+        print("Failed to delete ImgBB image: ${response.statusCode}, ${response.body}");
       }
     } catch (e) {
-      print("Error deleting image from ImgBB ($deleteHash): $e");
+      print("Error deleting ImgBB image: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget tileContent = ListTile(
-      leading: EnlargeableImage(
-        imageUrl: widget.imageUrl,
-        width: 60,
-        height: 60,
-      ),
-      title: Text(
-        widget.medicationName,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.blue.shade800,
-        ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        "الوقت: ${widget.nextDose}",
-        style: TextStyle(
-          fontSize: 14,
-          color: Colors.blue.shade600,
-        ),
-      ),
-      trailing: Icon(
-        _isExpanded ? Icons.expand_less : Icons.expand_more,
-        color: Colors.grey.shade500,
-      ),
-    );
-
-    Widget actionButtons = Padding(
-      padding: const EdgeInsets.only(top: 0, bottom: 8.0, right: 16.0, left: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildActionButton(
-            context: context,
-            icon: Icons.edit_note,
-            label: "تعديل",
-            color: Colors.orange.shade700,
-            onPressed: () => _handleEdit(context),
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.check_circle_outline,
-            label: "إنهاء",
-            color: Colors.red.shade700,
-            onPressed: () => _handleFinishMed(context),
-          ),
-          _buildActionButton(
-            context: context,
-            icon: Icons.delete_forever_outlined,
-            label: "حذف",
-            color: Colors.red.shade700,
-            onPressed: () => _handleDelete(context),
-          ),
-        ],
-      ),
-    );
+    // Toggle animation when expansion state changes
+    if (_isExpanded) {
+      _animationController.forward();
+    } else {
+      _animationController.reverse();
+    }
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       elevation: 2,
+      shadowColor: kPrimaryColor.withOpacity(0.2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        side: BorderSide(
+          color: _doseStatus == 'taken'
+              ? Colors.green.shade300.withOpacity(0.5)
+              : kSecondaryColor.withOpacity(0.2),
+          width: 1.5,
+        ),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kBorderRadius),
         onTap: () => setState(() => _isExpanded = !_isExpanded),
+        splashColor: kPrimaryColor.withOpacity(0.05),
+        highlightColor: kPrimaryColor.withOpacity(0.05),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            tileContent,
-            AnimatedCrossFade(
-              firstChild: Container(),
-              secondChild: actionButtons,
-              crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-              duration: const Duration(milliseconds: 250),
+            // Main tile content
+            Container(
+              decoration: BoxDecoration(
+                color: _doseStatus == 'taken'
+                    ? Colors.green.shade50.withOpacity(0.3)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(kBorderRadius),
+                  bottom: _isExpanded ? Radius.zero : Radius.circular(kBorderRadius),
+                ),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // Left: Dose Status Indicator
+                  _isLoadingStatus
+                      ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: kPrimaryColor,
+                    ),
+                  )
+                      : IconButton(
+                    icon: Icon(
+                      _doseStatus == 'taken'
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked,
+                      size: 28,
+                      color: _doseStatus == 'taken'
+                          ? Colors.green.shade600
+                          : Colors.grey.shade400,
+                    ),
+                    onPressed: _toggleDoseStatus,
+                    padding: EdgeInsets.zero,
+                    tooltip: _doseStatus == 'taken' ? "تم أخذ الجرعة" : "لم تؤخذ الجرعة بعد",
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Middle: Medication Image
+                  EnlargeableImage(
+                    imageUrl: widget.imageUrl,
+                    width: 50,
+                    height: 50,
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Right: Medication Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.medicationName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: kPrimaryColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 14,
+                              color: kSecondaryColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.nextDose,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: kSecondaryColor,
+                              ),
+                            ),
+                            if (_doseStatus == 'taken')
+                              Container(
+                                margin: const EdgeInsets.only(top: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "تم",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.green.shade800,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Expand/Collapse Icon
+                  RotationTransition(
+                    turns: Tween(begin: 0.0, end: 0.5)
+                        .animate(_animationController),
+                    child: Icon(
+                      Icons.expand_more_rounded,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Expandable actions section
+            SizeTransition(
+              sizeFactor: _expandAnimation,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: kSecondaryColor.withOpacity(0.05),
+                  border: Border(
+                    top: BorderSide(
+                      color: kSecondaryColor.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(kBorderRadius),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildActionButton(
+                      label: "تعديل",
+                      icon: Icons.edit_rounded,
+                      color: kPrimaryColor,
+                      onPressed: () => _handleEdit(context),
+                    ),
+                    _buildActionButton(
+                      label: "إنهاء",
+                      icon: Icons.event_busy_rounded,
+                      color: Colors.orange.shade700,
+                      onPressed: () => _handleFinishMed(context),
+                    ),
+                    _buildActionButton(
+                      label: "حذف",
+                      icon: Icons.delete_rounded,
+                      color: Colors.red.shade700,
+                      onPressed: () => _handleDelete(context),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -862,22 +1525,29 @@ class _DoseTileState extends State<DoseTile> {
   }
 
   Widget _buildActionButton({
-    required BuildContext context,
-    required IconData icon,
     required String label,
+    required IconData icon,
     required Color color,
     required VoidCallback onPressed,
   }) {
     return TextButton.icon(
-      icon: Icon(icon, color: color, size: 20),
-      label: Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
       onPressed: onPressed,
+      icon: Icon(icon, color: color, size: 18),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ),
       style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
     );
   }
 }
-// --- End DoseTile Widget ---
 

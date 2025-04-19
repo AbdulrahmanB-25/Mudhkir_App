@@ -31,7 +31,8 @@ dependencies:
   flutter:
     sdk: flutter
   intl: ^0.20.2
-
+  timezone: ^0.10.0
+  typed_data: ^1.3.2 # Add the latest version here
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -49,6 +50,11 @@ dependencies:
   path_provider: ^2.1.5
   http: ^1.3.0
   flutter_launcher_icons: ^0.14.3
+  flutter_local_notifications: ^19.0.0
+  flutter_local_notifications_linux: ^6.0.0
+  firebase_messaging: ^15.2.5
+  permission_handler: ^12.0.0+1
+  android_alarm_manager_plus: ^4.0.7
 
 dev_dependencies:
   flutter_test:
@@ -76,8 +82,12 @@ flutter:
   assets:
     - assets/icons/
     - assets/logo.png
+    - assets/icons/transpartnt_logo.png
+    - android/app/src/main/res/drawable/ic_stat_ic_notification.png
+    - android/app/src/main/res/drawable-v21/ic_stat_ic_notification.png
     - assets/Mediciens/trade_names.json
     - .env
+    - android/app/src/main/res/raw/alarm_sound.mp3
 
 
 flutter_launcher_icons:
@@ -104,10 +114,13 @@ flutter_launcher_icons:
   #       - asset: fonts/Schyler-Italic.ttf
   #         style: italic
   #   - family: Trajan Pro
-  #     fonts:
   #       - asset: fonts/TrajanPro.ttf
   #       - asset: fonts/TrajanPro_Bold.ttf
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+
+
+
