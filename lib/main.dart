@@ -7,6 +7,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your page/widget files
 import 'package:mudhkir_app/Pages/SettingsPage.dart';
@@ -27,6 +30,7 @@ import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
 
 // Global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
 
 // SharedPreferences Keys
 const String PREF_NEXT_DOSE_DOC_ID = 'next_dose_doc_id';
@@ -100,8 +104,22 @@ class MyApp extends StatelessWidget {
   }
 }
 
+Future<void> _handleNotificationPayload(String? medId) async {
+  if (medId != null && medId.isNotEmpty) {
+    final now = DateTime.now().toIso8601String();
+    print("Notification tapped! Medication ID: $medId at $now");
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_tapped_payload', medId);
+    await prefs.setString('last_tapped_time', now);
+
+    navigatorKey.currentState?.pushNamed('/medication_detail', arguments: {'docId': medId, 'fromNotification': true});
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await AndroidAlarmManager.initialize();
 
   // Initialize Localization
   try {
@@ -125,32 +143,48 @@ void main() async {
     print("[Firebase] Initialization complete.");
   } catch (e) {
     print("[Firebase] ERROR initializing Firebase: $e");
-    // Consider showing an error message to the user or stopping the app
     return;
   }
 
   // Initialize Timezones
   tz.initializeTimeZones();
   try {
-    // Set the local timezone for the application
     tz.setLocalLocation(tz.getLocation('Asia/Riyadh'));
     print("[Timezone] Local timezone set to 'Asia/Riyadh'.");
   } catch (e) {
     print("[Timezone] ERROR setting local timezone 'Asia/Riyadh': $e. Using system default.");
-    // The app might still work but scheduling could be based on the wrong zone
   }
 
   // Initialize Notifications
+  // Use contextless initialization for background isolate safety
+  const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  final InitializationSettings initSettings = InitializationSettings(android: androidInit);
+
+  await notificationsPlugin.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse response) async {
+      await _handleNotificationPayload(response.payload);
+    },
+  );
+
+  // Handle app launch from notification (killed state)
+  final NotificationAppLaunchDetails? details = await notificationsPlugin.getNotificationAppLaunchDetails();
+  if (details?.didNotificationLaunchApp ?? false) {
+    final medId = details!.notificationResponse?.payload;
+    if (medId != null && medId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _handleNotificationPayload(medId);
+      });
+    }
+  }
+
+  // Initialize AlarmNotificationHelper (if it needs initialization)
   try {
-    await AlarmNotificationHelper.initialize; // Call without arguments
+    await AlarmNotificationHelper.initialize(navigatorKey.currentContext!);
     print("[Notifications] AlarmNotificationHelper initialized.");
   } catch (e) {
     print("[Notifications] ERROR initializing AlarmNotificationHelper: $e");
-    // Notifications might not work
   }
-
-  // Optional: Request necessary permissions early
-  // await _requestEssentialPermissions();
 
   print("[Startup] Running the app...");
   runApp(const MyApp());
@@ -170,8 +204,6 @@ Future<void> _requestEssentialPermissions() async {
   // Request Exact Alarm Permission (Android 12+) - Crucial for precise scheduling
   if (Platform.isAndroid) {
     var exactAlarmStatus = await Permission.scheduleExactAlarm.status;
-    // Note: isDenied might mean it hasn't been requested OR the user denied it.
-    // Might need more specific checks depending on Android version.
     if (exactAlarmStatus.isDenied) {
       permissionsToRequest.add(Permission.scheduleExactAlarm);
     }
@@ -182,11 +214,9 @@ Future<void> _requestEssentialPermissions() async {
     Map<Permission, PermissionStatus> statuses = await permissionsToRequest.request();
     statuses.forEach((permission, status) {
       print("[Permissions] Status for $permission: $status");
-      // Handle denied permissions (e.g., show explanation dialog)
       if (status.isPermanentlyDenied) {
-        // Guide user to app settings
         print("[Permissions] $permission permanently denied. Guide user to settings.");
-        // openAppSettings(); // Requires url_launcher package
+        // openAppSettings();
       }
     });
   } else {
