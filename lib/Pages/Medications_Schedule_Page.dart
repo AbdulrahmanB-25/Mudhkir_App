@@ -10,9 +10,9 @@ import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 
 // Import your Edit screen
-import 'package:mudhkir_app/pages/EditMedicationScreen.dart';
+import 'package:mudhkir_app/pages/EditMedication_Page.dart';
 import '../main.dart';
-import 'mainpage.dart';
+import 'Main_Page.dart';
 
 // --- Theme constants ---
 const Color kPrimaryColor = Color(0xFF2E86C1); // Hospital blue (primary)

@@ -11,7 +11,7 @@ import 'dart:ui' as ui;
 // Import your services and widgets
 import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
 import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
-import 'package:mudhkir_app/Pages/MedicationDetailPage.dart'; // Import for type safety if needed
+import 'package:mudhkir_app/Pages/MedicationDetail_Page.dart'; // Import for type safety if needed
 
 // Import SharedPreferences keys from main.dart (adjust path if needed)
 import '../main.dart';

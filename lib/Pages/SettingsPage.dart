@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mudhkir_app/main.dart'; // Import notification utilities
 
 import '../Widgets/bottom_navigation.dart';
-import 'mainpage.dart'; // Import the bottom navigation bar
+import 'Main_Page.dart'; // Import the bottom navigation bar
 
 // Constants for theming
 // Hospital Blue Color Theme

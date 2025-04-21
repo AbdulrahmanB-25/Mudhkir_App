@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../add_dose.dart';
+import '../Add_Medication_Page.dart';
 
 
 //TODO : WARNAING FOR DOSAGE TIME

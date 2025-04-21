@@ -13,7 +13,7 @@ import 'package:http/http.dart' as http;
 import '../Pages/Add_Medicaiton/Add_Dosage.dart';
 import '../Pages/Add_Medicaiton/Add_Name_Picture.dart';
 import '../Pages/Add_Medicaiton/Add_Start_&_End_Date.dart' show AddStartEndDatePage;
-import '../Pages/EditMedicationScreen.dart';
+import '../Pages/EditMedication_Page.dart';
 
 /// Shared theme constants
 const Color kPrimaryColor = Color(0xFF1A5CFF);

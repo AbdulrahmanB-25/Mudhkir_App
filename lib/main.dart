@@ -15,15 +15,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mudhkir_app/Pages/SettingsPage.dart';
 import 'package:mudhkir_app/Pages/companions.dart';
 import 'package:mudhkir_app/Pages/personal_data.dart';
-import 'package:mudhkir_app/pages/add_dose.dart' as add_dose;
-import 'package:mudhkir_app/pages/login.dart';
-import 'package:mudhkir_app/pages/mainpage.dart';
-import 'package:mudhkir_app/pages/signup.dart';
-import 'package:mudhkir_app/pages/welcome.dart';
-import 'package:mudhkir_app/pages/dose_schedule.dart' as dose_schedule;
-import 'package:mudhkir_app/pages/ForgetPassword.dart';
+import 'package:mudhkir_app/pages/Add_Medication_Page.dart' as add_dose;
+import 'package:mudhkir_app/pages/Login_Page.dart';
+import 'package:mudhkir_app/pages/Main_Page.dart';
+import 'package:mudhkir_app/pages/Signup_Page.dart';
+import 'package:mudhkir_app/pages/Welcome_Page.dart';
+import 'package:mudhkir_app/pages/Medications_Schedule_Page.dart' as dose_schedule;
+import 'package:mudhkir_app/pages/ForgetPassword_Page.dart';
 import 'package:mudhkir_app/Widgets/AuthWrapper.dart';
-import 'package:mudhkir_app/Pages/MedicationDetailPage.dart';
+import 'package:mudhkir_app/Pages/MedicationDetail_Page.dart';
 
 // Import AlarmNotificationHelper
 import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
