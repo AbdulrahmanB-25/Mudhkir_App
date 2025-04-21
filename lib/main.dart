@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Import your page/widget files
 import 'package:mudhkir_app/Pages/SettingsPage.dart';
 import 'package:mudhkir_app/Pages/companions.dart';
-import 'package:mudhkir_app/Pages/personal_data.dart';
+import 'package:mudhkir_app/Pages/Personal_data_Page.dart';
 import 'package:mudhkir_app/pages/Add_Medication_Page.dart' as add_dose;
 import 'package:mudhkir_app/pages/Login_Page.dart';
 import 'package:mudhkir_app/pages/Main_Page.dart';
