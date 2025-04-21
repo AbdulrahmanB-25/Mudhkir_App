@@ -18,6 +18,7 @@ class AddStartEndDatePage extends StatelessWidget {
   final VoidCallback onSelectEndDate;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
+  final VoidCallback? onClearEndDate;
 
   const AddStartEndDatePage({
     Key? key,
@@ -28,6 +29,7 @@ class AddStartEndDatePage extends StatelessWidget {
     required this.onSelectEndDate,
     required this.onSubmit,
     required this.onBack,
+    this.onClearEndDate,
   }) : super(key: key);
 
   @override
@@ -423,6 +425,11 @@ class AddStartEndDatePage extends StatelessWidget {
                                           ? Colors.orange.shade700
                                           : Colors.grey.shade400,
                                     ),
+                                    if (endDate != null && onClearEndDate != null)
+                                      IconButton(
+                                        icon: const Icon(Icons.close, color: Colors.red),
+                                        onPressed: onClearEndDate,
+                                      ),
                                   ],
                                 ),
                               ),
