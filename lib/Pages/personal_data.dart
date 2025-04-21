@@ -14,6 +14,8 @@ const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
 
+//TODO : EMAIL MODIFCATION
+
 class PersonalDataPage extends StatefulWidget {
   const PersonalDataPage({super.key});
 

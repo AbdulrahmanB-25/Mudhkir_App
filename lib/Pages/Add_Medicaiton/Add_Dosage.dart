@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../add_dose.dart';
 
+
+//TODO : WARNAING FOR DOSAGE TIME
+//TODO : AUTO TIMEING RESET
+
 // Constants for theming
 // Hospital Blue Color Theme
 const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue

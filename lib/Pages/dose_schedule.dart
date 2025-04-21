@@ -599,8 +599,8 @@ class _DoseScheduleState extends State<DoseSchedule> {
                               _focusedDay = focusedDay;
                             },
                             availableCalendarFormats: const {
-                              CalendarFormat.month: 'شهر',
-                              CalendarFormat.week: 'أسبوع',
+                              CalendarFormat.month: 'اسبوع',
+                              CalendarFormat.week: 'شهر',
                             },
 
                             // Styled Calendar Header
