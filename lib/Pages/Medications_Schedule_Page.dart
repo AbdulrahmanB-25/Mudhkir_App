@@ -23,7 +23,23 @@ const double kSpacing = 16.0; // Base spacing unit
 
 // --- Time Utilities ---
 class TimeUtils {
-  static TimeOfDay? parseTime(String timeStr) {
+  static TimeOfDay? parseTime(dynamic timeInput) {
+    // Handle case where input is a Map with 'time' key
+    if (timeInput is Map) {
+      if (timeInput.containsKey('time')) {
+        return parseTime(timeInput['time']);
+      }
+      print("Failed to parse time from map: $timeInput");
+      return null;
+    }
+
+    // Now we should have a string
+    final String? timeStr = timeInput?.toString();
+    if (timeStr == null || timeStr.isEmpty) {
+      print("Empty or null time string");
+      return null;
+    }
+
     try {
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
       DateTime parsedDt = ampmFormat.parseStrict(timeStr);
@@ -65,12 +81,14 @@ class EnlargeableImage extends StatefulWidget {
   final String imageUrl;
   final double width;
   final double height;
+  final String docId;
 
   const EnlargeableImage({
     super.key,
     required this.imageUrl,
     required this.width,
     required this.height,
+    required this.docId,
   });
 
   @override
@@ -146,7 +164,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
                 ),
                 body: Center(
                   child: Hero(
-                    tag: 'medication_image_${widget.imageUrl.hashCode}',
+                    tag: 'medication_image_${widget.docId}_${widget.imageUrl.hashCode}',
                     child: InteractiveViewer(
                       panEnabled: true,
                       minScale: 0.5,
@@ -194,7 +212,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
           );
         } else if (snapshot.hasData && snapshot.data != null) {
           return Hero(
-            tag: 'medication_image_${widget.imageUrl.hashCode}',
+            tag: 'medication_image_${widget.docId}_${widget.imageUrl.hashCode}',
             child: GestureDetector(
               onTap: () => _openEnlargedImage(context, snapshot.data!),
               child: Container(
@@ -338,10 +356,16 @@ class _DoseScheduleState extends State<DoseSchedule> {
         final String frequencyType = frequencyParts.length > 1 ? frequencyParts[1] : 'يومي';
 
         final String resolvedFrequencyType = frequencyType;
+        print('Processing medication ${doc.id}: $medicationName, frequency type: $resolvedFrequencyType');
 
         final List<dynamic> timesRaw = data['times'] ?? [];
         final String imageUrl = data['imageUrl'] as String? ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] as String? ?? '';
+
+        if (resolvedFrequencyType == 'اسبوعي') {
+          print('Weekly medication found: $medicationName');
+          print('Times raw data: $timesRaw');
+        }
 
         final DateTime startDate = startTimestamp.toDate();
         final DateTime? endDate = endTimestamp?.toDate();
@@ -353,19 +377,76 @@ class _DoseScheduleState extends State<DoseSchedule> {
           List<TimeOfDay> timesParsed = [];
 
           if (resolvedFrequencyType == 'يومي') {
+            // Daily medication - parse all time entries for each day
             timesParsed = timesRaw
-                .map((t) => t != null ? TimeUtils.parseTime(t.toString()) : null)
+                .map((t) => TimeUtils.parseTime(t))
                 .whereType<TimeOfDay>()
                 .toList();
             shouldAddDoseToday = timesParsed.isNotEmpty;
           } else if (resolvedFrequencyType == 'اسبوعي') {
-            timesParsed = timesRaw
-                .whereType<Map>()
-                .where((map) => map['day'] == currentDate.weekday)
-                .map((map) => TimeUtils.parseTime(map['time'].toString()))
-                .whereType<TimeOfDay>()
-                .toList();
+            print('Processing weekly medication for ${currentDate.toIso8601String()}, weekday: ${currentDate.weekday}');
+
+            // Process weekly medication times
+            timesParsed = [];
+            for (var item in timesRaw) {
+              print('Processing weekly item type: ${item.runtimeType}, value: $item');
+
+              if (item is Map) {
+                // Extract day and time values considering different possible structures
+                int dayValue = -1;
+                dynamic timeValue;
+
+                // Handle direct map format or nested format
+                if (item.containsKey('day')) {
+                  var day = item['day'];
+                  if (day is int) dayValue = day;
+                  else if (day is String) dayValue = int.tryParse(day) ?? -1;
+                  else if (day is double) dayValue = day.toInt();
+
+                  timeValue = item['time'];
+                }
+
+                // Handle case where item itself has nested 'time' object with 'day' inside
+                if (item.containsKey('time') && item['time'] is Map) {
+                  var nestedTime = item['time'] as Map;
+                  if (nestedTime.containsKey('day')) {
+                    var day = nestedTime['day'];
+                    if (day is int) dayValue = day;
+                    else if (day is String) dayValue = int.tryParse(day) ?? -1;
+                    else if (day is double) dayValue = day.toInt();
+                  }
+                  timeValue = nestedTime['time'];
+                }
+
+                print('Weekly item: day=$dayValue, current weekday=${currentDate.weekday}, time=$timeValue');
+
+                if (dayValue == currentDate.weekday) {
+                  final parsedTime = TimeUtils.parseTime(timeValue);
+                  if (parsedTime != null) {
+                    timesParsed.add(parsedTime);
+                    print('Added weekly time: $parsedTime for day $dayValue');
+                  }
+                }
+              } else if (item is String) {
+                // Legacy format - Day:Time (e.g. "1:08:00")
+                final parts = item.split(':');
+                if (parts.length >= 2) {
+                  final dayPart = int.tryParse(parts[0]);
+                  if (dayPart == currentDate.weekday) {
+                    final timePart = parts.sublist(1).join(':');
+                    final parsedTime = TimeUtils.parseTime(timePart);
+                    if (parsedTime != null) {
+                      timesParsed.add(parsedTime);
+                      print('Added legacy weekly time: $parsedTime for day $dayPart');
+                    }
+                  }
+                }
+              }
+            }
             shouldAddDoseToday = timesParsed.isNotEmpty;
+            if (shouldAddDoseToday) {
+              print('Added weekly dose for ${currentDate.toIso8601String()} with ${timesParsed.length} times');
+            }
           }
 
           if (shouldAddDoseToday) {
@@ -744,8 +825,8 @@ class _DoseScheduleState extends State<DoseSchedule> {
                           children: [
                             Icon(
                               Icons.event_note_rounded,
-                              color: kPrimaryColor,
                               size: 20,
+                              color: kPrimaryColor,
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -1406,6 +1487,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
                     imageUrl: widget.imageUrl,
                     width: 50,
                     height: 50,
+                    docId: widget.docId,
                   ),
                   const SizedBox(width: 12),
 
@@ -1550,4 +1632,3 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
     );
   }
 }
-
