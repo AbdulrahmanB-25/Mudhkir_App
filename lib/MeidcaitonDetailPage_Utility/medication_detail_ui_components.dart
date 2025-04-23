@@ -2,11 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'time_utilities.dart';
 
-// Constants for theming
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -183,7 +182,6 @@ class MedicationDetailUIComponents {
                                 ),
                                 SizedBox(width: 4),
                                 Text(
-                                  // ignore: unnecessary_null_comparison
                                   manualConfirmationTime != null
                                       ? TimeUtilities.formatTimeOfDay(
                                       manualConfirmationTime)
@@ -666,7 +664,6 @@ class MedicationDetailUIComponents {
                         child: InkWell(
                           onTap: isProcessingConfirmation ? null : () {
                             updateState(() {
-                              // Replace with the new callback
                               selectSuggestedTime(time);
                             });
                           },

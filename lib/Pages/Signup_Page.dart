@@ -129,7 +129,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // Background gradient matching login/welcome pages
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -144,7 +143,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
             ),
           ),
           
-          // Decorative pill shapes in background matching login page
           Positioned(
             top: MediaQuery.of(context).size.height * 0.12,
             left: MediaQuery.of(context).size.width * 0.05,
@@ -283,7 +281,6 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                       ),
                     const SizedBox(height: 10), // Reduced from 16
                     
-                    // Email field with card styling
                     Card(
                       elevation: 4,
                       shadowColor: Colors.blue.shade100,
@@ -306,23 +303,23 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                               borderSide: BorderSide.none,
                             ),
                             prefixIcon: Icon(Icons.email, color: Colors.blue.shade800),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                           ),
                         ),
                       ),
                     ),
                     if (_isSubmitted && _emailError.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        padding: const EdgeInsets.only(top: 4, right: 12),
                         child: Text(
                           _emailError,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12),
                           textAlign: TextAlign.right,
                         ),
                       ),
-                    const SizedBox(height: 10), // Reduced from 16
+                    const SizedBox(height: 10),
                     
-                    // Password field with card styling
+                    // Password field
                     Card(
                       elevation: 4,
                       shadowColor: Colors.blue.shade100,
@@ -330,7 +327,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(3.0), // Reduced from 4.0
+                        padding: const EdgeInsets.all(3.0),
                         child: TextField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
@@ -348,7 +345,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_off : Icons.visibility,
                                 color: Colors.blue.shade700,
-                                size: 20, // Reduced from 22
+                                size: 20,
                               ),
                               onPressed: () {
                                 setState(() {
@@ -356,23 +353,23 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                                 });
                               },
                             ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                           ),
                         ),
                       ),
                     ),
                     if (_isSubmitted && _passwordError.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        padding: const EdgeInsets.only(top: 4, right: 12),
                         child: Text(
                           _passwordError,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12),
                           textAlign: TextAlign.right,
                         ),
                       ),
-                    const SizedBox(height: 10), // Reduced from 16
+                    const SizedBox(height: 10),
                     
-                    // Confirm Password field with card styling
+                    // Confirm Password field
                     Card(
                       elevation: 4,
                       shadowColor: Colors.blue.shade100,
@@ -380,7 +377,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(3.0), // Reduced from 4.0
+                        padding: const EdgeInsets.all(3.0),
                         child: TextField(
                           controller: _confirmPasswordController,
                           obscureText: _obscureConfirmPassword,
@@ -406,27 +403,27 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                                 });
                               },
                             ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16), // Reduced from vertical: 16
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                           ),
                         ),
                       ),
                     ),
                     if (_isSubmitted && _confirmPasswordError.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4, right: 12), // Reduced from top: 8
+                        padding: const EdgeInsets.only(top: 4, right: 12),
                         child: Text(
                           _confirmPasswordError,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 12), // Reduced from fontSize: 13
+                          style: TextStyle(color: Colors.red.shade700, fontSize: 12),
                           textAlign: TextAlign.right,
                         ),
                       ),
-                    const SizedBox(height: 15), // Reduced from 20
+                    const SizedBox(height: 15),
                     
                     // Error message display
                     if (_signupError.isNotEmpty)
                       Container(
-                        margin: const EdgeInsets.only(bottom: 10), // Reduced from 16
-                        padding: const EdgeInsets.all(8), // Reduced from 12
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.red.shade50,
                           borderRadius: BorderRadius.circular(10),
@@ -445,15 +442,15 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                     
                     // Signup Button with gradient and elevation
                     Container(
-                      margin: const EdgeInsets.only(top: 8), // Reduced from 10
-                      height: 50, // Reduced from 55
+                      margin: const EdgeInsets.only(top: 8),
+                      height: 50,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(25), // Reduced from 28
+                        borderRadius: BorderRadius.circular(25),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.blue.shade200.withOpacity(0.5),
-                            blurRadius: 8, // Reduced from 10
-                            offset: Offset(0, 3), // Reduced from Offset(0, 4)
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
                           ),
                         ],
                         gradient: LinearGradient(
@@ -469,20 +466,20 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                           shadowColor: Colors.transparent,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25), // Reduced from 28
+                            borderRadius: BorderRadius.circular(25),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12), // Reduced from 15
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           elevation: 0,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.person_add, size: 20), // Reduced from 22
+                            Icon(Icons.person_add, size: 20),
                             SizedBox(width: 10),
                             Text(
                               "إنشاء حساب",
                               style: TextStyle(
-                                fontSize: 16, // Reduced from 18
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1,
                               ),
@@ -494,8 +491,8 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                     
                     // Login redirect section
                     Container(
-                      margin: const EdgeInsets.only(top: 20, bottom: 15), // Reduced from top: 30, bottom: 20
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15), // Reduced from vertical: 15, horizontal: 20
+                      margin: const EdgeInsets.only(top: 20, bottom: 15),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.7),
                         borderRadius: BorderRadius.circular(15),
@@ -508,20 +505,20 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                             "لديك حساب؟",
                             style: TextStyle(
                               color: Colors.black87,
-                              fontSize: 14, // Reduced from 15
+                              fontSize: 14,
                             ),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pushNamed(context, '/login'),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.blue.shade800,
-                              padding: EdgeInsets.symmetric(horizontal: 8), // Reduced from 10
+                              padding: EdgeInsets.symmetric(horizontal: 8),
                             ),
                             child: Text(
                               "تسجيل الدخول",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14, // Reduced from 15
+                                fontSize: 14,
                               ),
                             ),
                           ),

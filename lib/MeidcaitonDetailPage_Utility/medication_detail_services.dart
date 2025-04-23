@@ -336,9 +336,7 @@ class MedicationDetailService {
             }
           }
         }
-        
-        // If we didn't update any existing time and it's intentional rescheduling
-        // In this case, we're NOT adding a new time, but replacing the first one
+
         if (!timeUpdated && times.isNotEmpty) {
           print("[MedicationDetailService] No matching time found, modifying the first time entry");
           
@@ -349,7 +347,6 @@ class MedicationDetailService {
           }
           timeUpdated = true;
         }
-        // Only if the times array is completely empty (should be rare), add a new entry
         else if (!timeUpdated && times.isEmpty) {
           print("[MedicationDetailService] Times array is empty, adding new time entry");
           times.add(formattedTime);

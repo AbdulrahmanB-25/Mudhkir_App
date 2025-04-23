@@ -36,7 +36,7 @@ final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotifica
 // SharedPreferences Keys
 const String PREF_NEXT_DOSE_DOC_ID = 'next_dose_doc_id';
 const String PREF_NEXT_DOSE_TIME_ISO = 'next_dose_time_iso'; // Store as UTC ISO8601 String
-const String PREF_CONFIRMATION_SHOWN_PREFIX = 'confirmation_shown_for_'; // Append docId_IsoTimeStringUTC
+const String PREF_CONFIRMATION_SHOWN_PREFIX = 'confirmation_shown_for_';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -49,7 +49,7 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        fontFamily: 'Tajawal', // Example font
+        fontFamily: 'Tajawal',
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const AuthWrapper(),
@@ -90,7 +90,6 @@ class MyApp extends StatelessWidget {
             confirmationTimeIso = args['confirmationTimeIso'] as String?;
             confirmationKey = args['confirmationKey'] as String?;
           } else if (args is String) {
-            // Handle legacy case where only docId might be passed
             docId = args;
           }
 
@@ -141,7 +140,6 @@ void main() async {
     print("[Localization] ERROR initializing locale data: $e");
   }
 
-  // Load Environment Variables (Optional)
   try {
     await dotenv.load(fileName: ".env");
     print("[Environment] Loaded .env file successfully.");
@@ -168,7 +166,6 @@ void main() async {
   }
 
   // Initialize Notifications
-  // Use contextless initialization for background isolate safety
   const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   final InitializationSettings initSettings = InitializationSettings(android: androidInit);
 
@@ -202,7 +199,6 @@ void main() async {
   runApp(const MyApp());
 }
 
-// Optional: Function to request permissions on startup or when needed
 Future<void> _requestEssentialPermissions() async {
   print("[Permissions] Checking/Requesting essential permissions...");
   List<Permission> permissionsToRequest = [];

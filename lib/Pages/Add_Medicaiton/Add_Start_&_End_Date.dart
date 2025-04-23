@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
-// Constants for theming
-// Hospital Blue Color Theme
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -47,7 +46,6 @@ class AddStartEndDatePage extends StatelessWidget {
         child: SafeArea(
           child: Stack(
             children: [
-              // Back button with consistent design
               Positioned(
                 top: 15,
                 left: 10,
@@ -89,7 +87,6 @@ class AddStartEndDatePage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Page title with gradient effect - matching other pages
                       Center(
                         child: ShaderMask(
                           shaderCallback: (bounds) => LinearGradient(
@@ -111,7 +108,6 @@ class AddStartEndDatePage extends StatelessWidget {
 
                       const SizedBox(height: 10),
 
-                      // Subtitle - matching style with other pages
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                         decoration: BoxDecoration(
@@ -173,7 +169,6 @@ class AddStartEndDatePage extends StatelessWidget {
 
                             const Divider(height: 24),
 
-                            // Info message with consistent styling
                             Container(
                               margin: const EdgeInsets.only(bottom: 20),
                               padding: const EdgeInsets.all(12),
@@ -352,7 +347,6 @@ class AddStartEndDatePage extends StatelessWidget {
 
                             const SizedBox(height: 10),
 
-                            // End Date Card with consistent styling
                             InkWell(
                               onTap: onSelectEndDate,
                               borderRadius: BorderRadius.circular(kBorderRadius),
@@ -547,7 +541,6 @@ class AddStartEndDatePage extends StatelessWidget {
 
                       const SizedBox(height: 30),
 
-                      // Submit button with consistent styling but green for completion
                       ElevatedButton(
                         onPressed: () {
                           if (formKey.currentState!.validate()) {

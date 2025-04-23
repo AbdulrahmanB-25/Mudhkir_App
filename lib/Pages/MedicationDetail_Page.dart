@@ -10,11 +10,10 @@ import '../MeidcaitonDetailPage_Utility/medication_detail_services.dart';
 import '../MeidcaitonDetailPage_Utility/medication_detail_ui_components.dart';
 import '../MeidcaitonDetailPage_Utility/time_utilities.dart';
 
-// Constants for theming
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -368,9 +367,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
       final dateTime = TimeUtilities.timeOfDayToDateTime(selectedTime);
       String? originalTimeString;
       
-      // For manual rescheduling without notification, create a timestamp string for today's date
       if (widget.confirmationTimeIso == null && _medData != null && _medData!.containsKey('times')) {
-        // If we're manually rescheduling, log the action with more details
         _logAction("Manual Rescheduling", "Selected new time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
       } else {
         _logAction("Notification Rescheduling", "New time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
@@ -409,11 +406,9 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
           ),
         );
 
-        // If from notification, pop with true to trigger medication reschedule
         if (widget.needsConfirmation) {
           Navigator.pop(context, true);
         } else {
-          // Just reset state for regular mode
           setState(() {
             _isReschedulingMode = false;
             _isProcessingConfirmation = false;

@@ -85,7 +85,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     setState(() {
       _isAuthenticated = newAuthStatus;
       if (!_isAuthenticated) {
-        _userName = 'زائر';
+        _userName = '';
         _closestMedName = '';
         _closestMedTimeStr = '';
         _closestMedDocId = '';

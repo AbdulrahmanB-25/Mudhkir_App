@@ -1,4 +1,3 @@
-// File: lib/EditMedication_Utility/edit_medication_data_provider.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -374,7 +373,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 }
 
 
-// File: lib/EditMedication_Utility/edit_medication_utils.dart
 
 /// Helper utilities: time parsing, date calc, permissions, ImgBB upload.
 class EditMedicationUtils {

@@ -151,8 +151,7 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
                   ),
                   SizedBox(height: 60),
                   
-                  // Removed "Enter as Guest" button
-                  
+
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: ElevatedButton(

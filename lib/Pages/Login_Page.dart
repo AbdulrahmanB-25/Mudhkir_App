@@ -259,7 +259,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                       ),
                     const SizedBox(height: 16),
                     
-                    // Password Field with card styling
+                    // Password Field
                     Card(
                       elevation: 4,
                       shadowColor: Colors.blue.shade100,
@@ -350,7 +350,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                         ),
                       ),
                     
-                    // Login Button with elevation and gradient
+                    // Login Button
                     Container(
                       margin: const EdgeInsets.only(top: 10),
                       height: 55,

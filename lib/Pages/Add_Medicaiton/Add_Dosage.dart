@@ -7,12 +7,11 @@ import '../Add_Medication_Page.dart';
 //TODO : WARNAING FOR DOSAGE TIME
 //TODO : AUTO TIMEING RESET
 
-// Constants for theming
-// Hospital Blue Color Theme
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -147,7 +146,6 @@ class AddDosagePage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Fixed to use horizontal ListView for full weekday names
           SizedBox(
             height: 56,
             child: ListView(
@@ -218,7 +216,6 @@ class AddDosagePage extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // Display a time picker for each selected day with improved styling
                 Column(
                   children: sortedDays.map((day) {
                     final time = weeklyTimes[day];
@@ -457,7 +454,7 @@ class AddDosagePage extends StatelessWidget {
 
                       const SizedBox(height: 25.0),
 
-                      // Dosage Card with consistent styling
+                      // Dosage Card
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -491,7 +488,7 @@ class AddDosagePage extends StatelessWidget {
 
                             const Divider(height: 24),
 
-                            // Dosage Amount and Unit with improved styling
+                            // Dosage Amount and Unit
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

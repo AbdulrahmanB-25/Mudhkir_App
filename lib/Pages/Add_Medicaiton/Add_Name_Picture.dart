@@ -1,12 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
-// Constants for theming
-// Hospital Blue Color Theme
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -54,7 +53,6 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
     } else {
       if (mounted) {
         setState(() {
-          // Get all matches, not limited to 3
           _filteredSuggestions = widget.suggestions
               .where((s) => s.toLowerCase().contains(text))
               .toList();
@@ -585,7 +583,6 @@ class AddNamePicturePage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Page title with gradient effect - matching AddDosagePage
                       ShaderMask(
                         shaderCallback: (bounds) => LinearGradient(
                           colors: [kPrimaryColor, Color(0xFF4E7BFF)],
@@ -604,7 +601,6 @@ class AddNamePicturePage extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
 
-                      // Subtitle - matching style with AddDosagePage
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                         decoration: BoxDecoration(
@@ -636,7 +632,6 @@ class AddNamePicturePage extends StatelessWidget {
 
                       const SizedBox(height: 25.0),
 
-                      // Medicine name search with consistent card style
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -751,7 +746,6 @@ class AddNamePicturePage extends StatelessWidget {
 
                       const SizedBox(height: 30.0),
 
-                      // Next button with consistent styling across all pages
                       ElevatedButton(
                         onPressed: () {
                           if (formKey.currentState!.validate()) {

@@ -5,7 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_init;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../main.dart'; // Import to access navigatorKey
+import '../main.dart';
 
 class AlarmNotificationHelper {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -464,6 +464,5 @@ void notificationTapBackground(NotificationResponse response) {
   final String? payload = response.payload;
   if (payload != null && payload.isNotEmpty) {
     print("[Background] Notification tapped with payload: $payload");
-    // You should handle saving this and checking it on resume to navigate.
   }
 }

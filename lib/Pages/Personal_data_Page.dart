@@ -4,12 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mudhkir_app/Pages/ForgetPassword_Page.dart';
 import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
 
-// Constants for theming - consistent with other pages
-// Hospital Blue Color Theme
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -223,7 +222,6 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Update Firestore document
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -325,7 +323,6 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  // Profile Header with Avatar
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
                     decoration: BoxDecoration(

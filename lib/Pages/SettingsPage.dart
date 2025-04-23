@@ -5,14 +5,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../Widgets/bottom_navigation.dart';
-import 'Main_Page.dart'; // Import the bottom navigation bar
+import 'Main_Page.dart';
 
-// Constants for theming
-// Hospital Blue Color Theme
-const Color kPrimaryColor = Color(0xFF2E86C1); // Medium hospital blue
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kErrorColor = Color(0xFFFF6B6B); // Error red
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
+
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kErrorColor = Color(0xFFFF6B6B);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
@@ -25,7 +24,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  int _selectedIndex = 2; // Index for the bottom navigation bar
+  int _selectedIndex = 2;
   String _appVersion = "جاري التحميل...";
 
   @override
@@ -37,7 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _fetchAppVersion() async {
     try {
       final response = await http.get(Uri.parse(
-          'https://api.github.com/repos/<owner>/<repo>/releases/latest')); // Replace <owner> and <repo> with your GitHub repository details
+          'https://api.github.com/repos/<owner>/<repo>/releases/latest'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
@@ -60,7 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // added to remove back button
+        automaticallyImplyLeading: false,
         title: const Text(
           "الإعدادات",
           style: TextStyle(

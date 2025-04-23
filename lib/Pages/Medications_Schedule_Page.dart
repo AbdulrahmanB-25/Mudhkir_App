@@ -15,11 +15,11 @@ import '../main.dart';
 import 'Main_Page.dart';
 
 // --- Theme constants ---
-const Color kPrimaryColor = Color(0xFF2E86C1); // Hospital blue (primary)
-const Color kSecondaryColor = Color(0xFF5DADE2); // Light hospital blue
-const Color kBackgroundColor = Color(0xFFF5F8FA); // Very light blue-gray background
-const double kBorderRadius = 16.0; // Consistent border radius
-const double kSpacing = 16.0; // Base spacing unit
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const Color kBackgroundColor = Color(0xFFF5F8FA);
+const double kBorderRadius = 16.0;
+const double kSpacing = 16.0;
 
 // --- Time Utilities ---
 class TimeUtils {
@@ -428,7 +428,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
                   }
                 }
               } else if (item is String) {
-                // Legacy format - Day:Time (e.g. "1:08:00")
                 final parts = item.split(':');
                 if (parts.length >= 2) {
                   final dayPart = int.tryParse(parts[0]);
@@ -914,7 +913,6 @@ class _DoseScheduleState extends State<DoseSchedule> {
             imgbbDeleteHash: events[index]['imgbbDeleteHash'],
             onDataChanged: _fetchDoses,
           ),
-          // Add space between tiles except for the last one
           if (index < events.length - 1) const SizedBox(height: 12),
         ],
       ],
@@ -1013,7 +1011,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
         return;
       }
 
-      String currentStatus = 'pending'; // Default to pending
+      String currentStatus = 'pending';
       for (var dose in missedDoses) {
         if (dose is Map<String, dynamic> && dose.containsKey('scheduled') && dose.containsKey('status')) {
           final scheduledTimestamp = dose['scheduled'] as Timestamp?;
@@ -1021,12 +1019,11 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
             final scheduledDate = scheduledTimestamp.toDate();
             final normalizedScheduledDate = DateTime(scheduledDate.year, scheduledDate.month, scheduledDate.day);
 
-            // Check if the dose time and date match the current tile's time and selected day
             if (scheduledDate.hour == doseTime.hour &&
                 scheduledDate.minute == doseTime.minute &&
                 isSameDay(normalizedScheduledDate, normalizedSelectedDay)) {
               currentStatus = dose['status'] as String? ?? 'pending';
-              break; // Found the status for this specific dose instance
+              break;
             }
           }
         }
@@ -1388,8 +1385,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
   }
 
   Future<void> _deleteImgBBImage(String deleteHash) async {
-    // SECURITY NOTE: API keys should be stored securely, not hardcoded
-    const String imgbbApiKey = 'YOUR_IMGBB_API_KEY'; // Replace with secure implementation
+    const String imgbbApiKey = 'YOUR_IMGBB_API_KEY';
 
     if (imgbbApiKey == 'YOUR_IMGBB_API_KEY' || imgbbApiKey.isEmpty) {
       print("WARNING: ImgBB API Key not configured. Skipping image deletion.");
