@@ -1,332 +1,351 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'CompanionDetailPage.dart';
+import 'package:intl/intl.dart';
+import 'dart:ui' as ui;
+
+const Color kPrimaryColor = Color(0xFF2E86C1);
+const Color kSecondaryColor = Color(0xFF5DADE2);
+const double kBorderRadius = 16.0;
 
 class Companions extends StatefulWidget {
   const Companions({super.key});
 
   @override
-  _CompanionsState createState() => _CompanionsState();
+  State<Companions> createState() => _CompanionsState();
 }
 
 class _CompanionsState extends State<Companions> {
-  final List<Map<String, String>> companions = [];
+  final user = FirebaseAuth.instance.currentUser;
+  late CollectionReference companionsRef;
+  List<Map<String, dynamic>> companionDataList = [];
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCompanionsFromFirestore();
-  }
-
-  Future<void> _loadCompanionsFromFirestore() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    try {
-      final snapshot = await FirebaseFirestore.instance
+    if (user != null) {
+      companionsRef = FirebaseFirestore.instance
           .collection('users')
-          .doc(currentUser.uid)
-          .collection('companions')
-          .get();
-
-      setState(() {
-        companions.clear();
-        companions.addAll(snapshot.docs.map((doc) {
-          final data = doc.data();
-          return {
-            'name': data['name'] ?? '',
-            'relation': data['relation'] ?? '',
-            'email': data['email'] ?? '',
-          };
-        }));
-      });
-    } catch (e) {
-      print('🚫 Error loading companions: $e');
+          .doc(user!.uid)
+          .collection('companions');
+      _loadCompanions();
     }
   }
 
-  void _showAddCompanionDialog() {
-    TextEditingController nameController = TextEditingController();
-    TextEditingController relationController = TextEditingController();
-    TextEditingController emailController = TextEditingController();
-    String errorText = "";
+  Future<void> _loadCompanions() async {
+    setState(() => isLoading = true);
+    final snapshot = await companionsRef.get();
+    List<Map<String, dynamic>> tempList = [];
 
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text("إضافة مرافق جديد", textAlign: TextAlign.right),
-              content: SingleChildScrollView(
+    for (var doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final email = data['email'];
+      final name = data['name'];
+      final relationship = data['relationship'] ?? '';
+      final lastSeen = data['lastSeen'] as Timestamp?;
+      int upcomingDoseCount = await _getUpcomingDoseCount(email);
+
+      tempList.add({
+        'docId': doc.id,
+        'name': name,
+        'email': email,
+        'relationship': relationship,
+        'lastSeen': lastSeen?.toDate(),
+        'upcomingDoseCount': upcomingDoseCount,
+      });
+    }
+
+    setState(() {
+      companionDataList = tempList;
+      isLoading = false;
+    });
+  }
+
+  Future<int> _getUpcomingDoseCount(String email) async {
+    int count = 0;
+
+    final query = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (query.docs.isEmpty) return 0;
+
+    final companionId = query.docs.first.id;
+
+    final medsSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(companionId)
+        .collection('medicines')
+        .get();
+
+    final today = DateTime.now();
+
+    for (var doc in medsSnapshot.docs) {
+      final data = doc.data();
+      final missedDoses = (data['missedDoses'] as List?) ?? [];
+
+      for (var dose in missedDoses) {
+        final ts = dose['scheduled'] as Timestamp?;
+        final status = dose['status'];
+
+        if (ts != null &&
+            status == 'pending' &&
+            ts.toDate().isAfter(today.subtract(const Duration(days: 1)))) {
+          count++;
+        }
+      }
+    }
+
+    return count;
+  }
+
+  Future<void> _deleteCompanion(String id) async {
+    await companionsRef.doc(id).delete();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("تم حذف المرافق"), backgroundColor: Colors.red),
+    );
+    _loadCompanions();
+  }
+
+  void _navigateToDetail(Map<String, dynamic> companion) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CompanionDetailPage(
+          email: companion['email'],
+          name: companion['name'],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: ui.TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("المرافقين"),
+          backgroundColor: kPrimaryColor,
+        ),
+        body: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : companionDataList.isEmpty
+                ? Center(
+                    child: Text(
+                      "لا يوجد مرافقين حالياً",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: kPrimaryColor.withOpacity(0.7),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: companionDataList.length,
+                    itemBuilder: (context, index) {
+                      final companion = companionDataList[index];
+                      return Dismissible(
+                        key: Key(companion['docId']),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(kBorderRadius),
+                          ),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (direction) async {
+                          return await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text("تأكيد الحذف"),
+                              content: const Text("هل تريد بالتأكيد حذف هذا المرافق؟"),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text("إلغاء"),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                  child: const Text("نعم، حذف"),
+                                  onPressed: () => Navigator.pop(context, true),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        onDismissed: (_) => _deleteCompanion(companion['docId']),
+                        child: _buildCompanionCard(companion),
+                      );
+                    },
+                  ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _showAddCompanionDialog,
+          backgroundColor: kPrimaryColor,
+          child: const Icon(Icons.person_add),
+          tooltip: "إضافة مرافق",
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompanionCard(Map<String, dynamic> companion) {
+    final name = companion['name'] ?? '';
+    final initials = name.isNotEmpty
+        ? name.trim().split(' ').map((e) => e[0]).take(2).join()
+        : '?';
+    final relationship = companion['relationship'] ?? '';
+    final lastSeen = companion['lastSeen'] as DateTime?;
+    final isOnline = lastSeen != null &&
+        DateTime.now().difference(lastSeen).inMinutes <= 5;
+    final doseCount = companion['upcomingDoseCount'] ?? 0;
+
+    return Card(
+      elevation: 4,
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kBorderRadius),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        onTap: () => _navigateToDetail(companion),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: kSecondaryColor,
+                    radius: 26,
+                    child: Text(
+                      initials,
+                      style: const TextStyle(color: Colors.white, fontSize: 18),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: isOnline ? Colors.green : Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
-                      controller: nameController,
-                      textAlign: TextAlign.right,
-                      decoration: const InputDecoration(labelText: "اسم المرافق"),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: kPrimaryColor,
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: relationController,
-                      textAlign: TextAlign.right,
-                      decoration: const InputDecoration(labelText: "العلاقة"),
+                    const SizedBox(height: 4),
+                    Text(
+                      companion['email'] ?? '',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textAlign: TextAlign.right,
-                      decoration: const InputDecoration(labelText: "البريد الإلكتروني للمرافق"),
-                    ),
-                    if (errorText.isNotEmpty)
+                    if (relationship.isNotEmpty)
+                      Text(
+                        "صلة القرابة: $relationship",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    if (doseCount > 0)
                       Padding(
-                        padding: const EdgeInsets.only(top: 10),
+                        padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          errorText,
-                          style: const TextStyle(color: Colors.red),
-                          textAlign: TextAlign.right,
+                          "$doseCount جرعة قادمة",
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.deepOrange,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("إلغاء"),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final name = nameController.text.trim();
-                    final relation = relationController.text.trim();
-                    final email = emailController.text.trim().toLowerCase();
-
-                    if (name.isEmpty || relation.isEmpty || email.isEmpty) {
-                      setState(() {
-                        errorText = "يرجى تعبئة جميع الحقول";
-                      });
-                      return;
-                    }
-
-                    try {
-                      // Check if that email exists (optional validation)
-                      final query = await FirebaseFirestore.instance
-                          .collection('users')
-                          .where('email', isEqualTo: email)
-                          .limit(1)
-                          .get();
-
-                      if (query.docs.isEmpty) {
-                        setState(() {
-                          errorText = "❌ هذا البريد غير مسجل في التطبيق";
-                        });
-                        return;
-                      }
-
-                      // Get your UID (current user)
-                      final currentUser = FirebaseAuth.instance.currentUser;
-                      if (currentUser == null || currentUser.email == null) {
-                        setState(() {
-                          errorText = "لم يتم تسجيل الدخول";
-                        });
-                        return;
-                      }
-
-                      // ✅ Save companion under YOUR account
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(currentUser.uid)
-                          .collection('companions')
-                          .add({
-                        'name': name,
-                        'relation': relation,
-                        'email': email,
-                        'addedAt': FieldValue.serverTimestamp(),
-                      });
-
-                      print("✅ Companion saved under your account");
-
-                      setState(() {
-                        companions.add({
-                          'name': name,
-                          'relation': relation,
-                          'email': email,
-                        });
-                        errorText = '';
-                      });
-
-                      Navigator.pop(context);
-                    } catch (e) {
-                      print("🔥 Error saving companion: $e");
-                      setState(() {
-                        errorText = "حدث خطأ أثناء الإضافة";
-                      });
-                    }
-                  },
-                  child: const Text("إضافة"),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  void _deleteCompanion(int index) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
+  void _showAddCompanionDialog() {
+    String name = '';
+    String email = '';
+    String relationship = '';
 
-    final emailToDelete = companions[index]['email'];
-
-    final query = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUser.uid)
-        .collection('companions')
-        .where('email', isEqualTo: emailToDelete)
-        .limit(1)
-        .get();
-
-    if (query.docs.isNotEmpty) {
-      await query.docs.first.reference.delete();
-      print("🗑️ Companion deleted");
-    }
-
-    setState(() {
-      companions.removeAt(index);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          /// 🌈 Background
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blue.shade100, Colors.white],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("إضافة مرافق"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              textDirection: ui.TextDirection.rtl,
+              decoration: const InputDecoration(labelText: "الاسم"),
+              onChanged: (value) => name = value,
             ),
+            TextField(
+              textDirection: ui.TextDirection.rtl,
+              decoration: const InputDecoration(labelText: "البريد الإلكتروني"),
+              onChanged: (value) => email = value,
+            ),
+            TextField(
+              textDirection: ui.TextDirection.rtl,
+              decoration: const InputDecoration(labelText: "صلة القرابة"),
+              onChanged: (value) => relationship = value,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text("إلغاء"),
+            onPressed: () => Navigator.pop(context),
           ),
-
-          /// 📜 Content
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-            child: Column(
-              children: [
-                /// 🔙 Back
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: Icon(Icons.arrow_back, color: Colors.blue.shade800),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
-
-                /// 📘 Title
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        "المرافقون",
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade800,
-                        ),
-                      ),
-                      Text(
-                        "المرافقين المرتبطين بحسابك",
-                        style: TextStyle(
-                          fontSize: 20,
-                          color: Colors.blue.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                /// ➕ Add Button
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: _showAddCompanionDialog,
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('إضافة مرافق جديد'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade800,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 12, horizontal: 20),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                /// 🧑 Companions List
-                Expanded(
-                  child: companions.isEmpty
-                      ? Center(
-                    child: Text(
-                      "لا يوجد مرافقون مضافون بعد.",
-                      style: TextStyle(color: Colors.blue.shade700),
-                    ),
-                  )
-                      : ListView.builder(
-                    itemCount: companions.length,
-                    itemBuilder: (context, index) {
-                      final companion = companions[index];
-                      return Dismissible(
-                        key: Key(companion['email'] ?? companion['name']!),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          padding: const EdgeInsets.only(right: 20),
-                          alignment: Alignment.centerRight,
-                          color: Colors.red.shade600,
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        onDismissed: (_) => _deleteCompanion(index),
-                        child: Card(
-                          elevation: 3,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: ListTile(
-                            leading: const Icon(Icons.person, color: Colors.blue),
-                            title: Text(
-                              companion['name']!,
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: Colors.blue.shade800,
-                              ),
-                            ),
-                            subtitle: Text(
-                              "العلاقة: ${companion['relation']}\nالبريد: ${companion['email']}",
-                              textAlign: TextAlign.right,
-                              style: TextStyle(color: Colors.blue.shade600),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
+          ElevatedButton(
+            onPressed: () async {
+              if (name.isNotEmpty && email.isNotEmpty) {
+                await companionsRef.add({
+                  'name': name,
+                  'email': email,
+                  'relationship': relationship,
+                  'lastSeen': FieldValue.serverTimestamp(),
+                });
+                Navigator.pop(context);
+                _loadCompanions();
+              }
+            },
+            child: const Text("إضافة"),
           ),
         ],
       ),

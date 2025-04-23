@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:mudhkir_app/Pages/CompanionDetailPage.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -63,6 +64,17 @@ class MyApp extends StatelessWidget {
         '/companions': (context) => const Companions(),
         '/forget_password': (context) => const ForgetPassword(),
         '/welcome': (context) => const Welcome(),
+        
+        '/companion_detail': (context) {
+           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            return CompanionDetailPage(
+             email: args['email'],
+             name: args['name'],
+          );
+       },
+
+      
+
         '/medication_detail': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           String docId = '';
