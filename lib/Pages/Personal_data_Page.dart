@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mudhkir_app/Pages/ForgetPassword.dart';
+import 'package:mudhkir_app/Pages/ForgetPassword_Page.dart';
 import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
 
 // Constants for theming - consistent with other pages

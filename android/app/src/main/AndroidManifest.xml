@@ -62,27 +62,11 @@
             android:value="medication_channel" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_sound"
-            android:resource="@raw/alarm_sound" /> <!-- Ensure this matches your raw sound file -->
+            android:resource="@raw/medication_alarm" /> <!-- Ensure this matches your raw sound file -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <service
-            android:name=".MyFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="true"
-            tools:replace="android:exported">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
 
         <!-- Local Notifications -->
         <receiver

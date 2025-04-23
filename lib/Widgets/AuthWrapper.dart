@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:mudhkir_app/pages/welcome.dart';
-import 'package:mudhkir_app/pages/mainpage.dart';
+import 'package:mudhkir_app/pages/Welcome_Page.dart';
+import 'package:mudhkir_app/pages/Main_Page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthWrapper extends StatefulWidget {

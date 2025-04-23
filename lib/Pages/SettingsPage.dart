@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mudhkir_app/main.dart'; // Import notification utilities
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 import '../Widgets/bottom_navigation.dart';
-import 'mainpage.dart'; // Import the bottom navigation bar
+import 'Main_Page.dart'; // Import the bottom navigation bar
 
 // Constants for theming
 // Hospital Blue Color Theme
@@ -24,8 +26,34 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   int _selectedIndex = 2; // Index for the bottom navigation bar
+  String _appVersion = "جاري التحميل...";
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchAppVersion();
+  }
 
+  Future<void> _fetchAppVersion() async {
+    try {
+      final response = await http.get(Uri.parse(
+          'https://api.github.com/repos/<owner>/<repo>/releases/latest')); // Replace <owner> and <repo> with your GitHub repository details
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _appVersion = data['tag_name'] ?? "غير متوفر";
+        });
+      } else {
+        setState(() {
+          _appVersion = "خطأ في جلب الإصدار";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _appVersion = "خطأ في الاتصال";
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +137,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 SettingTile(
                   icon: Icons.info_outline_rounded,
                   title: "معلومات التطبيق",
-                  subtitle: "الإصدار 1.0.5",
+                  subtitle: "الإصدار $_appVersion",
                   onTap: () {},
                 ),
 
@@ -269,3 +297,4 @@ class SettingTile extends StatelessWidget {
     );
   }
 }
+

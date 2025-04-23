@@ -60,7 +60,7 @@ class AlarmNotificationHelper {
         playSound: true,
         enableVibration: true,
         enableLights: true,
-        sound: const RawResourceAndroidNotificationSound('alarm_sound'),
+        sound: const RawResourceAndroidNotificationSound('medication_alarm'),
         vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
       );
 
@@ -240,7 +240,7 @@ class AlarmNotificationHelper {
       importance: Importance.max,
       priority: Priority.high,
       fullScreenIntent: true,
-      sound: const RawResourceAndroidNotificationSound('alarm_sound'),
+      sound: const RawResourceAndroidNotificationSound('medication_alarm'),
       vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
       category: AndroidNotificationCategory.alarm,
       actions: <AndroidNotificationAction>[
@@ -250,7 +250,7 @@ class AlarmNotificationHelper {
     );
 
     final iosDetails = DarwinNotificationDetails(
-      sound: 'alarm_sound.aiff',
+      sound: 'medication_alarm.orgg',
       categoryIdentifier: 'medication_category',
       interruptionLevel: InterruptionLevel.timeSensitive,
     );

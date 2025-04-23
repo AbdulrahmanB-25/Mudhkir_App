@@ -910,6 +910,8 @@ class _AddDoseState extends State<AddDose> {
                   endDate: _endDate,
                   onSelectStartDate: _selectStartDate,
                   onSelectEndDate: _selectEndDate,
+                  // New clear callback to allow removing the end date
+                  onClearEndDate: () => setState(() => _endDate = null),
                   onSubmit: _submitForm, // Call the final submit logic
                   onBack: _previousPage, // Go back to page 2
                 ),
