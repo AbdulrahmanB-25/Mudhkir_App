@@ -132,6 +132,9 @@ void main() async {
 
   await AndroidAlarmManager.initialize();
 
+  // Request notification permissions at the very start
+  await _requestEssentialPermissions();
+
   // Initialize Localization
   try {
     await initializeDateFormatting('ar_SA', null);

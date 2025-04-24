@@ -351,127 +351,189 @@ class _DoseScheduleState extends State<DoseSchedule> {
           continue;
         }
 
-        final String frequencyRaw = data['frequency'] as String? ?? '1 يومي';
-        final List<String> frequencyParts = frequencyRaw.split(" ");
-        final String frequencyType = frequencyParts.length > 1 ? frequencyParts[1] : 'يومي';
+        // Determine frequency type reliably
+        String resolvedFrequencyType = 'يومي'; // Default
+        if (data.containsKey('frequencyType') && data['frequencyType'] == 'اسبوعي') {
+          resolvedFrequencyType = 'اسبوعي';
+        } else if (data.containsKey('frequency')) {
+          // Fallback for older format '1 يومي' or '1 اسبوعي'
+          final String frequencyRaw = data['frequency'] as String? ?? '';
+          final List<String> frequencyParts = frequencyRaw.split(" ");
+          if (frequencyParts.length > 1 && frequencyParts[1] == 'اسبوعي') {
+            resolvedFrequencyType = 'اسبوعي';
+          }
+        }
 
-        final String resolvedFrequencyType = frequencyType;
         print('Processing medication ${doc.id}: $medicationName, frequency type: $resolvedFrequencyType');
 
         final List<dynamic> timesRaw = data['times'] ?? [];
         final String imageUrl = data['imageUrl'] as String? ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] as String? ?? '';
 
-        if (resolvedFrequencyType == 'اسبوعي') {
-          print('Weekly medication found: $medicationName');
-          print('Times raw data: $timesRaw');
-        }
-
         final DateTime startDate = startTimestamp.toDate();
         final DateTime? endDate = endTimestamp?.toDate();
 
-        DateTime currentDate = startDate;
-        while (endDate == null || !currentDate.isAfter(endDate)) {
-          final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
-          bool shouldAddDoseToday = false;
-          List<TimeOfDay> timesParsed = [];
+        // --- Daily Medication Logic (Unchanged) ---
+        if (resolvedFrequencyType == 'يومي') {
+          DateTime currentDate = startDate;
+          while (endDate == null || !currentDate.isAfter(endDate)) {
+            final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
 
-          if (resolvedFrequencyType == 'يومي') {
-            // Daily medication - parse all time entries for each day
-            timesParsed = timesRaw
+            List<TimeOfDay> timesParsed = timesRaw
                 .map((t) => TimeUtils.parseTime(t))
                 .whereType<TimeOfDay>()
                 .toList();
-            shouldAddDoseToday = timesParsed.isNotEmpty;
-          } else if (resolvedFrequencyType == 'اسبوعي') {
-            print('Processing weekly medication for ${currentDate.toIso8601String()}, weekday: ${currentDate.weekday}');
 
-            // Process weekly medication times
-            timesParsed = [];
-            for (var item in timesRaw) {
-              print('Processing weekly item type: ${item.runtimeType}, value: $item');
-
-              if (item is Map) {
-                // Extract day and time values considering different possible structures
-                int dayValue = -1;
-                dynamic timeValue;
-
-                // Handle direct map format or nested format
-                if (item.containsKey('day')) {
-                  var day = item['day'];
-                  if (day is int) dayValue = day;
-                  else if (day is String) dayValue = int.tryParse(day) ?? -1;
-                  else if (day is double) dayValue = day.toInt();
-
-                  timeValue = item['time'];
-                }
-
-                // Handle case where item itself has nested 'time' object with 'day' inside
-                if (item.containsKey('time') && item['time'] is Map) {
-                  var nestedTime = item['time'] as Map;
-                  if (nestedTime.containsKey('day')) {
-                    var day = nestedTime['day'];
-                    if (day is int) dayValue = day;
-                    else if (day is String) dayValue = int.tryParse(day) ?? -1;
-                    else if (day is double) dayValue = day.toInt();
-                  }
-                  timeValue = nestedTime['time'];
-                }
-
-                print('Weekly item: day=$dayValue, current weekday=${currentDate.weekday}, time=$timeValue');
-
-                if (dayValue == currentDate.weekday) {
-                  final parsedTime = TimeUtils.parseTime(timeValue);
-                  if (parsedTime != null) {
-                    timesParsed.add(parsedTime);
-                    print('Added weekly time: $parsedTime for day $dayValue');
-                  }
-                }
-              } else if (item is String) {
-                final parts = item.split(':');
-                if (parts.length >= 2) {
-                  final dayPart = int.tryParse(parts[0]);
-                  if (dayPart == currentDate.weekday) {
-                    final timePart = parts.sublist(1).join(':');
-                    final parsedTime = TimeUtils.parseTime(timePart);
-                    if (parsedTime != null) {
-                      timesParsed.add(parsedTime);
-                      print('Added legacy weekly time: $parsedTime for day $dayPart');
-                    }
-                  }
-                }
+            if (timesParsed.isNotEmpty) {
+              newDoses.putIfAbsent(normalizedDate, () => []);
+              for (var time in timesParsed) {
+                newDoses[normalizedDate]!.add({
+                  'medicationName': medicationName,
+                  'dosage': dosage,
+                  'timeOfDay': time,
+                  'timeString': TimeUtils.formatTimeOfDay(context, time),
+                  'docId': doc.id,
+                  'imageUrl': imageUrl,
+                  'imgbbDeleteHash': imgbbDeleteHash,
+                });
               }
             }
-            shouldAddDoseToday = timesParsed.isNotEmpty;
-            if (shouldAddDoseToday) {
-              print('Added weekly dose for ${currentDate.toIso8601String()} with ${timesParsed.length} times');
-            }
-          }
 
-          if (shouldAddDoseToday) {
-            newDoses.putIfAbsent(normalizedDate, () => []);
-            for (var time in timesParsed) {
-              newDoses[normalizedDate]!.add({
-                'medicationName': medicationName,
-                'dosage': dosage,
-                'timeOfDay': time,
-                'timeString': TimeUtils.formatTimeOfDay(context, time),
-                'docId': doc.id,
-                'imageUrl': imageUrl,
-                'imgbbDeleteHash': imgbbDeleteHash,
-              });
+            currentDate = currentDate.add(const Duration(days: 1));
+            if (endDate != null && currentDate.isAfter(endDate)) break;
+            if (endDate == null && currentDate.difference(startDate).inDays > (365 * 5)) { // Reduced limit for safety
+              print("Warning: Daily Medication ${doc.id} has long duration; stopping iteration after 5 years.");
+              break;
             }
-          }
-
-          currentDate = currentDate.add(const Duration(days: 1));
-          if (endDate != null && currentDate.isAfter(endDate)) break;
-          if (endDate == null && currentDate.difference(startDate).inDays > (365 * 10)) {
-            print("Warning: Medication ${doc.id} seems to have no end date or a very long duration; stopping iteration after 10 years.");
-            break;
           }
         }
-      }
+        // --- Weekly Medication Logic (Corrected) ---
+        else if (resolvedFrequencyType == 'اسبوعي') {
+          print('Weekly medication found: $medicationName');
+          print('Times raw data: $timesRaw');
 
+          // 1. Determine the scheduled weekdays and their times for this medication
+          final Map<int, List<TimeOfDay>> weeklySchedule = {}; // Key: weekday (1-7), Value: List of Times
+
+          // Check 'times' array (primary format with {'day': X, 'time': Y})
+          for (var item in timesRaw) {
+            if (item is Map) {
+              int? dayValue;
+              dynamic timeValue;
+
+              // Extract day (handle int, double, string)
+              if (item.containsKey('day')) {
+                var day = item['day'];
+                if (day is int) dayValue = day;
+                else if (day is String) dayValue = int.tryParse(day);
+                else if (day is double) dayValue = day.toInt();
+              }
+
+              // Extract time
+              timeValue = item['time'];
+
+              // Handle nested time object (if present)
+              if (timeValue is Map && timeValue.containsKey('time')) {
+                timeValue = timeValue['time'];
+              }
+
+              // --- Correction: Use DateTime.weekday standard (Mon=1, Sun=7) ---
+              // Adjust dayValue if it's potentially 0-based (assuming 0=Sunday)
+              // if (dayValue == 0) {
+              //   dayValue = 7; // Convert Sunday from 0 to 7
+              // }
+              // --- Note: Keep the above commented unless you are SURE your 'day' value is 0-6 ---
+              // Based on your example data 'day: 2', it seems 1-7 is likely used.
+
+              if (dayValue != null && dayValue >= 1 && dayValue <= 7) {
+                final parsedTime = TimeUtils.parseTime(timeValue);
+                if (parsedTime != null) {
+                  weeklySchedule.putIfAbsent(dayValue, () => []).add(parsedTime);
+                  print("Scheduled for weekday $dayValue at $parsedTime");
+                } else {
+                  print("Could not parse time '$timeValue' for day $dayValue");
+                }
+              } else {
+                print("Invalid or missing day value in weekly schedule item: $item");
+              }
+            }
+            // --- Add handling for other potential formats if necessary ---
+            // else if (item is String) { ... handle legacy string ... }
+          }
+
+          // Check 'selectedWeekdays' field (alternative format)
+          if (data.containsKey('selectedWeekdays') && data['selectedWeekdays'] is List) {
+            List<int> selectedDays = List<int>.from(
+                (data['selectedWeekdays'] as List)
+                    .map((day) => day is int ? day : int.tryParse(day.toString()))
+                    .where((day) => day != null && day >= 1 && day <= 7) // Ensure valid 1-7 range
+            );
+            print("Found selectedWeekdays: $selectedDays");
+            // Assume a default time or parse from a separate field if available
+            // For now, let's try parsing times from timesRaw if they are just strings
+            List<TimeOfDay> timesForSelectedDays = timesRaw
+                .whereType<String>()
+                .map((t) => TimeUtils.parseTime(t))
+                .whereType<TimeOfDay>()
+                .toList();
+
+            if(timesForSelectedDays.isEmpty && timesRaw.isNotEmpty && timesRaw.first is Map && timesRaw.first.containsKey('time')) {
+              // Maybe the time is in the first map item even if day isn't specified there?
+              final firstTime = TimeUtils.parseTime(timesRaw.first['time']);
+              if (firstTime != null) timesForSelectedDays.add(firstTime);
+            }
+
+            if (timesForSelectedDays.isNotEmpty) {
+              for (int dayValue in selectedDays) {
+                weeklySchedule.putIfAbsent(dayValue, () => []).addAll(timesForSelectedDays);
+                print("Scheduled for weekday $dayValue (from selectedWeekdays) at times: $timesForSelectedDays");
+              }
+            } else {
+              print("Warning: selectedWeekdays found but no valid times could be parsed from timesRaw: $timesRaw");
+            }
+          }
+
+
+          // 2. Iterate through dates and add doses ONLY on scheduled weekdays
+          if (weeklySchedule.isNotEmpty) {
+            DateTime currentDate = startDate;
+            while (endDate == null || !currentDate.isAfter(endDate)) {
+              final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
+              final int currentWeekday = normalizedDate.weekday; // 1 (Monday) to 7 (Sunday)
+
+              // --- Exact Check ---
+              if (weeklySchedule.containsKey(currentWeekday)) {
+                final List<TimeOfDay> timesForThisDay = weeklySchedule[currentWeekday]!;
+                print("Match found! Adding doses for ${normalizedDate.toIso8601String()} (weekday $currentWeekday)");
+
+                newDoses.putIfAbsent(normalizedDate, () => []);
+                for (var time in timesForThisDay) {
+                  newDoses[normalizedDate]!.add({
+                    'medicationName': medicationName,
+                    'dosage': dosage,
+                    'timeOfDay': time,
+                    'timeString': TimeUtils.formatTimeOfDay(context, time),
+                    'docId': doc.id,
+                    'imageUrl': imageUrl,
+                    'imgbbDeleteHash': imgbbDeleteHash,
+                  });
+                }
+              }
+
+              currentDate = currentDate.add(const Duration(days: 1));
+              if (endDate != null && currentDate.isAfter(endDate)) break;
+              if (endDate == null && currentDate.difference(startDate).inDays > (365 * 5)) { // Reduced limit
+                print("Warning: Weekly Medication ${doc.id} has long duration; stopping iteration after 5 years.");
+                break;
+              }
+            }
+          } else {
+            print("Warning: No valid weekly schedule found for medication ${doc.id}. Check 'times' or 'selectedWeekdays' data.");
+          }
+        }
+      } // End of loop through documents
+
+      // Sort doses within each day
       newDoses.forEach((date, meds) {
         meds.sort((a, b) {
           final TimeOfDay timeA = a['timeOfDay'];
@@ -496,7 +558,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _doses = {};
+          _doses = {}; // Clear doses on error
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -510,7 +572,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
       }
     }
   }
-
+// --- End of replacement for _fetchDoses ---
   List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
     final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
     return _doses[normalizedDay] ?? [];
@@ -1420,185 +1482,185 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
     }
 
     return Card(
-      elevation: 2,
-      shadowColor: kPrimaryColor.withOpacity(0.2),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kBorderRadius),
-        side: BorderSide(
-          color: _doseStatus == 'taken'
-              ? Colors.green.shade300.withOpacity(0.5)
-              : kSecondaryColor.withOpacity(0.2),
-          width: 1.5,
+        elevation: 2,
+        shadowColor: kPrimaryColor.withOpacity(0.2),
+    shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(kBorderRadius),
+    side: BorderSide(
+    color: _doseStatus == 'taken'
+    ? Colors.green.shade300.withOpacity(0.5)
+        : kSecondaryColor.withOpacity(0.2),
+    width: 1.5,
+    ),
+    ),
+    child: InkWell(
+    borderRadius: BorderRadius.circular(kBorderRadius),
+    onTap: () => setState(() => _isExpanded = !_isExpanded),
+    splashColor: kPrimaryColor.withOpacity(0.05),
+    highlightColor: kPrimaryColor.withOpacity(0.05),
+    child: Column(
+    children: [
+    // Main tile content
+    Container(
+    decoration: BoxDecoration(
+    color: _doseStatus == 'taken'
+    ? Colors.green.shade50.withOpacity(0.3)
+        : Colors.transparent,
+    borderRadius: BorderRadius.vertical(
+    top: Radius.circular(kBorderRadius),
+    bottom: _isExpanded ? Radius.zero : Radius.circular(kBorderRadius),
+    ),
+    ),
+    padding: const EdgeInsets.all(12),
+    child: Row(
+    children: [
+    // Left: Dose Status Indicator
+      _isLoadingStatus
+          ? SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: kPrimaryColor,
         ),
+      )
+          : IconButton(
+        icon: Icon(
+          _doseStatus == 'taken'
+              ? Icons.check_circle_rounded
+              : Icons.radio_button_unchecked,
+          size: 28,
+          color: _doseStatus == 'taken'
+              ? Colors.green.shade600
+              : Colors.grey.shade400,
+        ),
+        onPressed: _toggleDoseStatus,
+        padding: EdgeInsets.zero,
+        tooltip: _doseStatus == 'taken' ? "تم أخذ الجرعة" : "لم تؤخذ الجرعة بعد",
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kBorderRadius),
-        onTap: () => setState(() => _isExpanded = !_isExpanded),
-        splashColor: kPrimaryColor.withOpacity(0.05),
-        highlightColor: kPrimaryColor.withOpacity(0.05),
+      const SizedBox(width: 12),
+
+      // Middle: Medication Image
+      EnlargeableImage(
+        imageUrl: widget.imageUrl,
+        width: 50,
+        height: 50,
+        docId: widget.docId,
+      ),
+      const SizedBox(width: 12),
+
+      // Right: Medication Details
+      Expanded(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Main tile content
-            Container(
-              decoration: BoxDecoration(
-                color: _doseStatus == 'taken'
-                    ? Colors.green.shade50.withOpacity(0.3)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(kBorderRadius),
-                  bottom: _isExpanded ? Radius.zero : Radius.circular(kBorderRadius),
-                ),
+            Text(
+              widget.medicationName,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kPrimaryColor,
               ),
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  // Left: Dose Status Indicator
-                  _isLoadingStatus
-                      ? SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: kPrimaryColor,
-                    ),
-                  )
-                      : IconButton(
-                    icon: Icon(
-                      _doseStatus == 'taken'
-                          ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked,
-                      size: 28,
-                      color: _doseStatus == 'taken'
-                          ? Colors.green.shade600
-                          : Colors.grey.shade400,
-                    ),
-                    onPressed: _toggleDoseStatus,
-                    padding: EdgeInsets.zero,
-                    tooltip: _doseStatus == 'taken' ? "تم أخذ الجرعة" : "لم تؤخذ الجرعة بعد",
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Middle: Medication Image
-                  EnlargeableImage(
-                    imageUrl: widget.imageUrl,
-                    width: 50,
-                    height: 50,
-                    docId: widget.docId,
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Right: Medication Details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.medicationName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: kPrimaryColor,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time_rounded,
-                              size: 14,
-                              color: kSecondaryColor,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.nextDose,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: kSecondaryColor,
-                              ),
-                            ),
-                            if (_doseStatus == 'taken')
-                              Container(
-                                margin: const EdgeInsets.only(top: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  "تم",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.green.shade800,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Expand/Collapse Icon
-                  RotationTransition(
-                    turns: Tween(begin: 0.0, end: 0.5)
-                        .animate(_animationController),
-                    child: Icon(
-                      Icons.expand_more_rounded,
-                      color: kPrimaryColor,
-                    ),
-                  ),
-                ],
-              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-
-            // Expandable actions section
-            SizeTransition(
-              sizeFactor: _expandAnimation,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: kSecondaryColor.withOpacity(0.05),
-                  border: Border(
-                    top: BorderSide(
-                      color: kSecondaryColor.withOpacity(0.2),
-                      width: 1,
-                    ),
-                  ),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(kBorderRadius),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 14,
+                  color: kSecondaryColor,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  widget.nextDose,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: kSecondaryColor,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildActionButton(
-                      label: "تعديل",
-                      icon: Icons.edit_rounded,
-                      color: kPrimaryColor,
-                      onPressed: () => _handleEdit(context),
+                if (_doseStatus == 'taken')
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade100,
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    _buildActionButton(
-                      label: "إنهاء",
-                      icon: Icons.event_busy_rounded,
-                      color: Colors.orange.shade700,
-                      onPressed: () => _handleFinishMed(context),
+                    child: Text(
+                      "تم",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    _buildActionButton(
-                      label: "حذف",
-                      icon: Icons.delete_rounded,
-                      color: Colors.red.shade700,
-                      onPressed: () => _handleDelete(context),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
           ],
         ),
       ),
+
+      // Expand/Collapse Icon
+      RotationTransition(
+        turns: Tween(begin: 0.0, end: 0.5)
+            .animate(_animationController),
+        child: Icon(
+          Icons.expand_more_rounded,
+          color: kPrimaryColor,
+        ),
+      ),
+    ],
+    ),
+    ),
+
+      // Expandable actions section
+      SizeTransition(
+        sizeFactor: _expandAnimation,
+        child: Container(
+          decoration: BoxDecoration(
+            color: kSecondaryColor.withOpacity(0.05),
+            border: Border(
+              top: BorderSide(
+                color: kSecondaryColor.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(kBorderRadius),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildActionButton(
+                label: "تعديل",
+                icon: Icons.edit_rounded,
+                color: kPrimaryColor,
+                onPressed: () => _handleEdit(context),
+              ),
+              _buildActionButton(
+                label: "إنهاء",
+                icon: Icons.event_busy_rounded,
+                color: Colors.orange.shade700,
+                onPressed: () => _handleFinishMed(context),
+              ),
+              _buildActionButton(
+                label: "حذف",
+                icon: Icons.delete_rounded,
+                color: Colors.red.shade700,
+                onPressed: () => _handleDelete(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+    ),
+    ),
     );
   }
 

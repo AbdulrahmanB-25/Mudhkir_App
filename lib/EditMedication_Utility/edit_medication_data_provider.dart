@@ -10,17 +10,58 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 
+// --- Time Utilities ---
+// Ensure this class is defined correctly, either here or imported
+class TimeUtils {
+  // Use 'h:mm a' for consistent parsing and formatting with AM/PM in Arabic
+  static final DateFormat _timeFormat = DateFormat('h:mm a', 'ar');
+
+  static TimeOfDay? parseTime(String? timeStr) {
+    if (timeStr == null || timeStr.isEmpty) return null;
+    try {
+      // Use the defined format for strict parsing
+      return TimeOfDay.fromDateTime(_timeFormat.parseStrict(timeStr));
+    } catch (e) {
+      print("Error parsing time string '$timeStr' with format ${_timeFormat.pattern}: $e");
+      // Add fallbacks if needed, e.g., for 24-hour format if that might exist
+      try {
+        final parts = timeStr.split(':');
+        if(parts.length >= 2) {
+          int hour = int.parse(parts[0]);
+          int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+          if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+            print("Fallback parsing successful for '$timeStr'");
+            return TimeOfDay(hour: hour, minute: minute);
+          }
+        }
+      } catch (_) {} // Ignore fallback parse errors
+      print("Failed to parse time string '$timeStr' with any known format.");
+      return null; // Return null if all parsing fails
+    }
+  }
+
+  static String formatTimeOfDay(TimeOfDay t) {
+    final dt = DateTime(2000, 1, 1, t.hour, t.minute); // Use a fixed date
+    // Use the defined format
+    return _timeFormat.format(dt);
+  }
+}
+
+
+// Provides all data-loading, state, and update logic for editing a medication.
 class EditMedicationDataProvider {
   //======== State & Controllers ========
   final TextEditingController nameController;
   final TextEditingController dosageController;
   final PageController pageController = PageController();
 
-  String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a';
+  // ImgBB API key - Consider moving this to a config file or environment variable
+  String imgbbApiKey = '2b30d3479663bc30a70c916363b07c4a'; // Replace with your actual key
 
   List<String> _medicineNames = [];
   File? _capturedImage;
   String? _uploadedImageUrl;
+  String? _imgbbDeleteHash; // Store delete hash if needed
   bool _isUploading = false;
   bool _isLoading = true;
   bool _hasOriginalImage = false;
@@ -46,6 +87,7 @@ class EditMedicationDataProvider {
     required this.dosageController,
   });
 
+  //======== Getters for UI ========
   bool get isLoading => _isLoading;
   File? get capturedImage => _capturedImage;
   String? get uploadedImageUrl => _uploadedImageUrl;
@@ -68,9 +110,11 @@ class EditMedicationDataProvider {
 
   List<String> get medicineNames => _medicineNames;
 
+
   //======== Initialization & Cleanup ========
   Future<void> init(String docId) async {
     _isLoading = true;
+    // Ensure names are loaded before medication data
     await _loadMedicineNames();
     await loadMedicationData(docId);
     _isLoading = false;
@@ -88,134 +132,552 @@ class EditMedicationDataProvider {
       final raw = await rootBundle.loadString('assets/Mediciens/trade_names.json');
       final list = json.decode(raw) as List<dynamic>;
       _medicineNames = list.map((e) => e.toString()).toList();
+      print("Loaded ${_medicineNames.length} medicine names.");
     } catch (e) {
+      print("Error loading medicine names: $e");
       _medicineNames = [];
     }
   }
 
+  /// Loads medication data from Firestore and parses it into the provider's state.
   Future<void> loadMedicationData(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
-    final doc = await FirebaseFirestore.instance
+
+    print("Loading medication data for docId: $docId");
+    final docRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('medicines')
-        .doc(docId)
-        .get();
-    if (!doc.exists) throw Exception('Medicine not found');
+        .doc(docId);
 
-    final data = doc.data()!;
-    nameController.text = data['name'] ?? '';
-    _parseDosage(data['dosage'] as String?);
-    _frequencyType = data['frequencyType'] ?? 'يومي';
-    _frequencyNumber = (data['frequencyDetails']?['timesPerDay'] as int?) ?? 1;
-    _parseTimes(data['times'] as List<dynamic>?);
-    _parseWeekly(data['frequencyDetails'] as Map<String, dynamic>?);
-    _startDate = (data['startDate'] as Timestamp?)?.toDate();
-    _endDate   = (data['endDate']   as Timestamp?)?.toDate();
+    try {
+      final doc = await docRef.get();
+      if (!doc.exists) throw Exception('Medicine document $docId not found');
 
-    final url = data['imageUrl'] as String?;
-    if (url != null && url.isNotEmpty) {
-      _uploadedImageUrl = url;
-      _hasOriginalImage = true;
+      final data = doc.data()!;
+      print("Raw Firestore data: $data");
+
+      // --- Basic Info ---
+      nameController.text = data['name'] ?? '';
+      _parseDosage(data['dosage'] as String?); // Use helper
+      _startDate = (data['startDate'] as Timestamp?)?.toDate();
+      _endDate = (data['endDate'] as Timestamp?)?.toDate();
+      final url = data['imageUrl'] as String?;
+      if (url != null && url.isNotEmpty) {
+        _uploadedImageUrl = url;
+        _hasOriginalImage = true;
+        print("Loaded image URL: $_uploadedImageUrl");
+      }
+      _imgbbDeleteHash = data['imgbbDeleteHash'] as String?; // Load delete hash
+      _originalNotificationIds = List<int>.from(data['notificationIds'] ?? []); // Keep if needed
+
+      // --- Frequency and Times ---
+      // Determine frequency type reliably
+      _frequencyType = 'يومي'; // Default
+      if (data.containsKey('frequencyType') && data['frequencyType'] == 'اسبوعي') {
+        _frequencyType = 'اسبوعي';
+      } else if (data.containsKey('frequency')) {
+        // Fallback for older format '1 يومي' or '1 اسبوعي'
+        final String frequencyRaw = data['frequency'] as String? ?? '';
+        final List<String> frequencyParts = frequencyRaw.split(" ");
+        if (frequencyParts.length > 1 && frequencyParts[1] == 'اسبوعي') {
+          _frequencyType = 'اسبوعي';
+        }
+      }
+      print("Determined frequency type: $_frequencyType");
+
+      final timesList = data['times'] as List<dynamic>? ?? []; // Get the times list
+      print("Raw times data from Firestore: $timesList");
+
+      if (_frequencyType == 'يومي') {
+        // Load daily frequency number and parse times
+        _frequencyNumber = (data['frequencyDetails']?['timesPerDay'] as int?) ?? 1;
+        print("Daily frequency number: $_frequencyNumber");
+        _loadDailyTimes(timesList); // Use helper
+      } else if (_frequencyType == 'اسبوعي') {
+        // Load weekly selected days and parse times for those days
+        final freqDetails = data['frequencyDetails'] as Map<String, dynamic>?;
+        _loadWeeklyTimesAndDays(timesList, freqDetails); // Use helper
+      } else {
+        // Handle potential unknown frequency type or default to daily
+        print("Warning: Unknown frequency type found. Defaulting to daily.");
+        _frequencyType = 'يومي';
+        _frequencyNumber = 1;
+        _loadDailyTimes(timesList); // Attempt to load as daily if unknown
+      }
+
+      // Ensure internal state consistency after loading
+      _updateTimeFields(); // Call this to resize arrays if needed
+      _initializeWeeklySchedule(); // Call this to sync maps/sets
+
+      print("Finished loading medication data.");
+
+    } catch (e, stackTrace) {
+      print("Error loading medication data for docId $docId: $e");
+      print(stackTrace);
+      // Rethrow or handle the error appropriately for the UI
+      throw Exception('Failed to load medication data: $e');
     }
-    _originalNotificationIds = List<int>.from(data['notificationIds'] ?? []);
   }
 
+  // Helper to parse dosage string "Value Unit"
   void _parseDosage(String? dosage) {
-    if (dosage == null) return;
-    final parts = dosage.split(' ');
+    if (dosage == null || dosage.isEmpty) {
+      dosageController.text = '';
+      _dosageUnit = 'ملغم'; // Default unit
+      print("Dosage string is null or empty, using defaults.");
+      return;
+    }
+    final parts = dosage.trim().split(' ');
     if (parts.length >= 2) {
       dosageController.text = parts[0];
       _dosageUnit = parts.sublist(1).join(' ');
+      print("Parsed dosage: value='${parts[0]}', unit='$_dosageUnit'");
+    } else {
+      dosageController.text = dosage.trim(); // Assume the whole string is the value if no space
+      _dosageUnit = 'ملغم'; // Default unit if parsing fails
+      print("Parsed dosage (no unit found): value='${dosage.trim()}', using default unit '$_dosageUnit'");
     }
   }
 
-  void _parseTimes(List<dynamic>? timesList) {
+  // Helper for loading DAILY times from Firestore list
+  void _loadDailyTimes(List<dynamic> timesList) {
+    // Ensure lists are correctly sized based on _frequencyNumber
+    _selectedTimes = List<TimeOfDay?>.filled(_frequencyNumber, null, growable: true);
+    _isAutoGeneratedTimes = List<bool>.filled(_frequencyNumber, false, growable: true);
+
+    int loadedCount = 0;
+    for (var i = 0; i < timesList.length && i < _frequencyNumber; i++) {
+      if (timesList[i] is String) {
+        final timeStr = timesList[i] as String;
+        final parsedTime = TimeUtils.parseTime(timeStr);
+        if (parsedTime != null) {
+          _selectedTimes[i] = parsedTime;
+          // Assume times loaded from DB are not auto-generated
+          _isAutoGeneratedTimes[i] = false;
+          loadedCount++;
+        } else {
+          print("Warning: Could not parse daily time string '$timeStr' at index $i");
+        }
+      }
+    }
+    print("Loaded $loadedCount Daily Times: $_selectedTimes");
+  }
+
+  // Helper for loading WEEKLY times and days from Firestore data
+  void _loadWeeklyTimesAndDays(List<dynamic> timesList, Map<String, dynamic>? freqDetails) {
+    // 1. Load selected weekdays (ensure they are int 1-7)
+    final daysRaw = freqDetails?['selectedWeekdays'] as List<dynamic>? ?? [];
+    _selectedWeekdays = daysRaw
+        .map((day) {
+      if (day is int && day >= 1 && day <= 7) return day;
+      if (day is String) {
+        final parsedDay = int.tryParse(day);
+        if (parsedDay != null && parsedDay >= 1 && parsedDay <= 7) return parsedDay;
+      }
+      return null; // Invalid day format
+    })
+        .whereType<int>() // Filter out nulls
+        .toSet();
+    print("Loaded Selected Weekdays: $_selectedWeekdays");
+
+
+    // 2. Clear and load weekly times from the 'times' list (which should contain maps)
+    _weeklyTimes = {}; // Clear previous values
+    _weeklyAutoGenerated = {}; // Clear previous values
+
+    int loadedCount = 0;
+    for (var item in timesList) {
+      if (item is Map) {
+        final day = item['day'];
+        final timeStr = item['time'] as String?;
+
+        int? dayValue;
+        if (day is int && day >= 1 && day <= 7) {
+          dayValue = day;
+        } else if (day is String) {
+          dayValue = int.tryParse(day);
+        }
+
+        // Ensure the day is valid and actually selected
+        if (dayValue != null && _selectedWeekdays.contains(dayValue) && timeStr != null) {
+          final parsedTime = TimeUtils.parseTime(timeStr);
+          if (parsedTime != null) {
+            _weeklyTimes[dayValue] = parsedTime;
+            // Assume times loaded from DB are not auto-generated
+            _weeklyAutoGenerated[dayValue] = false;
+            loadedCount++;
+          } else {
+            print("Warning: Could not parse weekly time string '$timeStr' for day $dayValue");
+          }
+        } else if (dayValue != null && !_selectedWeekdays.contains(dayValue)) {
+          print("Warning: Time found for day $dayValue, but this day is not in selectedWeekdays ($_selectedWeekdays). Skipping.");
+        }
+      }
+    }
+    print("Loaded $loadedCount Weekly Times: $_weeklyTimes");
+
+    // Ensure all selected weekdays have an entry (even if null)
+    for (int day in _selectedWeekdays) {
+      _weeklyTimes.putIfAbsent(day, () => null);
+      _weeklyAutoGenerated.putIfAbsent(day, () => true); // Mark as auto-gen if time wasn't loaded
+    }
+  }
+
+
+  //======== Public Setters / State Updaters ========
+  void updateDosageUnit(String unit) => _dosageUnit = unit;
+
+  void updateFrequencyType(String type) {
+    if (_frequencyType == type) return; // No change
+    _frequencyType = type;
+    // Reset/update time structures when type changes
+    _updateTimeFields();
+    _initializeWeeklySchedule();
+  }
+
+  void updateFrequencyNumber(int number) {
+    if (_frequencyNumber == number) return; // No change
+    _frequencyNumber = number;
+    // Update daily time structures only if type is daily
     if (_frequencyType == 'يومي') {
-      final t = timesList ?? [];
-      _selectedTimes = List<TimeOfDay?>.filled(_frequencyNumber, null, growable: true);
-      _isAutoGeneratedTimes = List<bool>.filled(_frequencyNumber, false, growable: true);
-      for (var i = 0; i < t.length && i < _frequencyNumber; i++) {
-        final str = t[i] as String;
-        _selectedTimes[i] = TimeUtils.parseTime(str);
+      _updateTimeFields();
+    }
+  }
+
+  void selectDailyTime(int index, TimeOfDay time) {
+    if (_frequencyType == 'يومي' && index >= 0 && index < _selectedTimes.length) {
+      _selectedTimes[index] = time;
+      _isAutoGeneratedTimes[index] = false; // User explicitly set this time
+      // Optionally auto-fill subsequent times if the first one is changed
+      if (index == 0) {
+        _autoFillDosageTimes();
       }
     }
   }
 
-  void _parseWeekly(Map<String, dynamic>? freqDetails) {
-    if (_frequencyType != 'اسبوعي' || freqDetails == null) return;
-    final days = List<int>.from(freqDetails['selectedWeekdays'] ?? []);
-    _selectedWeekdays = days.toSet();
-    // we'll populate times below...
+  void toggleWeekday(int day, bool isSelected) {
+    if (_frequencyType != 'اسبوعي') return;
+    if (isSelected) {
+      // Optional: Limit number of selected days if needed
+      // if (_selectedWeekdays.length >= 6) return;
+      _selectedWeekdays.add(day);
+    } else {
+      _selectedWeekdays.remove(day);
+    }
+    // Re-initialize to add/remove entries from _weeklyTimes/_weeklyAutoGenerated
+    _initializeWeeklySchedule();
+  }
+
+  void selectWeeklyTime(int day, TimeOfDay time) {
+    if (_frequencyType == 'اسبوعي' && _selectedWeekdays.contains(day)) {
+      _weeklyTimes[day] = time;
+      _weeklyAutoGenerated[day] = false; // User explicitly set this time
+    }
+  }
+
+  void updateStartDate(DateTime d) => _startDate = d;
+  void updateEndDate(DateTime d) => _endDate = d;
+
+
+  //======== Internal Schedule Helpers ========
+
+  /// Updates the size of daily time lists based on _frequencyNumber.
+  void _updateTimeFields() {
+    if (_frequencyType != 'يومي') {
+      // Clear daily fields if not daily? Or just leave them? Depends on desired behavior.
+      // _selectedTimes = [];
+      // _isAutoGeneratedTimes = [];
+      return;
+    }
+
+    // Preserve existing times when resizing
+    final oldTimes = List<TimeOfDay?>.from(_selectedTimes);
+    final oldAuto = List<bool>.from(_isAutoGeneratedTimes);
+
+    _selectedTimes = List.generate(
+      _frequencyNumber,
+          (i) => i < oldTimes.length ? oldTimes[i] : null,
+      growable: true, // Allow adding more later if needed? Usually false for fixed size.
+    );
+    _isAutoGeneratedTimes = List.generate(
+      _frequencyNumber,
+          (i) => i < oldAuto.length ? oldAuto[i] : false, // Default new slots to not auto-generated
+      growable: true,
+    );
+
+    // Re-apply auto-fill logic if the first time exists
+    if (_selectedTimes.isNotEmpty && _selectedTimes[0] != null) {
+      _autoFillDosageTimes();
+    }
+  }
+
+  /// Auto-fills daily times based on the first time and frequency number.
+  void _autoFillDosageTimes() {
+    if (_frequencyType != 'يومي' || _selectedTimes.isEmpty || _selectedTimes[0] == null || _frequencyNumber <= 1) {
+      return; // Conditions not met for auto-fill
+    }
+
+    final firstTime = _selectedTimes[0]!;
+    // Use a fixed date for calculations to avoid DST issues
+    final baseDateTime = DateTime(2000, 1, 1, firstTime.hour, firstTime.minute);
+    final intervalMinutes = (24 * 60 / _frequencyNumber).round();
+
+    for (var i = 1; i < _frequencyNumber; i++) {
+      // Only fill if the slot is currently null or was previously auto-generated
+      if (_selectedTimes[i] == null || (i < _isAutoGeneratedTimes.length && _isAutoGeneratedTimes[i])) {
+        final nextDateTime = baseDateTime.add(Duration(minutes: intervalMinutes * i));
+        _selectedTimes[i] = TimeOfDay(hour: nextDateTime.hour, minute: nextDateTime.minute);
+        if (i < _isAutoGeneratedTimes.length) {
+          _isAutoGeneratedTimes[i] = true; // Mark as auto-generated
+        }
+      }
+    }
+  }
+
+  /// Ensures _weeklyTimes and _weeklyAutoGenerated maps contain entries only for currently selected weekdays.
+  void _initializeWeeklySchedule() {
+    if (_frequencyType != 'اسبوعي') {
+      // Clear weekly fields if not weekly?
+      // _selectedWeekdays = {};
+      // _weeklyTimes = {};
+      // _weeklyAutoGenerated = {};
+      return;
+    }
+
+    final currentTimes = Map<int, TimeOfDay?>.from(_weeklyTimes);
+    final currentAuto = Map<int, bool>.from(_weeklyAutoGenerated);
+
+    _weeklyTimes = {};
+    _weeklyAutoGenerated = {};
+
+    for (var day in _selectedWeekdays) {
+      _weeklyTimes[day] = currentTimes[day]; // Keep existing time if present, otherwise null
+      _weeklyAutoGenerated[day] = currentAuto[day] ?? (_weeklyTimes[day] == null); // True if time is null, false otherwise
+    }
   }
 
   //======== Image Capture & Upload ========
   Future<void> pickImage() async {
-    final status = await Permission.camera.request();
-    if (!status.isGranted) throw Exception('Camera permission denied');
-    final result = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (result == null) return;
+    try {
+      // 1. Request Permission
+      final status = await Permission.camera.request();
+      if (!status.isGranted) {
+        print("Camera permission denied.");
+        // Optionally show a dialog asking the user to grant permission in settings
+        if (status.isPermanentlyDenied) {
+          await openAppSettings();
+        }
+        throw Exception('Camera permission not granted');
+      }
 
-    _capturedImage = File(result.path);
-    _isUploading = true;
-    _uploadedImageUrl = await _uploadToImgBB(_capturedImage!);
-    _isUploading = false;
+      // 2. Pick Image
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.camera);
+      if (pickedFile == null) {
+        print("Image picking cancelled.");
+        return; // User cancelled
+      }
+
+      _capturedImage = File(pickedFile.path); // Store the file temporarily
+      _isUploading = true;
+      // Notify UI to show loading indicator (e.g., using setState in the calling widget)
+
+      // 3. Upload Image
+      print("Uploading image...");
+      final uploadResult = await _uploadToImgBB(_capturedImage!);
+      _uploadedImageUrl = uploadResult['url'];
+      _imgbbDeleteHash = uploadResult['delete_hash']; // Store delete hash
+      print("Image uploaded successfully: URL=$_uploadedImageUrl, DeleteHash=$_imgbbDeleteHash");
+
+      _isUploading = false;
+      _capturedImage = null; // Clear temporary file after successful upload
+      // Notify UI that upload is complete (e.g., using setState)
+
+    } catch (e) {
+      print("Error picking/uploading image: $e");
+      _isUploading = false;
+      _capturedImage = null; // Clear temporary file on error
+      // Notify UI about the error (e.g., using setState and showing a SnackBar)
+      // Rethrow if the calling code needs to handle it further
+      // throw e;
+    }
   }
 
-  Future<String> _uploadToImgBB(File file) async {
+  /// Uploads the image to ImgBB and returns URL and delete hash.
+  Future<Map<String, String>> _uploadToImgBB(File file) async {
+    if (imgbbApiKey.isEmpty || imgbbApiKey == 'YOUR_IMGBB_API_KEY') {
+      throw Exception('ImgBB API Key is not configured.');
+    }
     final bytes = await file.readAsBytes();
-    final b64 = base64Encode(bytes);
+    final base64Image = base64Encode(bytes);
     final url = Uri.parse('https://api.imgbb.com/1/upload?key=$imgbbApiKey');
-    final resp = await http.post(url, body: {'image': b64});
-    if (resp.statusCode != 200) throw Exception('ImgBB upload failed');
-    final jsonResp = json.decode(resp.body);
-    return jsonResp['data']['url'] as String;
+
+    print("Posting to ImgBB...");
+    final response = await http.post(
+      url,
+      body: {
+        'image': base64Image,
+      },
+    );
+
+    print("ImgBB Response Status: ${response.statusCode}");
+    print("ImgBB Response Body: ${response.body}");
+
+    if (response.statusCode == 200) {
+      final jsonResponse = json.decode(response.body);
+      if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+        final data = jsonResponse['data'];
+        final imageUrl = data['url'] as String?;
+        final deleteUrl = data['delete_url'] as String?; // This contains the hash
+
+        if (imageUrl != null && deleteUrl != null) {
+          // Extract delete hash from delete_url (it's usually the part after the last '/')
+          final deleteHash = deleteUrl.substring(deleteUrl.lastIndexOf('/') + 1);
+          return {'url': imageUrl, 'delete_hash': deleteHash};
+        }
+      }
+    }
+    // If success is not true or data is missing, throw error
+    throw Exception('ImgBB upload failed: Invalid response format or upload error.');
   }
+
 
   //======== Saving ========
   Future<void> updateMedication(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
-    final updated = <String, dynamic>{
+
+    // --- Validation (Basic Example) ---
+    if (nameController.text.trim().isEmpty) {
+      throw Exception('Medication name cannot be empty.');
+    }
+    if (dosageController.text.trim().isEmpty) {
+      throw Exception('Dosage value cannot be empty.');
+    }
+    if (_startDate == null) {
+      throw Exception('Start date must be selected.');
+    }
+    // Add more validation as needed (e.g., check if all required times are selected)
+    if (_frequencyType == 'يومي' && _selectedTimes.any((t) => t == null)) {
+      throw Exception('Please select all required daily times.');
+    }
+    if (_frequencyType == 'اسبوعي' && (_selectedWeekdays.isEmpty || _weeklyTimes.values.any((t) => t == null))) {
+      throw Exception('Please select at least one weekday and set the time for all selected weekdays.');
+    }
+
+    print("Preparing data for Firestore update...");
+
+    // --- Prepare Data ---
+    final Map<String, dynamic> frequencyDetailsData;
+    final List<dynamic> timesData;
+
+    if (_frequencyType == 'يومي') {
+      frequencyDetailsData = {'timesPerDay': _frequencyNumber};
+      timesData = _selectedTimes
+          .where((t) => t != null) // Filter out null times just in case
+          .map((t) => TimeUtils.formatTimeOfDay(t!))
+          .toList();
+    } else { // اسبوعي
+      frequencyDetailsData = {'selectedWeekdays': _selectedWeekdays.toList()..sort()};
+      timesData = _weeklyTimes.entries
+          .where((entry) => entry.value != null) // Only include days with a selected time
+          .map((entry) => {'day': entry.key, 'time': TimeUtils.formatTimeOfDay(entry.value!)})
+          .toList();
+      // Sort timesData by day? Optional but can be good for consistency.
+      timesData.sort((a, b) => (a['day'] as int).compareTo(b['day'] as int));
+    }
+
+    final updatedData = <String, dynamic>{
       'name': nameController.text.trim(),
-      'dosage': '${dosageController.text.trim()} $_dosageUnit',
+      'dosage': '${dosageController.text.trim()} $_dosageUnit'.trim(), // Ensure unit is appended correctly
       'frequencyType': _frequencyType,
-      'frequencyDetails': _frequencyType == 'يومي'
-          ? {'timesPerDay': _frequencyNumber}
-          : {'selectedWeekdays': _selectedWeekdays.toList()..sort()},
-      'times': _frequencyType == 'يومي'
-          ? _selectedTimes.map((t) => TimeUtils.formatTimeOfDay(t!)).toList()
-          : _weeklyTimes.entries
-          .map((e) => {'day': e.key, 'time': TimeUtils.formatTimeOfDay(e.value!)})
-          .toList(),
+      'frequencyDetails': frequencyDetailsData,
+      'times': timesData,
       'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
-      'endDate':   _endDate   != null ? Timestamp.fromDate(_endDate!)   : null,
+      'endDate':   _endDate   != null ? Timestamp.fromDate(_endDate!)   : null, // Allow null endDate
+      'imageUrl': _uploadedImageUrl, // Use the potentially updated URL
+      'imgbbDeleteHash': _imgbbDeleteHash, // Save the delete hash
       'lastUpdated': Timestamp.now(),
+      // 'notificationIds': ... // Handle notification updates if needed
     };
-    if (_uploadedImageUrl != null) updated['imageUrl'] = _uploadedImageUrl;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('medicines')
-        .doc(docId)
-        .update(updated);
-  }
-}
 
-// Pull in your TimeUtils from below (or import from utils file)
-class TimeUtils {
-  static TimeOfDay? parseTime(String timeStr) {
+    // Remove null values before sending to Firestore (optional, but good practice)
+    updatedData.removeWhere((key, value) => value == null && key != 'endDate'); // Allow endDate to be explicitly null
+
+    print("Updating Firestore document $docId with data: $updatedData");
+
     try {
-      final f = DateFormat('h:mm a', 'ar'); // changed locale here
-      return TimeOfDay.fromDateTime(f.parseStrict(timeStr));
-    } catch (_) {}
-    return null;
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .doc(docId)
+          .update(updatedData);
+      print("Firestore update successful.");
+    } catch (e, stackTrace) {
+      print("Error updating Firestore: $e");
+      print(stackTrace);
+      throw Exception('Failed to save medication changes: $e');
+    }
   }
 
-  static String formatTimeOfDay(TimeOfDay t) {
-    final dt = DateTime(0, 0, 0, t.hour, t.minute);
-    return DateFormat.jm('ar').format(dt);
+  // --- Optional: Add method to delete old ImgBB image if a new one was uploaded ---
+  // This should be called BEFORE saving the new data if the image changed.
+  Future<void> deleteOldImageIfReplaced(String oldDeleteHash) async {
+    if (_uploadedImageUrl != null && _hasOriginalImage && oldDeleteHash.isNotEmpty) {
+      print("New image uploaded, attempting to delete old image with hash: $oldDeleteHash");
+      try {
+        await _deleteImgBBImage(oldDeleteHash);
+      } catch (e) {
+        print("Warning: Failed to delete old ImgBB image (hash: $oldDeleteHash): $e. Continuing save.");
+        // Don't block the save operation if deletion fails, just log it.
+      }
+    }
   }
+
+  /// Deletes an image from ImgBB using its delete hash.
+  Future<void> _deleteImgBBImage(String deleteHash) async {
+    if (imgbbApiKey.isEmpty || imgbbApiKey == 'YOUR_IMGBB_API_KEY') {
+      print("ImgBB API Key not configured. Skipping deletion.");
+      return; // Don't throw, just skip if not configured
+    }
+    // ImgBB delete endpoint uses the delete *hash* directly in the URL path
+    final url = Uri.parse('https://api.imgbb.com/1/image/$deleteHash');
+
+    print("Deleting ImgBB image with hash: $deleteHash");
+
+    try {
+      final response = await http.post(
+        url,
+        body: {
+          'key': imgbbApiKey,
+          // ImgBB delete API uses POST, but parameters might vary.
+          // Check their current API docs. Sometimes it's just key in body or query.
+          // Let's assume 'key' in body is correct based on upload.
+          // 'action': 'delete' // This might be needed depending on API version
+        },
+      );
+
+      print("ImgBB Delete Response Status: ${response.statusCode}");
+      print("ImgBB Delete Response Body: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        // ImgBB delete success response might be simple, e.g., {"status_code":200,"success":{"message":"image deleted","code":200}}
+        if (jsonResponse['success'] != null) {
+          print("ImgBB image deletion successful (hash: $deleteHash).");
+          return;
+        }
+      }
+      // If status is not 200 or success field is missing/false
+      throw Exception('ImgBB deletion failed: Status ${response.statusCode}, Body: ${response.body}');
+
+    } catch (e) {
+      print("Error deleting ImgBB image (hash: $deleteHash): $e");
+      throw e; // Re-throw to indicate deletion failure if needed
+    }
+  }
+
 }
-
