@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
-
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kErrorColor = Color(0xFFFF6B6B);
@@ -10,7 +9,6 @@ const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
 
-// --- Medicine Autocomplete Widget ---
 class MedicineAutocomplete extends StatefulWidget {
   final List<String> suggestions;
   final TextEditingController controller;
@@ -32,7 +30,7 @@ class MedicineAutocomplete extends StatefulWidget {
 class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
   List<String> _filteredSuggestions = [];
   final ScrollController _scrollController = ScrollController();
-  final int _initialDisplayCount = 3; // Number of items to show initially
+  final int _initialDisplayCount = 3;
 
   @override
   void initState() {
@@ -44,30 +42,24 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
 
   void _filter() {
     final text = widget.controller.text.toLowerCase().trim();
-    if (text.isEmpty) {
-      if (mounted) {
-        setState(() {
+    if (mounted) {
+      setState(() {
+        if (text.isEmpty) {
           _filteredSuggestions = [];
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() {
+        } else {
           _filteredSuggestions = widget.suggestions
               .where((s) => s.toLowerCase().contains(text))
               .toList();
-        });
-      }
+        }
+      });
     }
   }
 
   void _handleFocusChange() {
-    if (!widget.focusNode.hasFocus) {
-      if (mounted) {
-        setState(() {
-          _filteredSuggestions = [];
-        });
-      }
+    if (!widget.focusNode.hasFocus && mounted) {
+      setState(() {
+        _filteredSuggestions = [];
+      });
     }
   }
 
@@ -79,19 +71,26 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
     super.dispose();
   }
 
-  // Highlights matching text in blue
   Widget _highlightMatchingText(String text, String query) {
-    if (query.isEmpty) return Text(text);
+    if (query.isEmpty || !text.toLowerCase().contains(query.toLowerCase())) {
+      return Text(
+        text,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+        overflow: TextOverflow.ellipsis,
+      );
+    }
 
     List<TextSpan> spans = [];
     int start = 0;
     final textLower = text.toLowerCase();
     final queryLower = query.toLowerCase();
+    int indexOfMatch;
 
-    // Find all occurrences of the query in the text
-    int indexOfMatch = textLower.indexOf(queryLower);
-    while (indexOfMatch != -1) {
-      // Add text before the match
+    while ((indexOfMatch = textLower.indexOf(queryLower, start)) != -1) {
       if (indexOfMatch > start) {
         spans.add(TextSpan(
           text: text.substring(start, indexOfMatch),
@@ -102,8 +101,6 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
           ),
         ));
       }
-
-      // Add the highlighted match
       spans.add(TextSpan(
         text: text.substring(indexOfMatch, indexOfMatch + query.length),
         style: const TextStyle(
@@ -112,13 +109,9 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
           fontSize: 16,
         ),
       ));
-
-      // Move to the next potential match
       start = indexOfMatch + query.length;
-      indexOfMatch = textLower.indexOf(queryLower, start);
     }
 
-    // Add any remaining text
     if (start < text.length) {
       spans.add(TextSpan(
         text: text.substring(start),
@@ -136,13 +129,14 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
-    // Calculate the number of results to display in the UI
     final bool hasMoreResults = _filteredSuggestions.length > _initialDisplayCount;
-    final int displayHeight = _filteredSuggestions.isEmpty
-        ? 0
-        : (_filteredSuggestions.length.clamp(1, _initialDisplayCount) * 60.0).toInt();
+    final int displayItemCount = _filteredSuggestions.isEmpty ? 0 : _filteredSuggestions.length.clamp(1, _initialDisplayCount);
+    final double calculatedHeight = displayItemCount * 60.0;
+    final double totalHeight = calculatedHeight + (hasMoreResults && displayItemCount > 0 ? 30.0 : 0.0);
+
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,13 +165,10 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
             suffixIcon: widget.controller.text.isNotEmpty
                 ? IconButton(
               icon: Icon(Icons.clear, color: kErrorColor),
+              tooltip: 'Clear search',
               onPressed: () {
                 widget.controller.clear();
-                if (mounted) {
-                  setState(() {
-                    _filteredSuggestions = [];
-                  });
-                }
+                widget.focusNode.requestFocus();
               },
             )
                 : null,
@@ -212,10 +203,12 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
           ),
           validator: (value) =>
           (value == null || value.trim().isEmpty) ? 'الرجاء إدخال اسم الدواء' : null,
+          onChanged: (text) {},
         ),
-        if (_filteredSuggestions.isNotEmpty)
+        if (widget.focusNode.hasFocus && _filteredSuggestions.isNotEmpty)
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
             margin: const EdgeInsets.only(top: 4),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -229,8 +222,8 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
                 ),
               ],
             ),
-            height: displayHeight + (hasMoreResults ? 30 : 0), // Add extra space for the "more results" indicator
-            child: Stack(
+            height: totalHeight >= 0 ? totalHeight : 0,
+            child: totalHeight > 0 ? Stack(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(kBorderRadius),
@@ -241,7 +234,7 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
                     radius: const Radius.circular(10),
                     child: ListView.separated(
                       controller: _scrollController,
-                      padding: EdgeInsets.zero,
+                      padding: EdgeInsets.only(bottom: (hasMoreResults ? 30 : 0)),
                       shrinkWrap: true,
                       physics: const BouncingScrollPhysics(),
                       itemCount: _filteredSuggestions.length,
@@ -253,32 +246,28 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
                       ),
                       itemBuilder: (context, index) {
                         final suggestion = _filteredSuggestions[index];
-                        return InkWell(
-                          onTap: () {
-                            widget.onSelected(suggestion);
-                            widget.controller.text = suggestion;
-                            widget.focusNode.unfocus();
-                            if (mounted) {
-                              setState(() {
-                                _filteredSuggestions = [];
-                              });
-                            }
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                Icon(
-                                    Icons.medication_outlined,
-                                    color: kPrimaryColor.withOpacity(0.7),
-                                    size: 20
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _highlightMatchingText(suggestion, widget.controller.text),
-                                ),
-                                Icon(Icons.arrow_forward_ios, color: Colors.grey.shade500, size: 14),
-                              ],
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              widget.onSelected(suggestion);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                      Icons.medication_outlined,
+                                      color: kPrimaryColor.withOpacity(0.7),
+                                      size: 20
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _highlightMatchingText(suggestion, widget.controller.text),
+                                  ),
+                                  Icon(Icons.arrow_forward_ios, color: Colors.grey.shade500, size: 14),
+                                ],
+                              ),
                             ),
                           ),
                         );
@@ -287,43 +276,53 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
                   ),
                 ),
 
-                // "More results" indicator if there are more than 3 results
                 if (hasMoreResults)
                   Positioned(
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    child: Container(
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        border: Border(
-                          top: BorderSide(color: Colors.grey.shade200),
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 30,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withOpacity(0.8),
+                              Colors.white.withOpacity(1.0),
+                            ],
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(kBorderRadius),
+                            bottomRight: Radius.circular(kBorderRadius),
+                          ),
+                          border: Border(
+                            top: BorderSide(color: Colors.grey.shade200),
+                          ),
                         ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "مرر لأسفل لمزيد من النتائج (${_filteredSuggestions.length - _initialDisplayCount})",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: kSecondaryColor,
-                            fontWeight: FontWeight.bold,
+                        child: Center(
+                          child: Text(
+                            "مرر لأسفل لمزيد من النتائج (${_filteredSuggestions.length - _initialDisplayCount}+)",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: kSecondaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
               ],
-            ),
+            ) : const SizedBox.shrink(),
           ),
       ],
     );
   }
 }
 
-
-// --- AddNamePicturePage Widget ---
-class AddNamePicturePage extends StatelessWidget {
+class AddNamePicturePage extends StatefulWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController nameController;
   final Future<List<String>> medicineNamesFuture;
@@ -345,8 +344,25 @@ class AddNamePicturePage extends StatelessWidget {
     required this.onBack,
   }) : super(key: key);
 
+  @override
+  _AddNamePicturePageState createState() => _AddNamePicturePageState();
+}
 
-  // --- Image Picker Section UI ---
+class _AddNamePicturePageState extends State<AddNamePicturePage> {
+  late FocusNode _medicineFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _medicineFocusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _medicineFocusNode.dispose();
+    super.dispose();
+  }
+
   Widget _buildImagePicker(BuildContext context, double screenWidth) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -384,15 +400,15 @@ class AddNamePicturePage extends StatelessWidget {
 
           Center(
             child: GestureDetector(
-              onTap: onPickImage,
+              onTap: widget.onPickImage,
               child: Container(
                 height: screenWidth * 0.45,
                 width: screenWidth * 0.7,
                 decoration: BoxDecoration(
                   color: kCardColor,
                   border: Border.all(
-                    color: capturedImage != null ? kPrimaryColor : Colors.grey.shade300,
-                    width: capturedImage != null ? 2.0 : 1.0,
+                    color: widget.capturedImage != null ? kPrimaryColor : Colors.grey.shade300,
+                    width: widget.capturedImage != null ? 2.0 : 1.0,
                   ),
                   borderRadius: BorderRadius.circular(kBorderRadius),
                   boxShadow: [
@@ -402,40 +418,28 @@ class AddNamePicturePage extends StatelessWidget {
                       offset: const Offset(0, 4),
                     ),
                   ],
-                  image: capturedImage != null
+                  image: widget.capturedImage != null
                       ? DecorationImage(
-                    image: FileImage(capturedImage!),
+                    image: FileImage(widget.capturedImage!),
                     fit: BoxFit.cover,
                   )
                       : null,
                 ),
-                child: capturedImage == null
+                child: widget.capturedImage == null
                     ? Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Pulsing animation effect for camera icon
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0.8, end: 1.0),
-                      duration: const Duration(seconds: 2),
-                      curve: Curves.easeInOut,
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: value,
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: kPrimaryColor.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.camera_alt_outlined,
-                              color: kPrimaryColor,
-                              size: screenWidth * 0.1,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: kPrimaryColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.camera_alt_outlined,
+                        color: kPrimaryColor,
+                        size: screenWidth * 0.1,
+                      ),
                     ),
                     Positioned(
                       bottom: screenWidth * 0.08,
@@ -444,14 +448,14 @@ class AddNamePicturePage extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey.shade700,
-                          fontSize: screenWidth * 0.04,
+                          fontSize: screenWidth * 0.035,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                   ],
                 )
-                    : (uploadedImageUrl == null
+                    : (widget.uploadedImageUrl == null
                     ? Center(
                   child: Container(
                     width: 48,
@@ -491,8 +495,7 @@ class AddNamePicturePage extends StatelessWidget {
             ),
           ),
 
-          // Optional hint text
-          if (capturedImage == null)
+          if (widget.capturedImage == null)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Center(
@@ -533,7 +536,7 @@ class AddNamePicturePage extends StatelessWidget {
     const verticalPadding = 20.0;
 
     return Form(
-      key: formKey,
+      key: widget.formKey,
       child: Container(
         decoration: const BoxDecoration(
           color: kBackgroundColor,
@@ -541,7 +544,6 @@ class AddNamePicturePage extends StatelessWidget {
         child: SafeArea(
           child: Stack(
             children: [
-              // Back button with consistent design
               Positioned(
                 top: 15,
                 left: 10,
@@ -549,7 +551,7 @@ class AddNamePicturePage extends StatelessWidget {
                   color: Colors.transparent,
                   borderRadius: BorderRadius.circular(30),
                   child: InkWell(
-                    onTap: onBack,
+                    onTap: widget.onBack,
                     borderRadius: BorderRadius.circular(30),
                     child: Container(
                       padding: const EdgeInsets.all(8.0),
@@ -570,12 +572,11 @@ class AddNamePicturePage extends StatelessWidget {
                 ),
               ),
 
-              // Main content
               Padding(
                 padding: EdgeInsets.only(
                   left: horizontalPadding,
                   right: horizontalPadding,
-                  top: verticalPadding + 35, // Add space for back button
+                  top: verticalPadding + 35,
                   bottom: verticalPadding,
                 ),
                 child: SingleChildScrollView(
@@ -627,7 +628,6 @@ class AddNamePicturePage extends StatelessWidget {
 
                       const SizedBox(height: 25.0),
 
-                      // Image section in card
                       _buildImagePicker(context, screenWidth),
 
                       const SizedBox(height: 25.0),
@@ -666,29 +666,30 @@ class AddNamePicturePage extends StatelessWidget {
 
                             const Divider(height: 24),
 
-                            // Medicine name autocomplete
                             FutureBuilder<List<String>>(
-                              future: medicineNamesFuture,
+                              future: widget.medicineNamesFuture,
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState == ConnectionState.waiting) {
                                   return Center(
-                                    child: Column(
-                                      children: [
-                                        const SizedBox(height: 20),
-                                        const CircularProgressIndicator(
-                                          strokeWidth: 3,
-                                          color: kPrimaryColor,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          "جاري تحميل قائمة الأدوية...",
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey.shade600,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const CircularProgressIndicator(
+                                            strokeWidth: 3,
+                                            color: kPrimaryColor,
                                           ),
-                                        ),
-                                        const SizedBox(height: 20),
-                                      ],
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            "جاري تحميل قائمة الأدوية...",
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   );
                                 } else if (snapshot.hasError) {
@@ -700,29 +701,29 @@ class AddNamePicturePage extends StatelessWidget {
                                       border: Border.all(color: kErrorColor.withOpacity(0.3)),
                                     ),
                                     child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Icon(Icons.error_outline, color: kErrorColor, size: 36),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'خطأ في تحميل أسماء الأدوية: ${snapshot.error}',
+                                          'خطأ في تحميل أسماء الأدوية.',
                                           textAlign: TextAlign.center,
-                                          style: TextStyle(color: kErrorColor),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            // Reload medicine names
-                                            // (Would need to implement if desired)
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: kErrorColor,
-                                            foregroundColor: Colors.white,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(kBorderRadius/2),
-                                            ),
+                                          style: TextStyle(
+                                            color: const Color(0xFFD32F2F), // Dark red color instead of shade900
+                                            fontWeight: FontWeight.w500
                                           ),
-                                          child: const Text('إعادة المحاولة'),
                                         ),
+                                        Text(
+                                          '${snapshot.error}',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: const Color(0xFFE57373), // Lighter red color instead of shade700
+                                            fontSize: 11
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 12),
                                       ],
                                     ),
                                   );
@@ -730,11 +731,11 @@ class AddNamePicturePage extends StatelessWidget {
                                   final medicineNames = snapshot.data ?? [];
                                   return MedicineAutocomplete(
                                     suggestions: medicineNames,
-                                    controller: nameController,
-                                    focusNode: FocusNode(),
+                                    controller: widget.nameController,
+                                    focusNode: _medicineFocusNode,
                                     onSelected: (selection) {
-                                      nameController.text = selection;
-                                      FocusScope.of(context).unfocus();
+                                      widget.nameController.text = selection;
+                                      _medicineFocusNode.unfocus();
                                     },
                                   );
                                 }
@@ -748,8 +749,10 @@ class AddNamePicturePage extends StatelessWidget {
 
                       ElevatedButton(
                         onPressed: () {
-                          if (formKey.currentState!.validate()) {
-                            onNext();
+                          if (widget.formKey.currentState!.validate()) {
+                            _medicineFocusNode.unfocus();
+                            widget.onNext();
+                          } else {
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -761,6 +764,7 @@ class AddNamePicturePage extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(kBorderRadius),
                           ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -776,7 +780,7 @@ class AddNamePicturePage extends StatelessWidget {
                                 color: Colors.white.withOpacity(0.2),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.arrow_forward, size: 16),
+                              child: const Icon(Icons.arrow_forward, size: 18),
                             ),
                           ],
                         ),
