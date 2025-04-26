@@ -14,9 +14,39 @@ class EditMedicationUtils {
   // -- Time Parsing & Formatting --
   static TimeOfDay? parseTime(String timeStr) {
     try {
-      final f = DateFormat('h:mm a', 'ar'); // changed locale here
-      return TimeOfDay.fromDateTime(f.parseStrict(timeStr));
-    } catch (_) {}
+      // Enhanced normalization for Arabic AM/PM indicators
+      String normalizedTime = timeStr
+          .replaceAll('صباحاً', 'AM')
+          .replaceAll('صباحا', 'AM')
+          .replaceAll('ص', 'AM')
+          .replaceAll('مساءً', 'PM')
+          .replaceAll('مساء', 'PM')
+          .replaceAll('م', 'PM')
+          .trim();
+      
+      // Try to parse with normalized English AM/PM format
+      final f = DateFormat('h:mm a', 'en_US');
+      DateTime dt = f.parseStrict(normalizedTime);
+      return TimeOfDay(hour: dt.hour, minute: dt.minute);
+    } catch (_) {
+      // Try direct parsing as fallback
+      try {
+        final parts = timeStr.split(':');
+        if(parts.length >= 2) {
+          int hour = int.parse(parts[0]);
+          int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+          
+          // Check for AM/PM indicators
+          bool isPM = timeStr.contains('م') || timeStr.contains('مساء') || timeStr.toLowerCase().contains('pm');
+          bool isAM = timeStr.contains('ص') || timeStr.contains('صباح') || timeStr.toLowerCase().contains('am');
+          
+          if (isPM && hour < 12) hour += 12;
+          if (isAM && hour == 12) hour = 0;
+          
+          return TimeOfDay(hour: hour, minute: minute);
+        }
+      } catch (_) {}
+    }
     return null;
   }
 

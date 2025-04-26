@@ -39,6 +39,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   String _closestMedName = '';
   String _closestMedTimeStr = '';
   String _closestMedDocId = '';
+  DateTime? _nextDoseDateTime;
   bool _isLoadingMed = true; // Specifically for the 'Upcoming Dose' UI tile
   bool _isInitializing = true; // Tracks overall initial loading/checking state
   late AnimationController _animationController;
@@ -494,6 +495,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     String displayMedName = '';
     String displayMedTime = '';
+    DateTime? nextDoseDateTime;
 
     if (nextDocId != null && nextTimeIso != null) {
       try {
@@ -513,6 +515,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
         final nextTimeUTC = DateTime.parse(nextTimeIso);
         final nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, tz.local);
+        nextDoseDateTime = nextTimeLocal; // Store the actual DateTime
         displayMedTime = _formatTimeOfDay(context, TimeOfDay.fromDateTime(nextTimeLocal));
         print("[DataLoad] Display data: $displayMedName at $displayMedTime");
 
@@ -520,6 +523,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         print("[DataLoad] Error fetching display data for closest med $nextDocId: $e");
         displayMedName = '';
         displayMedTime = 'خطأ';
+        nextDoseDateTime = null;
       }
     } else {
       print("[DataLoad] No stored next dose info found for display.");
@@ -530,6 +534,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         _closestMedName = displayMedName;
         _closestMedTimeStr = displayMedTime;
         _closestMedDocId = nextDocId ?? '';
+        _nextDoseDateTime = nextDoseDateTime;
         _isLoadingMed = false;
       });
     }
@@ -537,33 +542,82 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
   TimeOfDay? _parseTime(String timeStr) {
     try {
+      // Enhanced normalization for Arabic PM/AM indicators
+      String normalizedTime = timeStr;
+      bool isPM = false;
+      
+      // Check for PM indicators
+      if (timeStr.contains('م') || 
+          timeStr.contains('مساءً') || 
+          timeStr.contains('مساء') || 
+          timeStr.toLowerCase().contains('pm')) {
+        normalizedTime = normalizedTime
+            .replaceAll('مساءً', 'PM')
+            .replaceAll('مساء', 'PM')
+            .replaceAll('م', 'PM');
+        isPM = true;
+      }
+      // Check for AM indicators
+      else if (timeStr.contains('ص') || 
+               timeStr.contains('صباحاً') || 
+               timeStr.contains('صباحا') || 
+               timeStr.toLowerCase().contains('am')) {
+        normalizedTime = normalizedTime
+            .replaceAll('صباحاً', 'AM')
+            .replaceAll('صباحا', 'AM')
+            .replaceAll('ص', 'AM');
+      }
+      
+      // Try parsing with English AM/PM format
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
-      DateTime parsedDt = ampmFormat.parseStrict(timeStr);
+      DateTime parsedDt = ampmFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
-    try {
-      String normalizedTime = timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
-      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US');
-      DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
-      return TimeOfDay.fromDateTime(parsedDt);
-    } catch (_) {}
+
+    // Direct parsing fallback with PM adjustment
     try {
       final parts = timeStr.split(':');
       if (parts.length == 2) {
-        int hour = int.parse(parts[0]);
+        int hour = int.parse(parts[0].trim());
         int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+        
+        // Adjust for PM if Arabic PM indicators are present
+        bool isPM = timeStr.contains('م') || 
+                   timeStr.contains('مساءً') || 
+                   timeStr.contains('مساء') ||
+                   timeStr.toLowerCase().contains('pm');
+        
+        // Adjust hour for PM (only if not already in 24-hour format)
+        if (isPM && hour < 12) hour += 12;
+        
+        // Adjust for 12 AM (midnight)
+        bool isAM = timeStr.contains('ص') || 
+                   timeStr.contains('صباحاً') || 
+                   timeStr.contains('صباحا') ||
+                   timeStr.toLowerCase().contains('am');
+        if (isAM && hour == 12) hour = 0;
+        
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
       }
     } catch (_) {}
+    
+    print("Failed to parse time string: $timeStr");
     return null;
   }
 
   String _formatTimeOfDay(BuildContext context, TimeOfDay time) {
+    // Correctly determine if it's AM or PM based on the hour
+    final bool isPM = time.period == DayPeriod.pm;
+    
+    // Use 12-hour format with correct hour value
     final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final String minute = time.minute.toString().padLeft(2, '0');
-    final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
+    
+    // Use the correct Arabic period indicator
+    final String period = isPM ? 'مساءً' : 'صباحاً';
+    
     return '$hour:$minute $period';
   }
 
@@ -905,6 +959,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           medicationName: _closestMedName,
           nextDose: _closestMedTimeStr,
           docId: _closestMedDocId,
+          doseDateTime: _nextDoseDateTime,
         ),
       ],
     );
@@ -1113,12 +1168,14 @@ class DoseTile extends StatelessWidget {
   final String medicationName;
   final String nextDose;
   final String docId;
+  final DateTime? doseDateTime;
 
   const DoseTile({
     super.key,
     required this.medicationName,
     required this.nextDose,
     required this.docId,
+    this.doseDateTime,
   });
 
   @override
@@ -1128,39 +1185,29 @@ class DoseTile extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(kBorderRadius),
         boxShadow: [ BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: Offset(0, 2)) ],
-        border: Border.all(color: kPrimaryColor.withOpacity(0.2), width: 1.5),
+        border: Border.all(
+          color: kPrimaryColor.withOpacity(0.2), 
+          width: 1.5
+        ),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(kBorderRadius),
-        child: InkWell(
-          onTap: () {
-            if (docId.isNotEmpty) {
-              Navigator.pushNamed(context, '/medication_detail', arguments: {'docId': docId});
-            }
-          },
-          splashColor: kPrimaryColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(kBorderRadius),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(medicationName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87), overflow: TextOverflow.ellipsis, maxLines: 1),
-                      SizedBox(height: 6),
-                      _buildTimeDisplay(),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 16),
-                _buildMedicationIcon(),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(medicationName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87), overflow: TextOverflow.ellipsis, maxLines: 1),
+                  SizedBox(height: 6),
+                  _buildTimeDisplay(),
+                ],
+              ),
             ),
-          ),
+            SizedBox(width: 16),
+            _buildMedicationIcon(),
+          ],
         ),
       ),
     );
@@ -1170,12 +1217,24 @@ class DoseTile extends StatelessWidget {
     return Container(
       width: 56, height: 56,
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: LinearGradient(
+          colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+          begin: Alignment.topLeft, 
+          end: Alignment.bottomRight
+        ),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.2), blurRadius: 8, offset: Offset(0, 2))],
+        boxShadow: [BoxShadow(
+          color: kPrimaryColor.withOpacity(0.2), 
+          blurRadius: 8, 
+          offset: Offset(0, 2)
+        )],
       ),
       alignment: Alignment.center,
-      child: Icon(Icons.medication_liquid_rounded, size: 32, color: Colors.white),
+      child: Icon(
+        Icons.medication_liquid_rounded, 
+        size: 32, 
+        color: Colors.white
+      ),
     );
   }
 
@@ -1188,14 +1247,28 @@ class DoseTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: kSecondaryColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: kSecondaryColor.withOpacity(0.3), width: 1),
+            border: Border.all(
+              color: kSecondaryColor.withOpacity(0.3), 
+              width: 1
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(nextDose, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kPrimaryColor)),
+              Text(
+                nextDose, 
+                style: TextStyle(
+                  fontSize: 14, 
+                  fontWeight: FontWeight.w600, 
+                  color: kPrimaryColor
+                )
+              ),
               SizedBox(width: 4),
-              Icon(Icons.access_time_filled_rounded, size: 14, color: kPrimaryColor),
+              Icon(
+                Icons.access_time_filled_rounded, 
+                size: 14, 
+                color: kPrimaryColor
+              ),
             ],
           ),
         ),
@@ -1291,4 +1364,6 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
+
+
 

@@ -20,20 +20,26 @@ class TimeUtils {
   static TimeOfDay? parseTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return null;
     try {
-      // Normalize Arabic AM/PM indicators to English for reliable parsing
+      // More comprehensive normalization of Arabic AM/PM indicators
       String normalizedTime = timeStr
           .replaceAll('صباحاً', 'AM')
+          .replaceAll('صباحا', 'AM')  // Handle variant without diacritics
+          .replaceAll('ص', 'AM')      // Handle short form
           .replaceAll('مساءً', 'PM')
+          .replaceAll('مساء', 'PM')   // Handle variant without diacritics
+          .replaceAll('م', 'PM')      // Handle short form
           .trim();
-      
-      // Use the English format for parsing the normalized string
-      return TimeOfDay.fromDateTime(_parsingFormat.parseStrict(normalizedTime));
+
+      // Parse the normalized time with English AM/PM format
+      DateTime parsedDt = _parsingFormat.parseStrict(normalizedTime);
+      return TimeOfDay(hour: parsedDt.hour, minute: parsedDt.minute); // Create TimeOfDay preserving 24-hour format
     } catch (e) {
       print("Error parsing time string '$timeStr' with normalized format: $e");
-      
+
       // Try with original format as fallback
       try {
-        return TimeOfDay.fromDateTime(_timeFormat.parseStrict(timeStr));
+        DateTime parsedDt = _timeFormat.parseStrict(timeStr);
+        return TimeOfDay(hour: parsedDt.hour, minute: parsedDt.minute);
       } catch (_) {
         // Try direct numeric parsing as last resort
         try {
@@ -41,6 +47,18 @@ class TimeUtils {
           if(parts.length >= 2) {
             int hour = int.parse(parts[0]);
             int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+
+            // Check for AM/PM indicators and adjust hour if needed
+            bool isPM = timeStr.toLowerCase().contains('م') ||
+                timeStr.toLowerCase().contains('مساء') ||
+                timeStr.toLowerCase().contains('pm');
+            bool isAM = timeStr.toLowerCase().contains('ص') ||
+                timeStr.toLowerCase().contains('صباح') ||
+                timeStr.toLowerCase().contains('am');
+
+            if (isPM && hour < 12) hour += 12;
+            if (isAM && hour == 12) hour = 0;
+
             if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
               print("Fallback parsing successful for '$timeStr'");
               return TimeOfDay(hour: hour, minute: minute);
@@ -48,19 +66,18 @@ class TimeUtils {
           }
         } catch (_) {} // Ignore fallback parse errors
       }
-      
+
       print("Failed to parse time string '$timeStr' with any known format.");
       return null; // Return null if all parsing fails
     }
   }
 
   static String formatTimeOfDay(TimeOfDay t) {
-    final dt = DateTime(2000, 1, 1, t.hour, t.minute); // Use a fixed date
-    // Use the defined format
+    // Use 24-hour value to ensure correct AM/PM conversion
+    final dt = DateTime(2000, 1, 1, t.hour, t.minute);
     return _timeFormat.format(dt);
   }
 }
-
 
 // Provides all data-loading, state, and update logic for editing a medication.
 class EditMedicationDataProvider {

@@ -22,15 +22,41 @@ class TimeUtils {
   static TimeOfDay? parseTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return null;
     try {
-      String normalizedTime = timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
+      // Enhanced normalization for more robust AM/PM handling
+      String normalizedTime = timeStr
+          .replaceAll('صباحاً', 'AM')
+          .replaceAll('صباحا', 'AM')
+          .replaceAll('ص', 'AM')
+          .replaceAll('مساءً', 'PM')
+          .replaceAll('مساء', 'PM')
+          .replaceAll('م', 'PM')
+          .trim();
+
       DateTime parsedDt = _parsingFormat.parseStrict(normalizedTime);
-      return TimeOfDay.fromDateTime(parsedDt);
+      // Use the actual hour from DateTime to preserve AM/PM correctly
+      return TimeOfDay(hour: parsedDt.hour, minute: parsedDt.minute);
     } catch (e) {
+      // Try direct numeric parsing as fallback
       try {
         final parts = timeStr.split(':');
         if(parts.length >= 2) {
           int hour = int.parse(parts[0]);
           int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+
+          // Check for period indicators in original string
+          bool isPM = timeStr.contains('م') ||
+              timeStr.contains('مساء') ||
+              timeStr.contains('PM') ||
+              timeStr.contains('pm');
+          bool isAM = timeStr.contains('ص') ||
+              timeStr.contains('صباح') ||
+              timeStr.contains('AM') ||
+              timeStr.contains('am');
+
+          // Adjust hour based on AM/PM indicator
+          if (isPM && hour < 12) hour += 12;
+          if (isAM && hour == 12) hour = 0;
+
           if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
             return TimeOfDay(hour: hour, minute: minute);
           }
@@ -42,6 +68,7 @@ class TimeUtils {
   }
 
   static String formatTimeOfDay(TimeOfDay t) {
+    // Use the actual hour value to ensure correct AM/PM
     final dt = DateTime(2000, 1, 1, t.hour, t.minute);
     return _timeFormat.format(dt);
   }
