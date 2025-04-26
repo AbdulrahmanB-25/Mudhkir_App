@@ -96,6 +96,7 @@ class AndroidNotificationService implements NotificationService {
       playSound: true,
       sound: RawResourceAndroidNotificationSound('medication_alarm'),
       audioAttributesUsage: AudioAttributesUsage.alarm,
+      visibility: NotificationVisibility.public,
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction('TAKE_ACTION', 'Take Now'),
         AndroidNotificationAction('SNOOZE_ACTION', 'Snooze (5 min)'),
@@ -180,3 +181,4 @@ class AndroidNotificationService implements NotificationService {
     return await androidPlugin?.areNotificationsEnabled();
   }
 }
+

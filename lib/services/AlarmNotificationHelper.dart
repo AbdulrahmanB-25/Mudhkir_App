@@ -17,10 +17,17 @@ class AlarmNotificationHelper {
   static Future<void> initialize(BuildContext context) async {
     tz_init.initializeTimeZones();
     await _service.initialize(
-      context, 
-      _onNotificationResponse, 
-      notificationTapBackground
+        context,
+        _onNotificationResponse,
+        notificationTapBackground
     );
+    // Ensure channels are set up during initial initialization as well
+    await ensureChannelsSetup();
+  }
+
+  static Future<void> ensureChannelsSetup() async {
+    // Call the platform-specific channel setup
+    await _service.setupNotificationChannels();
   }
 
   static void _onNotificationResponse(NotificationResponse response) {
@@ -123,7 +130,7 @@ class AlarmNotificationHelper {
     required DateTime startDate,
   }) async {
     final firstOccurrence = _nextInstanceOfTime(startDate, timeOfDay);
-    
+
     return scheduleAlarmNotification(
       id: id,
       title: title,
@@ -145,7 +152,7 @@ class AlarmNotificationHelper {
     required DateTime startDate,
   }) async {
     final firstOccurrence = _nextInstanceOfWeekday(startDate, weekday, timeOfDay);
-    
+
     return scheduleAlarmNotification(
       id: id,
       title: title,

@@ -145,6 +145,15 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     if (!mounted) return;
     print("[Scheduling] Starting scheduling process for user $userId...");
 
+    // Ensure notification channels are configured before scheduling
+    try {
+      await AlarmNotificationHelper.ensureChannelsSetup();
+      print("[Scheduling] Ensured notification channels are set up.");
+    } catch (e) {
+      print("[Scheduling] ERROR ensuring notification channels setup: $e");
+      // Optionally handle this error, though scheduling might still work if channels exist
+    }
+
     await AlarmNotificationHelper.cancelAllNotifications();
     print("[Scheduling] Cancelled previous notifications.");
 
@@ -1282,3 +1291,4 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
+
