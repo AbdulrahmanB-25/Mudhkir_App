@@ -86,7 +86,7 @@ class EditMedicationUtils {
   }
 
   static Future<Map<String, String>> uploadToImgBB(File file, String apiKey) async {
-    if (apiKey.isEmpty || apiKey == 'YOUR_IMGBB_API_KEY') {
+    if (apiKey.isEmpty || apiKey == '2b30d3479663bc30a70c916363b07c4a') {
       throw Exception('ImgBB API Key is not configured.');
     }
     final b64 = base64Encode(await file.readAsBytes());
@@ -110,7 +110,7 @@ class EditMedicationUtils {
   }
 
   static Future<void> deleteImgBBImage(String deleteHash, String apiKey) async {
-    if (apiKey.isEmpty || apiKey == 'YOUR_IMGBB_API_KEY' || deleteHash.isEmpty) {
+    if (apiKey.isEmpty || apiKey == '2b30d3479663bc30a70c916363b07c4a' || deleteHash.isEmpty) {
       print("ImgBB delete skipped: API Key or delete hash missing.");
       return;
     }
@@ -638,13 +638,14 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         controller: dp.pageController,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          // This is line ~621 where the error likely occurs
+          // Name & Picture Page
           AddNamePicturePage(
             formKey: _page1FormKey,
             nameController: dp.nameController,
             medicineNamesFuture: Future.value(dp.medicineNames),
             capturedImage: dp.capturedImage,
             uploadedImageUrl: dp.displayImageUrl,
+            isEditMode: true, // Set this to true for edit mode
             onPickImage: () async {
               await dp.pickImage();
               if (mounted) setState(() {});
@@ -693,6 +694,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
             formKey: _page3FormKey,
             startDate: dp.startDate,
             endDate: dp.endDate,
+            isEditMode: true, // Add this parameter to use "تعديل الدواء" instead of "أضف الدواء"
             onSelectStartDate: () async {
               final d = await showDatePicker(
                 context: context,
@@ -720,3 +722,4 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
+
