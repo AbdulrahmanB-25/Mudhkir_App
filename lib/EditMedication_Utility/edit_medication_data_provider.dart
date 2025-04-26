@@ -15,26 +15,40 @@ import 'package:http/http.dart' as http;
 class TimeUtils {
   // Use 'h:mm a' for consistent parsing and formatting with AM/PM in Arabic
   static final DateFormat _timeFormat = DateFormat('h:mm a', 'ar');
+  static final DateFormat _parsingFormat = DateFormat('h:mm a', 'en_US'); // Added for AM/PM normalization
 
   static TimeOfDay? parseTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return null;
     try {
-      // Use the defined format for strict parsing
-      return TimeOfDay.fromDateTime(_timeFormat.parseStrict(timeStr));
+      // Normalize Arabic AM/PM indicators to English for reliable parsing
+      String normalizedTime = timeStr
+          .replaceAll('صباحاً', 'AM')
+          .replaceAll('مساءً', 'PM')
+          .trim();
+      
+      // Use the English format for parsing the normalized string
+      return TimeOfDay.fromDateTime(_parsingFormat.parseStrict(normalizedTime));
     } catch (e) {
-      print("Error parsing time string '$timeStr' with format ${_timeFormat.pattern}: $e");
-      // Add fallbacks if needed, e.g., for 24-hour format if that might exist
+      print("Error parsing time string '$timeStr' with normalized format: $e");
+      
+      // Try with original format as fallback
       try {
-        final parts = timeStr.split(':');
-        if(parts.length >= 2) {
-          int hour = int.parse(parts[0]);
-          int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-          if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-            print("Fallback parsing successful for '$timeStr'");
-            return TimeOfDay(hour: hour, minute: minute);
+        return TimeOfDay.fromDateTime(_timeFormat.parseStrict(timeStr));
+      } catch (_) {
+        // Try direct numeric parsing as last resort
+        try {
+          final parts = timeStr.split(':');
+          if(parts.length >= 2) {
+            int hour = int.parse(parts[0]);
+            int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
+            if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+              print("Fallback parsing successful for '$timeStr'");
+              return TimeOfDay(hour: hour, minute: minute);
+            }
           }
-        }
-      } catch (_) {} // Ignore fallback parse errors
+        } catch (_) {} // Ignore fallback parse errors
+      }
+      
       print("Failed to parse time string '$timeStr' with any known format.");
       return null; // Return null if all parsing fails
     }

@@ -905,7 +905,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     return Container(
       height: 120,
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(kBorderRadius),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kBorderRadius),
         border: Border.all(color: kPrimaryColor.withOpacity(0.1)),
       ),
       child: Center(
@@ -925,7 +926,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     return Container(
       padding: EdgeInsets.symmetric(vertical: 25, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(kBorderRadius),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(kBorderRadius),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Center(

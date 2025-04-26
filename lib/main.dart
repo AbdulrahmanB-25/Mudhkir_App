@@ -21,13 +21,15 @@ import 'package:mudhkir_app/pages/Login_Page.dart';
 import 'package:mudhkir_app/pages/Main_Page.dart';
 import 'package:mudhkir_app/pages/Signup_Page.dart';
 import 'package:mudhkir_app/pages/Welcome_Page.dart';
-import 'package:mudhkir_app/pages/Medications_Schedule_Page.dart' as dose_schedule;
+import 'package:mudhkir_app/MedicationsSchedule_Utility/dose_schedule_UI.dart';
 import 'package:mudhkir_app/pages/ForgetPassword_Page.dart';
 import 'package:mudhkir_app/Widgets/AuthWrapper.dart';
 import 'package:mudhkir_app/Pages/MedicationDetail_Page.dart';
 
 // Import AlarmNotificationHelper
 import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
+
+import 'Pages/Medications_Schedule_Page.dart';
 
 // Global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -58,7 +60,7 @@ class MyApp extends StatelessWidget {
         '/signup': (context) => const Signup(),
         '/mainpage': (context) => const MainPage(),
         '/add_dose': (context) => const add_dose.AddDose(),
-        '/dose_schedule': (context) => const dose_schedule.DoseSchedule(),
+        '/dose_schedule': (context) => const DoseSchedule(),
         '/personal_data': (context) => const PersonalDataPage(),
         '/settings': (context) => const SettingsPage(),
         '/companions': (context) => const Companions(),
