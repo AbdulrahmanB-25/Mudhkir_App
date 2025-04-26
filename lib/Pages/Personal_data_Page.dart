@@ -13,8 +13,6 @@ const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
 
-//TODO : EMAIL MODIFCATION
-
 class PersonalDataPage extends StatefulWidget {
   const PersonalDataPage({super.key});
 
@@ -30,7 +28,10 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _newEmailController = TextEditingController();
+  final TextEditingController _currentPasswordController = TextEditingController();
   bool _isUpdating = false;
+  bool _verificationEmailSent = false;
 
   @override
   void initState() {
@@ -53,6 +54,8 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
   void dispose() {
     _animationController.dispose();
     _usernameController.dispose();
+    _newEmailController.dispose();
+    _currentPasswordController.dispose();
     super.dispose();
   }
 
@@ -192,6 +195,326 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
         );
       },
     );
+  }
+
+  // Show dialog to verify current user before changing email
+  Future<void> _showVerifyUserDialog() async {
+    _newEmailController.text = '';
+    _currentPasswordController.text = '';
+    _verificationEmailSent = false;
+
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return AlertDialog(
+                title: Text(
+                  'تغيير البريد الإلكتروني',
+                  style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
+                ),
+                content: SingleChildScrollView(
+                  child: ListBody(
+                    children: <Widget>[
+                      if (!_verificationEmailSent) ...[
+                        Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: TextFormField(
+                            controller: _newEmailController,
+                            decoration: InputDecoration(
+                              labelText: 'البريد الإلكتروني الجديد',
+                              labelStyle: TextStyle(color: kPrimaryColor),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: kPrimaryColor, width: 2),
+                              ),
+                              prefixIcon: Icon(Icons.email, color: kPrimaryColor),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: TextFormField(
+                            controller: _currentPasswordController,
+                            obscureText: true,
+                            decoration: InputDecoration(
+                              labelText: 'كلمة المرور الحالية',
+                              labelStyle: TextStyle(color: kPrimaryColor),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: kPrimaryColor, width: 2),
+                              ),
+                              prefixIcon: Icon(Icons.lock, color: kPrimaryColor),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                      ] else ...[
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'تم إرسال رابط التحقق إلى البريد الإلكتروني الجديد',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                                      textAlign: TextAlign.right,
+                                    ),
+                                  ),
+                                  Icon(Icons.check_circle, color: Colors.green),
+                                  SizedBox(width: 8),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'الرجاء اتباع التعليمات في البريد الإلكتروني ثم تسجيل الدخول مرة أخرى.',
+                                style: TextStyle(fontSize: 14, color: Colors.black87),
+                                textAlign: TextAlign.right,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    child: Text('إلغاء', style: TextStyle(color: Colors.grey.shade700)),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  _isUpdating
+                      ? Center(child: CircularProgressIndicator(color: kPrimaryColor))
+                      : _verificationEmailSent
+                      ? ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('تم'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  )
+                      : ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kPrimaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('إرسال رابط التحقق'),
+                    onPressed: () async {
+                      setState(() => _isUpdating = true);
+
+                      bool success = await _sendVerificationEmail();
+
+                      if (success && mounted) {
+                        setDialogState(() {
+                          _verificationEmailSent = true;
+                          _isUpdating = false;
+                        });
+                      } else if (mounted) {
+                        setState(() => _isUpdating = false);
+                      }
+                    },
+                  ),
+                ],
+              );
+            }
+        );
+      },
+    );
+  }
+
+  // Send verification email to the new email address
+  Future<bool> _sendVerificationEmail() async {
+    final newEmail = _newEmailController.text.trim();
+    final password = _currentPasswordController.text;
+
+    // Validate inputs
+    if (newEmail.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('يرجى إدخال البريد الإلكتروني الجديد وكلمة المرور')),
+            ],
+          ),
+          backgroundColor: kErrorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.all(10),
+        ),
+      );
+      return false;
+    }
+
+    // Validate email format
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(newEmail)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('يرجى إدخال بريد إلكتروني صحيح')),
+            ],
+          ),
+          backgroundColor: kErrorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.all(10),
+        ),
+      );
+      return false;
+    }
+
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+
+      // Reauthenticate user before changing email
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: password,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+
+      // Save the new email in a temporary location in Firestore
+      // We'll update the actual email in Firebase Auth after verification
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'pendingEmail': newEmail,
+        'lastUpdated': Timestamp.now(),
+      });
+
+      // Send verification email to the new address
+      // Using Firebase Auth Action Code Settings
+      ActionCodeSettings actionCodeSettings = ActionCodeSettings(
+        url: 'https://mudhkir-app.com/finishChangeEmail?email=${Uri.encodeComponent(newEmail)}',
+        handleCodeInApp: true,
+        androidPackageName: 'com.example.mudhkir_app',
+        androidInstallApp: true,
+        androidMinimumVersion: '12',
+      );
+
+      await FirebaseAuth.instance.sendSignInLinkToEmail(
+        email: newEmail,
+        actionCodeSettings: actionCodeSettings,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_outline_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'تم إرسال رابط التحقق إلى البريد الإلكتروني الجديد',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.all(10),
+        ),
+      );
+
+      return true;
+
+    } catch (e) {
+      String errorMessage = 'حدث خطأ أثناء إرسال رابط التحقق';
+
+      // Handle specific Firebase errors
+      if (e is FirebaseAuthException) {
+        switch (e.code) {
+          case 'wrong-password':
+            errorMessage = 'كلمة المرور غير صحيحة';
+            break;
+          case 'user-mismatch':
+            errorMessage = 'بيانات الاعتماد لا تتطابق مع المستخدم الحالي';
+            break;
+          case 'user-not-found':
+            errorMessage = 'لم يتم العثور على المستخدم';
+            break;
+          case 'invalid-email':
+            errorMessage = 'صيغة البريد الإلكتروني غير صحيحة';
+            break;
+          case 'email-already-in-use':
+            errorMessage = 'البريد الإلكتروني مستخدم بالفعل';
+            break;
+          case 'requires-recent-login':
+            errorMessage = 'يرجى إعادة تسجيل الدخول ثم المحاولة مرة أخرى';
+            // Handle this special case by signing out the user
+            await FirebaseAuth.instance.signOut();
+            if (mounted) {
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/login',
+                    (route) => false,
+              );
+            }
+            break;
+          default:
+            errorMessage = 'حدث خطأ: ${e.message}';
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text(errorMessage)),
+            ],
+          ),
+          backgroundColor: kErrorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.all(10),
+        ),
+      );
+      return false;
+    }
   }
 
   // Update profile information in Firestore
@@ -452,6 +775,18 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
 
                   const SizedBox(height: 15),
 
+                  // Change Email Button
+                  _buildActionButton(
+                    icon: Icons.email,
+                    label: "تغيير البريد الإلكتروني",
+                    color: kSecondaryColor,
+                    onPressed: () {
+                      _showVerifyUserDialog();
+                    },
+                  ),
+
+                  const SizedBox(height: 15),
+
                   // Change Password Button
                   _buildActionButton(
                     icon: Icons.lock_outline,
@@ -672,4 +1007,3 @@ class _PersonalDataPageState extends State<PersonalDataPage> with SingleTickerPr
     );
   }
 }
-
