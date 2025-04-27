@@ -23,70 +23,47 @@ import 'Add_Medicaiton/Add_Start_&_End_Date.dart';
 // --------------------
 class TimeUtils {
   static TimeOfDay? parseTime(String timeStr) {
-    // Enhanced parsing with better Arabic AM/PM handling
-
-    // First check for PM indicators and normalize
-    bool isPM = timeStr.contains('م') || 
-                timeStr.contains('مساءً') || 
-                timeStr.contains('مساء') ||
-                timeStr.toLowerCase().contains('pm');
-                
-    // Check for AM indicators
-    bool isAM = timeStr.contains('ص') || 
-                timeStr.contains('صباحاً') || 
-                timeStr.contains('صباحا') ||
-                timeStr.toLowerCase().contains('am');
-    
     // Try parsing with AM/PM format first
     try {
-      String normalizedTime = timeStr
-          .replaceAll('صباحاً', 'AM')
-          .replaceAll('صباحا', 'AM')
-          .replaceAll('ص', 'AM')
-          .replaceAll('مساءً', 'PM')
-          .replaceAll('مساء', 'PM')
-          .replaceAll('م', 'PM');
-      
       final DateFormat ampmFormat = DateFormat('h:mm a', 'en_US');
-      DateTime parsedDt = ampmFormat.parseStrict(normalizedTime);
+      DateTime parsedDt = ampmFormat.parseStrict(timeStr);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (_) {}
-    
-    // Direct parsing as fallback
+    // Try parsing with Arabic AM/PM markers
+    try {
+      String normalizedTime =
+      timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
+      final DateFormat arabicAmpmFormat = DateFormat('h:mm a', 'en_US');
+      DateTime parsedDt = arabicAmpmFormat.parseStrict(normalizedTime);
+      return TimeOfDay.fromDateTime(parsedDt);
+    } catch (_) {}
+    // Try parsing 24-hour format HH:MM
     try {
       final parts = timeStr.split(':');
       if (parts.length == 2) {
-        int hour = int.parse(parts[0].trim());
+        int hour = int.parse(parts[0]);
+        // Remove any non-digit characters from minutes (like AM/PM if accidentally included)
         int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-        
-        // Adjust hour correctly for PM/AM
-        if (isPM && hour < 12) hour += 12;
-        if (isAM && hour == 12) hour = 0;
-        
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
       }
     } catch (_) {}
-    
+    // Log failure if all parsing attempts fail
     print("Failed to parse time string: $timeStr");
     return null;
   }
 
   static String formatTimeOfDay(BuildContext context, TimeOfDay time) {
-    // Use proper time period based on the hour
-    final bool isPM = time.period == DayPeriod.pm;
-    
-    // Format hour correctly for 12-hour format
-    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+
+    final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod; // 0 hour is 12 AM
     final String minute = time.minute.toString().padLeft(2, '0');
-    
-    // Use the correct Arabic period indicator
-    final String period = isPM ? 'مساءً' : 'صباحاً';
-    
+    // Determine period based on TimeOfDay object
+    final String period = time.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
     return '$hour:$minute $period';
   }
 }
+
 
 // --------------------
 // AddDose Widget (Main State Holder)
@@ -893,4 +870,3 @@ class _AddDoseState extends State<AddDose> {
     );
   }
 }
-

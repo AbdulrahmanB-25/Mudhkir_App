@@ -18,7 +18,6 @@ class AddStartEndDatePage extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onBack;
   final VoidCallback? onClearEndDate;
-  final bool isEditMode;
 
   const AddStartEndDatePage({
     Key? key,
@@ -30,7 +29,6 @@ class AddStartEndDatePage extends StatelessWidget {
     required this.onSubmit,
     required this.onBack,
     this.onClearEndDate,
-    this.isEditMode = false,
   }) : super(key: key);
 
   @override
@@ -564,9 +562,9 @@ class AddStartEndDatePage extends StatelessWidget {
                           children: [
                             const Icon(Icons.check_circle, size: 24),
                             const SizedBox(width: 12),
-                            Text(
-                              isEditMode ? 'تعديل الدواء' : 'أضف الدواء',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            const Text(
+                              'إضافة الدواء إلى خزانتي',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -653,4 +651,3 @@ class AddStartEndDatePage extends StatelessWidget {
     return end.difference(start).inDays + 1; // Include the end day
   }
 }
-

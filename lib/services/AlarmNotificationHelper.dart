@@ -13,38 +13,16 @@ import 'notification_service.dart';
 class AlarmNotificationHelper {
   static final NotificationService _service = NotificationService();
   static FlutterLocalNotificationsPlugin get notificationsPlugin => _service.notificationsPlugin;
-  static bool _isInitialized = false;
 
-  static Future<void> initialize(BuildContext? context) async {
+  static Future<void> initialize(BuildContext context) async {
     tz_init.initializeTimeZones();
-
-    // Only proceed with context-dependent initialization if context is provided
-    if (context != null) {
-      await _initializeWithContext(context);
-    } else {
-      print("[AlarmNotificationHelper] Initialized timezone data. Will complete setup when context is available.");
-    }
-
-    // Channels setup doesn't require context
-    await ensureChannelsSetup();
-  }
-
-  // Method to complete initialization when context is available
-  static Future<void> completeInitialization(BuildContext context) async {
-    if (!_isInitialized) {
-      await _initializeWithContext(context);
-      print("[AlarmNotificationHelper] Initialization completed with context.");
-    }
-  }
-
-  // Private method to handle context-dependent initialization
-  static Future<void> _initializeWithContext(BuildContext context) async {
     await _service.initialize(
         context,
         _onNotificationResponse,
         notificationTapBackground
     );
-    _isInitialized = true;
+    // Ensure channels are set up during initial initialization as well
+    await ensureChannelsSetup();
   }
 
   static Future<void> ensureChannelsSetup() async {

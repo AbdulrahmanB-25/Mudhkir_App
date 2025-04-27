@@ -45,11 +45,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Complete notification initialization when context is available
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AlarmNotificationHelper.completeInitialization(context);
-    });
-
     return MaterialApp(
       title: 'Mudhkir App',
       debugShowCheckedModeBanner: false,
@@ -71,14 +66,16 @@ class MyApp extends StatelessWidget {
         '/companions': (context) => const Companions(),
         '/forget_password': (context) => const ForgetPassword(),
         '/welcome': (context) => const Welcome(),
-
+        
         '/companion_detail': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-          return CompanionDetailPage(
-            email: args['email'],
-            name: args['name'],
+           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            return CompanionDetailPage(
+             email: args['email'],
+             name: args['name'],
           );
-        },
+       },
+
+      
 
         '/medication_detail': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
@@ -195,10 +192,10 @@ void main() async {
     }
   }
 
-  // Initialize AlarmNotificationHelper without context
+  // Initialize AlarmNotificationHelper (if it needs initialization)
   try {
-    await AlarmNotificationHelper.initialize(null);  // Pass null instead of navigatorKey.currentContext!
-    print("[Notifications] AlarmNotificationHelper basic initialization complete.");
+    await AlarmNotificationHelper.initialize(navigatorKey.currentContext!);
+    print("[Notifications] AlarmNotificationHelper initialized.");
   } catch (e) {
     print("[Notifications] ERROR initializing AlarmNotificationHelper: $e");
   }

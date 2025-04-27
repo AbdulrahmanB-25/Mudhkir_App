@@ -14,39 +14,9 @@ class EditMedicationUtils {
   // -- Time Parsing & Formatting --
   static TimeOfDay? parseTime(String timeStr) {
     try {
-      // Enhanced normalization for Arabic AM/PM indicators
-      String normalizedTime = timeStr
-          .replaceAll('صباحاً', 'AM')
-          .replaceAll('صباحا', 'AM')
-          .replaceAll('ص', 'AM')
-          .replaceAll('مساءً', 'PM')
-          .replaceAll('مساء', 'PM')
-          .replaceAll('م', 'PM')
-          .trim();
-      
-      // Try to parse with normalized English AM/PM format
-      final f = DateFormat('h:mm a', 'en_US');
-      DateTime dt = f.parseStrict(normalizedTime);
-      return TimeOfDay(hour: dt.hour, minute: dt.minute);
-    } catch (_) {
-      // Try direct parsing as fallback
-      try {
-        final parts = timeStr.split(':');
-        if(parts.length >= 2) {
-          int hour = int.parse(parts[0]);
-          int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-          
-          // Check for AM/PM indicators
-          bool isPM = timeStr.contains('م') || timeStr.contains('مساء') || timeStr.toLowerCase().contains('pm');
-          bool isAM = timeStr.contains('ص') || timeStr.contains('صباح') || timeStr.toLowerCase().contains('am');
-          
-          if (isPM && hour < 12) hour += 12;
-          if (isAM && hour == 12) hour = 0;
-          
-          return TimeOfDay(hour: hour, minute: minute);
-        }
-      } catch (_) {}
-    }
+      final f = DateFormat('h:mm a', 'ar'); // changed locale here
+      return TimeOfDay.fromDateTime(f.parseStrict(timeStr));
+    } catch (_) {}
     return null;
   }
 
@@ -71,15 +41,22 @@ class EditMedicationUtils {
   }
 
   // -- ImgBB Upload --
-  static Future<String> uploadToImgBB(File file, String apiKey) async {
+  static Future<Map<String, String>> uploadToImgBB(File file, String apiKey) async {
     final b64 = base64Encode(await file.readAsBytes());
     final uri = Uri.parse('https://api.imgbb.com/1/upload?key=$apiKey');
     final resp = await http.post(uri, body: {'image': b64});
+    
     if (resp.statusCode != 200) {
-      throw Exception('ImgBB upload failed: ${resp.statusCode}');
+      print("ImgBB Upload Failed - Status: ${resp.statusCode}, Body: ${resp.body}");
+      throw Exception('ImgBB upload failed');
     }
-    final data = json.decode(resp.body)['data'];
-    return data['url'] as String;
+    
+    final jsonResponse = json.decode(resp.body);
+    final data = jsonResponse['data'];
+    final imageUrl = data['url'] as String;
+    final deleteUrl = data['delete_url'] as String;
+    final deleteHash = deleteUrl.substring(deleteUrl.lastIndexOf('/') + 1);
+    
+    return {'url': imageUrl, 'delete_hash': deleteHash};
   }
 }
-

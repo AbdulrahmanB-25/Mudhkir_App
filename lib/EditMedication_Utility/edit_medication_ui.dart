@@ -79,6 +79,11 @@ class EditMedicationDataProvider {
   String? _uploadedImageUrl;
   String? get uploadedImageUrl => _uploadedImageUrl;
 
+  String? _originalImageUrl;
+  String? get displayImageUrl => _capturedImage != null
+      ? null
+      : (_uploadedImageUrl ?? _originalImageUrl); // Ensure fallback to original image
+
   bool _isUploading = false;
   bool get isUploading => _isUploading;
 
@@ -300,8 +305,17 @@ class EditMedicationDataProvider {
 
     _capturedImage = File(result.path);
     _isUploading = true;
-    _uploadedImageUrl = await EditMedicationUtils.uploadToImgBB(File(result.path), imgbbApiKey);
-    _isUploading = false;
+
+    try {
+      final uploadResult = await EditMedicationUtils.uploadToImgBB(_capturedImage!, imgbbApiKey);
+      _uploadedImageUrl = uploadResult;
+      print("Image uploaded successfully: URL=$_uploadedImageUrl");
+    } catch (e) {
+      print("Error uploading image: $e");
+    } finally {
+      _isUploading = false;
+      _capturedImage = null; // Clear temporary file after upload attempt
+    }
   }
 
   // Commit the changes back to Firestore.
@@ -390,8 +404,11 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
             nameController: dp.nameController,
             medicineNamesFuture: Future.value(dp.medicineNames),
             capturedImage: dp.capturedImage,
-            uploadedImageUrl: dp.uploadedImageUrl,
-            onPickImage: () async { await dp.pickImage(); setState((){}); },
+            uploadedImageUrl: dp.displayImageUrl, // Use displayImageUrl instead of uploadedImageUrl
+            onPickImage: () async {
+              await dp.pickImage();
+              setState((){});
+            },
             onNext: () => dp.pageController.nextPage(
               duration: const Duration(milliseconds: 500),
               curve: Curves.easeInOutCubic,

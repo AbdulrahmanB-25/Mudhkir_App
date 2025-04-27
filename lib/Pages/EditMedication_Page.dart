@@ -22,41 +22,15 @@ class TimeUtils {
   static TimeOfDay? parseTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return null;
     try {
-      // Enhanced normalization for more robust AM/PM handling
-      String normalizedTime = timeStr
-          .replaceAll('صباحاً', 'AM')
-          .replaceAll('صباحا', 'AM')
-          .replaceAll('ص', 'AM')
-          .replaceAll('مساءً', 'PM')
-          .replaceAll('مساء', 'PM')
-          .replaceAll('م', 'PM')
-          .trim();
-
+      String normalizedTime = timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
       DateTime parsedDt = _parsingFormat.parseStrict(normalizedTime);
-      // Use the actual hour from DateTime to preserve AM/PM correctly
-      return TimeOfDay(hour: parsedDt.hour, minute: parsedDt.minute);
+      return TimeOfDay.fromDateTime(parsedDt);
     } catch (e) {
-      // Try direct numeric parsing as fallback
       try {
         final parts = timeStr.split(':');
         if(parts.length >= 2) {
           int hour = int.parse(parts[0]);
           int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-
-          // Check for period indicators in original string
-          bool isPM = timeStr.contains('م') ||
-              timeStr.contains('مساء') ||
-              timeStr.contains('PM') ||
-              timeStr.contains('pm');
-          bool isAM = timeStr.contains('ص') ||
-              timeStr.contains('صباح') ||
-              timeStr.contains('AM') ||
-              timeStr.contains('am');
-
-          // Adjust hour based on AM/PM indicator
-          if (isPM && hour < 12) hour += 12;
-          if (isAM && hour == 12) hour = 0;
-
           if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
             return TimeOfDay(hour: hour, minute: minute);
           }
@@ -68,7 +42,6 @@ class TimeUtils {
   }
 
   static String formatTimeOfDay(TimeOfDay t) {
-    // Use the actual hour value to ensure correct AM/PM
     final dt = DateTime(2000, 1, 1, t.hour, t.minute);
     return _timeFormat.format(dt);
   }
@@ -86,7 +59,7 @@ class EditMedicationUtils {
   }
 
   static Future<Map<String, String>> uploadToImgBB(File file, String apiKey) async {
-    if (apiKey.isEmpty || apiKey == '2b30d3479663bc30a70c916363b07c4a') {
+    if (apiKey.isEmpty || apiKey == 'YOUR_IMGBB_API_KEY') {
       throw Exception('ImgBB API Key is not configured.');
     }
     final b64 = base64Encode(await file.readAsBytes());
@@ -110,7 +83,7 @@ class EditMedicationUtils {
   }
 
   static Future<void> deleteImgBBImage(String deleteHash, String apiKey) async {
-    if (apiKey.isEmpty || apiKey == '2b30d3479663bc30a70c916363b07c4a' || deleteHash.isEmpty) {
+    if (apiKey.isEmpty || apiKey == 'YOUR_IMGBB_API_KEY' || deleteHash.isEmpty) {
       print("ImgBB delete skipped: API Key or delete hash missing.");
       return;
     }
@@ -360,8 +333,9 @@ class EditMedicationDataProvider {
       _uploadedImageUrl = uploadResult['url'];
       _imgbbDeleteHash = uploadResult['delete_hash'];
 
+      print("Image uploaded successfully: URL=$_uploadedImageUrl");
       _isUploading = false;
-      _capturedImage = null;
+      _capturedImage = null; // Clear temporary file after successful upload
 
     } catch (e) {
       print("Error picking/uploading image: $e");
@@ -638,17 +612,15 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
         controller: dp.pageController,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          // Name & Picture Page
           AddNamePicturePage(
             formKey: _page1FormKey,
             nameController: dp.nameController,
             medicineNamesFuture: Future.value(dp.medicineNames),
             capturedImage: dp.capturedImage,
-            uploadedImageUrl: dp.displayImageUrl,
-            isEditMode: true, // Set this to true for edit mode
+            uploadedImageUrl: dp.displayImageUrl, // Ensure displayImageUrl is used
             onPickImage: () async {
               await dp.pickImage();
-              if (mounted) setState(() {});
+              if (mounted) setState(() {}); // Ensure UI updates after image upload
             },
             onNext: _nextPage,
             onBack: () => Navigator.pop(context),
@@ -694,7 +666,6 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
             formKey: _page3FormKey,
             startDate: dp.startDate,
             endDate: dp.endDate,
-            isEditMode: true, // Add this parameter to use "تعديل الدواء" instead of "أضف الدواء"
             onSelectStartDate: () async {
               final d = await showDatePicker(
                 context: context,
@@ -722,4 +693,3 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
-
