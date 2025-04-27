@@ -534,11 +534,13 @@ class EditMedicationDataProvider {
 class EditMedicationScreen extends StatefulWidget {
   final String docId;
   final String? companionId;
+  final VoidCallback? onSave; // <-- added new parameter
 
   const EditMedicationScreen({
     Key? key,
     required this.docId,
     this.companionId,
+    this.onSave, // <-- added to constructor
   }) : super(key: key);
 
   @override
@@ -609,6 +611,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 
     try {
       await dp.updateMedication(widget.docId);
+      widget.onSave?.call(); // <-- call onSave callback after successful update
       if (mounted) {
         Navigator.of(context).pop();
         Navigator.of(context).pop(true);

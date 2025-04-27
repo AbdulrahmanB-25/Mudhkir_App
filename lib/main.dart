@@ -76,8 +76,6 @@ class MyApp extends StatelessWidget {
           );
         },
 
-
-
         '/medication_detail': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           String docId = '';
@@ -259,33 +257,78 @@ void main() async {
 
 Future<void> _requestEssentialPermissions() async {
   print("[Permissions] Checking/Requesting essential permissions...");
-  List<Permission> permissionsToRequest = [];
-
-  // Request Notification Permission (Android 13+ / iOS)
-  var notificationStatus = await Permission.notification.status;
-  if (notificationStatus.isDenied) {
-    permissionsToRequest.add(Permission.notification);
-  }
-
-  // Request Exact Alarm Permission (Android 12+) - Crucial for precise scheduling
+  
+  // For Android 13+ (API level 33+), explicitly request POST_NOTIFICATIONS permission
   if (Platform.isAndroid) {
-    var exactAlarmStatus = await Permission.scheduleExactAlarm.status;
-    if (exactAlarmStatus.isDenied) {
-      permissionsToRequest.add(Permission.scheduleExactAlarm);
+    var notificationStatus = await Permission.notification.status;
+    print("[Permissions] Notification permission status: $notificationStatus");
+    
+    if (notificationStatus.isDenied) {
+      print("[Permissions] Requesting notification permission");
+      final status = await Permission.notification.request();
+      print("[Permissions] Notification permission request result: $status");
     }
-  }
-
-  if (permissionsToRequest.isNotEmpty) {
-    print("[Permissions] Requesting: ${permissionsToRequest.map((p) => p.toString()).join(', ')}");
-    Map<Permission, PermissionStatus> statuses = await permissionsToRequest.request();
-    statuses.forEach((permission, status) {
-      print("[Permissions] Status for $permission: $status");
-      if (status.isPermanentlyDenied) {
-        print("[Permissions] $permission permanently denied. Guide user to settings.");
-        // openAppSettings();
-      }
+    
+    // Request schedule exact alarm permission (crucial for Android 12+)
+    var exactAlarmStatus = await Permission.scheduleExactAlarm.status;
+    print("[Permissions] Schedule exact alarm permission status: $exactAlarmStatus");
+    
+    if (exactAlarmStatus.isDenied) {
+      print("[Permissions] Requesting schedule exact alarm permission");
+      final status = await Permission.scheduleExactAlarm.request();
+      print("[Permissions] Schedule exact alarm permission request result: $status");
+    }
+    
+    // Add diagnostic function to check notification settings
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkNotificationPermissions();
     });
-  } else {
-    print("[Permissions] All checked essential permissions seem granted or not applicable.");
+  }
+  
+  print("[Permissions] Essential permissions setup completed");
+}
+
+// Add a diagnostic function to check notification permissions after startup
+Future<void> _checkNotificationPermissions() async {
+  await Future.delayed(Duration(seconds: 2)); // Wait for app to settle
+  
+  print("[Diagnostic] Checking all notification-related permissions and settings");
+  
+  try {
+    // Check permission_handler status
+    final notificationStatus = await Permission.notification.status;
+    print("[Diagnostic] Permission.notification.status: $notificationStatus");
+    
+    final alarmStatus = await Permission.scheduleExactAlarm.status;
+    print("[Diagnostic] Permission.scheduleExactAlarm.status: $alarmStatus");
+    
+    // Check Flutter Local Notifications Plugin status
+    final flutterNotificationsStatus = await AlarmNotificationHelper.checkForNotificationPermissions();
+    print("[Diagnostic] Flutter Local Notifications permission status: $flutterNotificationsStatus");
+    
+    // Check pending notifications
+    final pendingNotifications = await AlarmNotificationHelper.getPendingNotifications();
+    print("[Diagnostic] Number of pending notifications: ${pendingNotifications.length}");
+    
+    // Check notification channels (Android only)
+    if (Platform.isAndroid) {
+      try {
+        final plugin = AlarmNotificationHelper.notificationsPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        if (plugin != null) {
+          final channels = await plugin.getNotificationChannels();
+          print("[Diagnostic] Found ${channels?.length ?? 0} notification channels:");
+          channels?.forEach((channel) {
+            print("[Diagnostic] Channel: ${channel.id}, Name: ${channel.name}, Importance: ${channel.importance.index}");
+          });
+        }
+      } catch (e) {
+        print("[Diagnostic] Error checking notification channels: $e");
+      }
+    }
+    
+    print("[Diagnostic] Notification diagnostics completed");
+  } catch (e) {
+    print("[Diagnostic] Error during notification diagnostics: $e");
   }
 }

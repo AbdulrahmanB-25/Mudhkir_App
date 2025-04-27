@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_init;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../main.dart';
 
 // Import platform-specific service implementations
@@ -14,60 +15,74 @@ import 'companion_medication_tracker.dart';
 class AlarmNotificationHelper {
   static final NotificationService _service = NotificationService();
   static FlutterLocalNotificationsPlugin get notificationsPlugin => _service.notificationsPlugin;
+  static bool _isInitialized = false;
 
   static Future<void> initialize(BuildContext context) async {
+    print("[AlarmNotificationHelper] Starting initialization...");
     tz_init.initializeTimeZones();
+    print("[AlarmNotificationHelper] Time zones initialized");
+    
     await _service.initialize(
         context,
         _onNotificationResponse,
         notificationTapBackground
     );
+    print("[AlarmNotificationHelper] Service initialized");
+    
     // Ensure channels are set up during initial initialization as well
     await ensureChannelsSetup();
+    _isInitialized = true;
+    print("[AlarmNotificationHelper] Initialization complete");
   }
 
   static Future<void> ensureChannelsSetup() async {
+    print("[AlarmNotificationHelper] Setting up notification channels");
     // Call the platform-specific channel setup
     await _service.setupNotificationChannels();
+    print("[AlarmNotificationHelper] Notification channels setup complete");
   }
 
   static void _onNotificationResponse(NotificationResponse response) {
     final payload = response.payload ?? '';
     final id = response.id ?? 0;
 
+    print("[AlarmNotificationHelper] Notification response received: payload=$payload, id=$id, actionId=${response.actionId}");
+
     if (payload.isEmpty) {
+      print("[AlarmNotificationHelper] No payload found in notification response.");
       return;
     }
 
-    debugPrint("Notification response: payload=$payload, id=$id, actionId=${response.actionId}");
-
     if (payload.startsWith('companion_check_')) {
-      debugPrint("Processing companion check notification");
+      print("[AlarmNotificationHelper] Processing companion check notification with payload: $payload");
       CompanionMedicationTracker.processCompanionDoseCheck(payload);
       return;
     } else if (payload.startsWith('companion_missed_')) {
-      debugPrint("Navigating to companions page");
+      print("[AlarmNotificationHelper] Navigating to companions page due to missed dose notification.");
       _navigateToCompanionsPage();
       return;
     }
 
     // Handle medication notifications
     if (response.actionId == 'TAKE_ACTION') {
+      print("[AlarmNotificationHelper] Take action triggered for notification with payload: $payload");
       _navigateToMedicationDetail(payload, markAsTaken: true);
     } else if (response.actionId == 'SNOOZE_ACTION') {
+      print("[AlarmNotificationHelper] Snooze action triggered for notification with payload: $payload");
       _handleSnooze(id, payload);
     } else {
+      print("[AlarmNotificationHelper] Default action triggered for notification with payload: $payload");
       _navigateToMedicationDetail(payload);
     }
   }
 
   static Future<void> _navigateToCompanionsPage() async {
     if (navigatorKey.currentState == null) {
-      debugPrint("Navigator key is null, can't navigate to companions page");
+      print("[AlarmNotificationHelper] Navigator key is null, can't navigate to companions page");
       return;
     }
 
-    debugPrint("Navigating to companions page");
+    print("[AlarmNotificationHelper] Navigating to companions page");
     navigatorKey.currentState?.pushNamed('/companions');
   }
 
@@ -98,7 +113,7 @@ class AlarmNotificationHelper {
       );
 
     } catch (e, stackTrace) {
-      debugPrint("[AlarmHelper] Error navigating to medication detail: $e\n$stackTrace");
+      print("[AlarmNotificationHelper] Error navigating to medication detail: $e\n$stackTrace");
     }
   }
 
@@ -120,7 +135,7 @@ class AlarmNotificationHelper {
         repeatInterval: null,
       );
     } catch (e) {
-      debugPrint("[AlarmHelper] Error scheduling snoozed notification $newId: $e");
+      print("[AlarmNotificationHelper] Error scheduling snoozed notification $newId: $e");
     }
   }
 
@@ -134,17 +149,79 @@ class AlarmNotificationHelper {
     bool isCompanionCheck = false,
     RepeatInterval? repeatInterval,
   }) async {
-    debugPrint("Scheduling notification: id=$id, title=\"$title\", time=$scheduledTime, payload=$medicationId");
+    if (!_isInitialized) {
+      print("[AlarmNotificationHelper] WARNING: Trying to schedule notification before initialization!");
+    }
+    
+    print("[AlarmNotificationHelper] Scheduling notification:");
+    print("[AlarmNotificationHelper] - ID: $id");
+    print("[AlarmNotificationHelper] - Title: $title");
+    print("[AlarmNotificationHelper] - Body: $body");
+    print("[AlarmNotificationHelper] - Time: $scheduledTime");
+    print("[AlarmNotificationHelper] - Payload: $medicationId");
+    print("[AlarmNotificationHelper] - Current time: ${DateTime.now()}");
+    
+    // --- For close time notifications, show immediately ---
+    final now = DateTime.now();
+    final int secondsDifference = scheduledTime.difference(now).inSeconds;
+    
+    // Show immediately if within 20 seconds
+    if (secondsDifference < 20) {
+      print("[AlarmNotificationHelper] Notification time within $secondsDifference seconds, showing immediately");
+      
+      final String channelId = 'medication_alarms_v2';
+      final String channelName = 'Medication Alarms';
 
-    return _service.scheduleAlarmNotification(
-      id: id,
-      title: title,
-      body: body,
-      scheduledTime: scheduledTime,
-      medicationId: medicationId,
-      isSnoozed: isSnoozed,
-      repeatInterval: repeatInterval,
-    );
+      try {
+        await _service.notificationsPlugin.show(
+          id,
+          title,
+          body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              channelId,
+              channelName,
+              channelDescription: 'Critical medication reminders',
+              importance: Importance.max,
+              priority: Priority.high,
+              playSound: true,
+              enableVibration: true,
+              enableLights: true,
+              vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
+              category: AndroidNotificationCategory.alarm,
+              fullScreenIntent: true,
+              autoCancel: true,
+            ),
+          ),
+          payload: medicationId,
+        );
+        print("[AlarmNotificationHelper] Immediate notification sent successfully with ID: $id");
+      } catch (e) {
+        print("[AlarmNotificationHelper] ERROR showing immediate notification: $e");
+      }
+      return;
+    }
+
+    try {
+      // Ensure the time is in the future
+      if (scheduledTime.isBefore(DateTime.now())) {
+        print("[AlarmNotificationHelper] WARNING: Cannot schedule notification for past time ($scheduledTime)");
+        return;
+      }
+      
+      await _service.scheduleAlarmNotification(
+        id: id,
+        title: title,
+        body: body,
+        scheduledTime: scheduledTime,
+        medicationId: medicationId,
+        isSnoozed: isSnoozed,
+        repeatInterval: repeatInterval,
+      );
+      print("[AlarmNotificationHelper] Future notification scheduled with ID: $id");
+    } catch (e) {
+      print("[AlarmNotificationHelper] ERROR scheduling notification: $e");
+    }
   }
 
   static Future<void> scheduleDailyRepeatingNotification({
@@ -216,19 +293,28 @@ class AlarmNotificationHelper {
   }
 
   static Future<void> cancelNotification(int id) async {
-    return _service.cancelNotification(id);
+    print("[AlarmNotificationHelper] Cancelling notification with ID: $id");
+    await _service.cancelNotification(id);
   }
 
   static Future<void> cancelAllNotifications() async {
-    return _service.cancelAllNotifications();
+    print("[AlarmNotificationHelper] Cancelling all notifications");
+    await _service.cancelAllNotifications();
   }
 
   static Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    return _service.getPendingNotifications();
+    final list = await _service.getPendingNotifications();
+    print("[AlarmNotificationHelper] Retrieved ${list.length} pending notifications");
+    for (var req in list) {
+      print("[AlarmNotificationHelper] Pending: ID=${req.id}, Title='${req.title}', Payload=${req.payload}");
+    }
+    return list;
   }
 
   static Future<bool?> checkForNotificationPermissions() async {
-    return _service.checkNotificationPermissions();
+    final result = await _service.checkNotificationPermissions();
+    print("[AlarmNotificationHelper] Notification permission status: $result");
+    return result;
   }
 }
 
@@ -237,5 +323,5 @@ void notificationTapBackground(NotificationResponse response) {
   final String? payload = response.payload;
   final String? actionId = response.actionId;
   final int? id = response.id;
-  print("[Background] Notification tapped: id=$id, action=$actionId, payload=$payload");
+  print("[BackgroundHandler] Notification tapped: id=$id, action=$actionId, payload=$payload");
 }

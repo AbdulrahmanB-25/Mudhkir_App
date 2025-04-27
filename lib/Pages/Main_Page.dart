@@ -12,6 +12,7 @@ import 'dart:ui' as ui;
 import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
 import 'package:mudhkir_app/Widgets/bottom_navigation.dart';
 import 'package:mudhkir_app/Pages/MedicationDetail_Page.dart'; // Import for type safety if needed
+import 'package:mudhkir_app/services/companion_medication_tracker.dart';
 
 // Import SharedPreferences keys from main.dart (adjust path if needed)
 import '../main.dart';
@@ -132,6 +133,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     await _loadUserName();
     await _scheduleAllUserMedications(_currentUser!.uid);
+    // --- Fetch and schedule companion medications on every refresh ---
+    await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
     await _loadClosestMedDisplayData();
   }
 
@@ -158,6 +161,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     print("[Scheduling] Cancelled previous notifications.");
 
     List<Map<String, dynamic>> upcomingDoses = [];
+    int scheduledCount = 0; // Counter for scheduled notifications
 
     try {
       final medsSnapshot = await FirebaseFirestore.instance
@@ -166,6 +170,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           .collection('medicines')
           .get();
 
+      print("[Scheduling] Fetched ${medsSnapshot.docs.length} medication documents.");
+
       final tz.Location local = tz.local;
       final tz.TZDateTime now = tz.TZDateTime.now(local);
 
@@ -173,7 +179,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       final tz.TZDateTime todayStart = tz.TZDateTime(local, now.year, now.month, now.day);
       final tz.TZDateTime tomorrowStart = todayStart.add(const Duration(days: 1));
 
-      print("[Scheduling] Today's window: $todayStart to $tomorrowStart");
+      print("[Scheduling] Current time: $now (Local)");
+      print("[Scheduling] Today's window for next dose check: $todayStart to $tomorrowStart");
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
@@ -182,24 +189,37 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final startTimestamp = data['startDate'] as Timestamp?;
         final endTimestamp = data['endDate'] as Timestamp?;
 
-        if (startTimestamp == null) continue;
+        if (startTimestamp == null) {
+          print("[Scheduling] Skipping '$medName' ($docId): Missing start date.");
+          continue;
+        }
 
         final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), local);
         final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), local) : null;
 
+        // Basic filtering: Skip if medication hasn't started or has already ended
         final tz.TZDateTime todayFloor = tz.TZDateTime(local, now.year, now.month, now.day);
         final tz.TZDateTime startDayFloor = tz.TZDateTime(local, startDate.year, startDate.month, startDate.day);
-        if (todayFloor.isBefore(startDayFloor)) continue;
+        if (todayFloor.isBefore(startDayFloor)) {
+          print("[Scheduling] Skipping '$medName' ($docId): Start date ($startDate) is in the future.");
+          continue;
+        }
         if (endDate != null) {
           final tz.TZDateTime endDayFloor = tz.TZDateTime(local, endDate.year, endDate.month, endDate.day);
-          if (todayFloor.isAfter(endDayFloor)) continue;
+          if (todayFloor.isAfter(endDayFloor)) {
+            print("[Scheduling] Skipping '$medName' ($docId): End date ($endDate) has passed.");
+            continue;
+          }
         }
 
         final frequencyType = data['frequencyType'] as String? ?? 'يومي';
         final List<dynamic> timesRaw = data['times'] ?? [];
 
+        // Schedule doses within a reasonable future window (e.g., 48 hours)
         final Duration scheduleWindow = Duration(hours: 48);
         final tz.TZDateTime scheduleUntil = now.add(scheduleWindow);
+
+        print("[Scheduling] Calculating doses for '$medName' ($docId) until $scheduleUntil");
 
         List<tz.TZDateTime> nextDoseTimes = _calculateNextDoseTimes(
             now: now,
@@ -209,11 +229,13 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             frequencyType: frequencyType,
             timesRaw: timesRaw);
 
+        print("[Scheduling] Found ${nextDoseTimes.length} potential dose times for '$medName' ($docId) in the window.");
+
         for (tz.TZDateTime doseTime in nextDoseTimes) {
           // Ensure generateNotificationId is available in AlarmNotificationHelper
           final notificationId = AlarmNotificationHelper.generateNotificationId(docId, doseTime.toUtc());
 
-          print("[Scheduling] Scheduling '$medName' (ID: $notificationId) for $doseTime");
+          print("[Scheduling] Attempting to schedule '$medName' (ID: $notificationId) for $doseTime (Local)");
 
           try {
             // Ensure scheduleAlarmNotification is available and takes 'id'
@@ -221,9 +243,12 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               id: notificationId,
               title: "💊 تذكير بجرعة دواء",
               body: "حان الآن موعد تناول جرعة دواء '$medName'.",
-              scheduledTime: doseTime.toLocal(),
+              scheduledTime: doseTime.toLocal(), // Pass local time for scheduling
               medicationId: docId,
             );
+            scheduledCount++; // Increment counter
+            print("[Scheduling] Successfully scheduled/updated notification ID $notificationId for $docId at $doseTime");
+
             // Store all upcoming doses for processing, not just today's doses
             if (doseTime.isAfter(now)) {
               upcomingDoses.add({'docId': docId, 'time': doseTime});
@@ -233,6 +258,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           }
         }
       }
+
+      print("[Scheduling] Total notifications scheduled/updated in this run: $scheduledCount");
 
       final prefs = await SharedPreferences.getInstance();
 
@@ -272,6 +299,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
     print("[Scheduling] Scheduling process finished.");
   }
+
   List<tz.TZDateTime> _calculateNextDoseTimes({
     required tz.TZDateTime now,
     required tz.TZDateTime scheduleUntil,
@@ -591,43 +619,77 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("جدولة إشعار اختباري خلال 5 ثوان...", textAlign: TextAlign.right),
+        content: Text("جاري إرسال إشعار اختباري...", textAlign: TextAlign.right),
         backgroundColor: Colors.blueGrey,
         duration: Duration(seconds: 2),
       ),
     );
 
-    final medicationId = await _getRandomMedicationId();
-    if (medicationId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("لا يوجد دواء لربط الإشعار به.", textAlign: TextAlign.right),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    final now = DateTime.now();
-    final testTime = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 5));
-    final testId = AlarmNotificationHelper.generateNotificationId(medicationId, testTime.toUtc());
-
     try {
+      // Use a simple ID for test notifications
+      final testId = DateTime.now().millisecondsSinceEpoch % 100000;
+      final testPayload = DateTime.now().millisecondsSinceEpoch.toString();
+
+      debugPrint("Showing immediate test notification with ID: $testId");
+      
+      // Show immediate notification for testing
       await AlarmNotificationHelper.scheduleAlarmNotification(
         id: testId,
         title: "🔔 اختبار إشعار مُذكر",
         body: "هذا إشعار اختباري للتحقق من عمل النظام.",
-        scheduledTime: testTime.toLocal(), // Pass local time
-        medicationId: medicationId,
+        scheduledTime: DateTime.now(), // Send immediately
+        medicationId: testPayload,
       );
+      
+      debugPrint("Test notification request sent successfully");
     } catch (e) {
-      print("Error scheduling test notification: $e");
+      debugPrint("Error scheduling test notification: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("فشل جدولة الإشعار الاختباري: $e", textAlign: TextAlign.right),
+            content: Text("فشل إرسال الإشعار الاختباري: $e", textAlign: TextAlign.right),
+            backgroundColor: kErrorColor,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _triggerCompanionTestNotification(BuildContext context) async {
+    if (!mounted || !_isAuthenticated) {
+      _showLoginRequiredDialog("اختبار إشعار مرافق");
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("جاري إرسال إشعار اختباري للمرافق...", textAlign: TextAlign.right),
+        backgroundColor: Colors.blueGrey,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      final testId = DateTime.now().millisecondsSinceEpoch % 100000;
+      
+      debugPrint("Showing immediate companion test notification with ID: $testId");
+      
+      await AlarmNotificationHelper.scheduleAlarmNotification(
+        id: testId,
+        title: "💊 تذكير جرعة مرافق (اختبار)",
+        body: "هذا إشعار اختباري لجرعة مرافق.",
+        scheduledTime: DateTime.now(), // Show immediately
+        medicationId: "test_companion",
+        isCompanionCheck: true,
+      );
+      
+      debugPrint("Companion test notification sent successfully");
+    } catch (e) {
+      debugPrint("Error scheduling companion test notification: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("فشل إرسال إشعار المرافق: $e", textAlign: TextAlign.right),
             backgroundColor: kErrorColor,
           ),
         );
@@ -1046,6 +1108,23 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
+                  onPressed: () => _triggerCompanionTestNotification(context),
+                  icon: Icon(Icons.people, size: 18),
+                  label: Text("اختبار مرافق", style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
                   onPressed: () => _testMedicationDetailNavigation(context),
                   icon: Icon(Icons.medication_liquid_rounded, size: 18),
                   label: Text("تفاصيل تجريبية", style: TextStyle(fontSize: 13)),
@@ -1287,4 +1366,5 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
+
 

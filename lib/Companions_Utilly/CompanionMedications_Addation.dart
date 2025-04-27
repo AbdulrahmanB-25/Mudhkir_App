@@ -114,93 +114,10 @@ class _CompanionMedicationsPageState extends State<CompanionMedicationsPage> {
           .collection('medicines')
           .add(medicationData);
 
-      // Schedule companion dose checks
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        final medicationId = docRef.id;
-        final medicationName = _nameController.text.trim();
+      final medicationId = docRef.id;
+      final medicationName = _nameController.text.trim();
 
-        debugPrint("Setting up checks for companion medication: $medicationName (ID: $medicationId)");
-
-        // Schedule checks for each dose time
-        if (_frequencyType == 'يومي') {
-          for (TimeOfDay? time in _selectedTimes) {
-            if (time != null) {
-              final DateTime doseTime = _combineDateAndTime(_startDate!, time);
-
-              // Only schedule if the dose time is in the future
-              if (doseTime.isAfter(DateTime.now())) {
-                debugPrint("Scheduling check for daily dose at $doseTime");
-                await CompanionMedicationTracker.scheduleCompanionDoseCheck(
-                  companionId: widget.companionId,
-                  companionName: widget.companionName,
-                  medicationId: medicationId,
-                  medicationName: medicationName,
-                  scheduledTime: doseTime,
-                );
-              }
-
-              // Add schedule for tomorrow as well
-              final tomorrowDose = _combineDateAndTime(
-                  _startDate!.add(Duration(days: 1)),
-                  time
-              );
-
-              debugPrint("Scheduling check for tomorrow's dose at $tomorrowDose");
-              await CompanionMedicationTracker.scheduleCompanionDoseCheck(
-                companionId: widget.companionId,
-                companionName: widget.companionName,
-                medicationId: medicationId,
-                medicationName: medicationName,
-                scheduledTime: tomorrowDose,
-              );
-            }
-          }
-        } else {
-          // Weekly scheduling
-          for (var entry in _weeklyTimes.entries) {
-            if (entry.value != null) {
-              final int weekday = entry.key;
-              final TimeOfDay time = entry.value!;
-
-              // Find the next occurrence of this weekday
-              DateTime doseDate = _startDate!;
-              while (doseDate.weekday != weekday) {
-                doseDate = doseDate.add(Duration(days: 1));
-              }
-
-              final DateTime doseTime = _combineDateAndTime(doseDate, time);
-
-              // Only schedule if the dose time is in the future
-              if (doseTime.isAfter(DateTime.now())) {
-                debugPrint("Scheduling check for weekly dose on ${_getDayName(weekday)} at $doseTime");
-                await CompanionMedicationTracker.scheduleCompanionDoseCheck(
-                  companionId: widget.companionId,
-                  companionName: widget.companionName,
-                  medicationId: medicationId,
-                  medicationName: medicationName,
-                  scheduledTime: doseTime,
-                );
-              }
-
-              // Also schedule for next week
-              final nextWeekDose = _combineDateAndTime(
-                  doseDate.add(Duration(days: 7)),
-                  time
-              );
-
-              debugPrint("Scheduling check for next week's dose at $nextWeekDose");
-              await CompanionMedicationTracker.scheduleCompanionDoseCheck(
-                companionId: widget.companionId,
-                companionName: widget.companionName,
-                medicationId: medicationId,
-                medicationName: medicationName,
-                scheduledTime: nextWeekDose,
-              );
-            }
-          }
-        }
-      }
+      debugPrint("Medication added successfully: $medicationName (ID: $medicationId)");
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -387,4 +304,3 @@ class _CompanionMedicationsPageState extends State<CompanionMedicationsPage> {
     );
   }
 }
-

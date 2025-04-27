@@ -24,25 +24,6 @@
     <application
         android:label="Mudhkir"
         android:icon="@mipmap/ic_launcher">
-        <!-- AlarmManager background service -->
-        <service
-            android:name="dev.fluttercommunity.plus.androidalarmmanager.AlarmService"
-            android:permission="android.permission.BIND_JOB_SERVICE"
-            android:exported="false"/>
-
-        <!-- Fires when an alarm goes off -->
-        <receiver
-            android:name="dev.fluttercommunity.plus.androidalarmmanager.AlarmBroadcastReceiver"
-            android:exported="false"/>
-
-        <!-- Enables rescheduling on reboot -->
-        <receiver
-            android:name="dev.fluttercommunity.plus.androidalarmmanager.RebootBroadcastReceiver"
-            android:enabled="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-            </intent-filter>
-        </receiver>
 
         <!-- Main Activity -->
         <receiver
@@ -89,11 +70,6 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-
-        <!-- Local Notifications -->
-        <receiver
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
-            android:exported="false" />
 
     </application>
 
