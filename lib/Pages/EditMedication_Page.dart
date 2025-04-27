@@ -119,6 +119,7 @@ class EditMedicationDataProvider {
   final TextEditingController dosageController;
   final PageController pageController = PageController();
   final String imgbbApiKey;
+  final String? companionId;
 
   bool _isLoading = true;
   File? _capturedImage;
@@ -166,6 +167,7 @@ class EditMedicationDataProvider {
     required this.nameController,
     required this.dosageController,
     required this.imgbbApiKey,
+    this.companionId,
   });
 
   Future<void> init(String docId) async {
@@ -201,7 +203,13 @@ class EditMedicationDataProvider {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
 
-    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('medicines').doc(docId);
+    final ownerId = companionId ?? user.uid;
+
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(ownerId)
+        .collection('medicines')
+        .doc(docId);
 
     try {
       final doc = await docRef.get();
@@ -348,7 +356,7 @@ class EditMedicationDataProvider {
 
       print("Image uploaded successfully: URL=$_uploadedImageUrl");
       _isUploading = false;
-      _capturedImage = null; // Clear temporary file after successful upload
+      _capturedImage = null;
 
     } catch (e) {
       print("Error picking/uploading image: $e");
@@ -360,6 +368,8 @@ class EditMedicationDataProvider {
   Future<void> updateMedication(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
+
+    final ownerId = companionId ?? user.uid;
 
     if (nameController.text.trim().isEmpty) throw Exception('Medication name cannot be empty.');
     if (dosageController.text.trim().isEmpty) throw Exception('Dosage value cannot be empty.');
@@ -413,7 +423,12 @@ class EditMedicationDataProvider {
     print("Updating Firestore document $docId with data: $updatedData");
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('medicines').doc(docId).update(updatedData);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(ownerId)
+          .collection('medicines')
+          .doc(docId)
+          .update(updatedData);
       print("Firestore update successful.");
     } catch (e, stackTrace) {
       print("Error updating Firestore: $e");
@@ -518,7 +533,14 @@ class EditMedicationDataProvider {
 
 class EditMedicationScreen extends StatefulWidget {
   final String docId;
-  const EditMedicationScreen({Key? key, required this.docId}) : super(key: key);
+  final String? companionId;
+
+  const EditMedicationScreen({
+    Key? key,
+    required this.docId,
+    this.companionId,
+  }) : super(key: key);
+
   @override
   _EditMedicationScreenState createState() => _EditMedicationScreenState();
 }
@@ -535,7 +557,8 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     dp = EditMedicationDataProvider(
       nameController: TextEditingController(),
       dosageController: TextEditingController(),
-      imgbbApiKey: '2b30d3479663bc30a70c916363b07c4a', // Replace with your actual key
+      imgbbApiKey: '2b30d3479663bc30a70c916363b07c4a',
+      companionId: widget.companionId,
     );
     _initializeData();
   }
@@ -630,10 +653,10 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
             nameController: dp.nameController,
             medicineNamesFuture: Future.value(dp.medicineNames),
             capturedImage: dp.capturedImage,
-            uploadedImageUrl: dp.displayImageUrl, // Ensure displayImageUrl is used
+            uploadedImageUrl: dp.displayImageUrl,
             onPickImage: () async {
               await dp.pickImage();
-              if (mounted) setState(() {}); // Ensure UI updates after image upload
+              if (mounted) setState(() {});
             },
             onNext: _nextPage,
             onBack: () => Navigator.pop(context),
@@ -706,4 +729,3 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
-

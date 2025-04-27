@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:mudhkir_app/Pages/CompanionDetailPage.dart';
+import 'package:mudhkir_app/Pages/Companion_Details_Page.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your page/widget files
 import 'package:mudhkir_app/Pages/SettingsPage.dart';
-import 'package:mudhkir_app/Pages/companions.dart';
+import 'package:mudhkir_app/Pages/Companions_Main_Page.dart';
 import 'package:mudhkir_app/Pages/Personal_data_Page.dart';
 import 'package:mudhkir_app/pages/Add_Medication_Page.dart' as add_dose;
 import 'package:mudhkir_app/pages/Login_Page.dart';
@@ -28,6 +28,7 @@ import 'package:mudhkir_app/Pages/MedicationDetail_Page.dart';
 
 // Import AlarmNotificationHelper
 import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
+import 'package:mudhkir_app/services/companion_medication_tracker.dart';
 
 import 'Pages/Medications_Schedule_Page.dart';
 
@@ -66,16 +67,16 @@ class MyApp extends StatelessWidget {
         '/companions': (context) => const Companions(),
         '/forget_password': (context) => const ForgetPassword(),
         '/welcome': (context) => const Welcome(),
-        
-        '/companion_detail': (context) {
-           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-            return CompanionDetailPage(
-             email: args['email'],
-             name: args['name'],
-          );
-       },
 
-      
+        '/companion_detail': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return CompanionDetailPage(
+            email: args['email'],
+            name: args['name'],
+          );
+        },
+
+
 
         '/medication_detail': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
@@ -125,14 +126,63 @@ Future<void> _handleNotificationPayload(String? medId) async {
     await prefs.setString('last_tapped_payload', medId);
     await prefs.setString('last_tapped_time', now);
 
+    // Handle companion check notifications
+    if (medId.startsWith('companion_check_')) {
+      print("Processing companion check notification: $medId");
+      await CompanionMedicationTracker.processCompanionDoseCheck(medId);
+      return;
+    } else if (medId.startsWith('companion_missed_')) {
+      print("Navigating to companions page from missed dose notification");
+      navigatorKey.currentState?.pushNamed('/companions');
+      return;
+    }
+
     navigatorKey.currentState?.pushNamed('/medication_detail', arguments: {'docId': medId, 'fromNotification': true});
   }
+}
+
+// Add this method to periodically check for missed companion doses
+Future<void> _setupPeriodicCompanionChecks() async {
+  if (Platform.isAndroid) {
+    try {
+      const int checkId = 11223344;
+
+      final bool success = await AndroidAlarmManager.periodic(
+        const Duration(hours: 1),
+        checkId,
+        _runCompanionChecks,
+        exact: false,
+        wakeup: false,
+        rescheduleOnReboot: true,
+      );
+
+      print("Scheduled periodic companion checks every hour: $success");
+    } catch (e) {
+      print("Failed to schedule periodic companion checks: $e");
+      // The app will still work without the background checks
+      // Users will need to manually open the app to check companion medications
+    }
+  }
+}
+
+@pragma('vm:entry-point')
+void _runCompanionChecks() async {
+  print("Running periodic companion checks");
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await CompanionMedicationTracker.runPendingChecks();
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await AndroidAlarmManager.initialize();
+  try {
+    await AndroidAlarmManager.initialize();
+    print("[AlarmManager] Initialized successfully");
+  } catch (e) {
+    print("[AlarmManager] Failed to initialize: $e");
+    // Continue without background services
+  }
 
   // Request notification permissions at the very start
   await _requestEssentialPermissions();
@@ -199,6 +249,9 @@ void main() async {
   } catch (e) {
     print("[Notifications] ERROR initializing AlarmNotificationHelper: $e");
   }
+
+  // Setup periodic companion checks
+  await _setupPeriodicCompanionChecks();
 
   print("[Startup] Running the app...");
   runApp(const MyApp());

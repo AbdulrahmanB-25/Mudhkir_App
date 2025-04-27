@@ -9,6 +9,7 @@ import '../main.dart';
 
 // Import platform-specific service implementations
 import 'notification_service.dart';
+import 'companion_medication_tracker.dart';
 
 class AlarmNotificationHelper {
   static final NotificationService _service = NotificationService();
@@ -38,6 +39,19 @@ class AlarmNotificationHelper {
       return;
     }
 
+    debugPrint("Notification response: payload=$payload, id=$id, actionId=${response.actionId}");
+
+    if (payload.startsWith('companion_check_')) {
+      debugPrint("Processing companion check notification");
+      CompanionMedicationTracker.processCompanionDoseCheck(payload);
+      return;
+    } else if (payload.startsWith('companion_missed_')) {
+      debugPrint("Navigating to companions page");
+      _navigateToCompanionsPage();
+      return;
+    }
+
+    // Handle medication notifications
     if (response.actionId == 'TAKE_ACTION') {
       _navigateToMedicationDetail(payload, markAsTaken: true);
     } else if (response.actionId == 'SNOOZE_ACTION') {
@@ -45,6 +59,16 @@ class AlarmNotificationHelper {
     } else {
       _navigateToMedicationDetail(payload);
     }
+  }
+
+  static Future<void> _navigateToCompanionsPage() async {
+    if (navigatorKey.currentState == null) {
+      debugPrint("Navigator key is null, can't navigate to companions page");
+      return;
+    }
+
+    debugPrint("Navigating to companions page");
+    navigatorKey.currentState?.pushNamed('/companions');
   }
 
   static Future<void> _navigateToMedicationDetail(String medicationId, {bool markAsTaken = false}) async {
@@ -107,8 +131,11 @@ class AlarmNotificationHelper {
     required DateTime scheduledTime,
     required String medicationId,
     bool isSnoozed = false,
+    bool isCompanionCheck = false,
     RepeatInterval? repeatInterval,
   }) async {
+    debugPrint("Scheduling notification: id=$id, title=\"$title\", time=$scheduledTime, payload=$medicationId");
+
     return _service.scheduleAlarmNotification(
       id: id,
       title: title,
