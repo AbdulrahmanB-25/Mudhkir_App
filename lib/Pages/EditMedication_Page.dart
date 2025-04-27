@@ -22,7 +22,13 @@ class TimeUtils {
   static TimeOfDay? parseTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return null;
     try {
-      String normalizedTime = timeStr.replaceAll('صباحاً', 'AM').replaceAll('مساءً', 'PM').trim();
+      // Normalize Arabic AM/PM to English for parsing
+      String normalizedTime = timeStr
+          .replaceAll('صباحاً', 'AM')
+          .replaceAll('مساءً', 'PM')
+          .replaceAll('ص', 'AM')
+          .replaceAll('م', 'PM')
+          .trim();
       DateTime parsedDt = _parsingFormat.parseStrict(normalizedTime);
       return TimeOfDay.fromDateTime(parsedDt);
     } catch (e) {
@@ -43,7 +49,14 @@ class TimeUtils {
 
   static String formatTimeOfDay(TimeOfDay t) {
     final dt = DateTime(2000, 1, 1, t.hour, t.minute);
-    return _timeFormat.format(dt);
+    // Always output Arabic AM/PM for DB
+    String formatted = _timeFormat.format(dt);
+    formatted = formatted
+        .replaceAll('AM', 'صباحاً')
+        .replaceAll('PM', 'مساءً')
+        .replaceAll('ص', 'صباحاً')
+        .replaceAll('م', 'مساءً');
+    return formatted;
   }
 }
 
@@ -693,3 +706,4 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
+

@@ -1134,11 +1134,7 @@ class DoseTile extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(kBorderRadius),
         child: InkWell(
-          onTap: () {
-            if (docId.isNotEmpty) {
-              Navigator.pushNamed(context, '/medication_detail', arguments: {'docId': docId});
-            }
-          },
+          // Remove tap handler to disable navigation
           splashColor: kPrimaryColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(kBorderRadius),
           child: Padding(

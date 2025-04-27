@@ -26,15 +26,28 @@ const double kSpacing = 18.0;
 class EditMedicationUtils {
   static TimeOfDay? parseTime(String timeStr) {
     try {
-      final f = DateFormat('h:mm a', 'ar'); // changed locale here
-      return TimeOfDay.fromDateTime(f.parseStrict(timeStr));
+      // Normalize Arabic AM/PM to English for parsing
+      String normalized = timeStr
+          .replaceAll('صباحاً', 'AM')
+          .replaceAll('مساءً', 'PM')
+          .replaceAll('ص', 'AM')
+          .replaceAll('م', 'PM')
+          .trim();
+      final f = DateFormat('h:mm a', 'en_US');
+      return TimeOfDay.fromDateTime(f.parseStrict(normalized));
     } catch (_) {}
     return null;
   }
 
   static String formatTimeOfDay(TimeOfDay t) {
     final dt = DateTime(0, 0, 0, t.hour, t.minute);
-    return DateFormat.jm('ar').format(dt);
+    String formatted = DateFormat('h:mm a', 'ar').format(dt);
+    formatted = formatted
+        .replaceAll('AM', 'صباحاً')
+        .replaceAll('PM', 'مساءً')
+        .replaceAll('ص', 'صباحاً')
+        .replaceAll('م', 'مساءً');
+    return formatted;
   }
 
   static int calculateDays(DateTime start, DateTime end) => end.difference(start).inDays + 1;
