@@ -611,131 +611,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
   }
 
-  Future<void> _triggerTestNotification(BuildContext context) async {
-    if (!mounted || !_isAuthenticated) {
-      _showLoginRequiredDialog("اختبار الإشعارات");
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("جاري إرسال إشعار اختباري...", textAlign: TextAlign.right),
-        backgroundColor: Colors.blueGrey,
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    try {
-      // Use a simple ID for test notifications
-      final testId = DateTime.now().millisecondsSinceEpoch % 100000;
-      final testPayload = DateTime.now().millisecondsSinceEpoch.toString();
-
-      debugPrint("Showing immediate test notification with ID: $testId");
-      
-      // Show immediate notification for testing
-      await AlarmNotificationHelper.scheduleAlarmNotification(
-        id: testId,
-        title: "🔔 اختبار إشعار مُذكر",
-        body: "هذا إشعار اختباري للتحقق من عمل النظام.",
-        scheduledTime: DateTime.now(), // Send immediately
-        medicationId: testPayload,
-      );
-      
-      debugPrint("Test notification request sent successfully");
-    } catch (e) {
-      debugPrint("Error scheduling test notification: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("فشل إرسال الإشعار الاختباري: $e", textAlign: TextAlign.right),
-            backgroundColor: kErrorColor,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _triggerCompanionTestNotification(BuildContext context) async {
-    if (!mounted || !_isAuthenticated) {
-      _showLoginRequiredDialog("اختبار إشعار مرافق");
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("جاري إرسال إشعار اختباري للمرافق...", textAlign: TextAlign.right),
-        backgroundColor: Colors.blueGrey,
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    try {
-      final testId = DateTime.now().millisecondsSinceEpoch % 100000;
-      
-      debugPrint("Showing immediate companion test notification with ID: $testId");
-      
-      await AlarmNotificationHelper.scheduleAlarmNotification(
-        id: testId,
-        title: "💊 تذكير جرعة مرافق (اختبار)",
-        body: "هذا إشعار اختباري لجرعة مرافق.",
-        scheduledTime: DateTime.now(), // Show immediately
-        medicationId: "test_companion",
-        isCompanionCheck: true,
-      );
-      
-      debugPrint("Companion test notification sent successfully");
-    } catch (e) {
-      debugPrint("Error scheduling companion test notification: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("فشل إرسال إشعار المرافق: $e", textAlign: TextAlign.right),
-            backgroundColor: kErrorColor,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _testMedicationDetailNavigation(BuildContext context) async {
-    if (!mounted || !_isAuthenticated) {
-      _showLoginRequiredDialog("اختبار تفاصيل الدواء");
-      return;
-    }
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(child: CircularProgressIndicator(color: kPrimaryColor)),
-    );
-
-    try {
-      final medicationId = await _getRandomMedicationId();
-      Navigator.pop(context);
-
-      if (medicationId != null) {
-        Navigator.pushNamed(
-          context,
-          '/medication_detail',
-          arguments: {'docId': medicationId},
-        );
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("لم يتم العثور على دواء لاختبار التفاصيل.", textAlign: TextAlign.right), backgroundColor: Colors.orange),
-          );
-        }
-      }
-    } catch (e) {
-      Navigator.pop(context);
-      print("Error testing medication detail navigation: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("حدث خطأ أثناء الاختبار.", textAlign: TextAlign.right), backgroundColor: kErrorColor),
-        );
-      }
-    }
-  }
-
   void _onItemTapped(int index) {
     if (_selectedIndex == index && index == 0) {
       if (_isAuthenticated && _currentUser != null && !_isLoadingMed) {
@@ -829,24 +704,211 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                      // --- Updated User Name Section ---
+                      Container(
+                        width: double.infinity,
+                        height: 130,
+                        child: Stack(
                           children: [
-                            Text(
-                              _isAuthenticated
-                                  ? "$greeting، ${_userName.isNotEmpty ? _userName : '...'}"
-                                  : "$greeting، زائر",
-                              style: TextStyle(
-                                fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white,
-                                shadows: [ Shadow(offset: Offset(0, 1), blurRadius: 2.0, color: Colors.black.withOpacity(0.3)) ],
+                            // Background container with improved styling and login-like gradient
+                            Container(
+                              width: double.infinity,
+                              height: 170,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.blue.shade50, 
+                                    Colors.white.withOpacity(0.8),
+                                    Colors.blue.shade100,
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                                borderRadius: BorderRadius.only(
+                                  bottomLeft: Radius.circular(40),
+                                  bottomRight: Radius.circular(40),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: kPrimaryColor.withOpacity(0.3),
+                                    blurRadius: 16,
+                                    offset: Offset(0, 8),
+                                    spreadRadius: 2,
+                                  ),
+                                ],
                               ),
-                              textAlign: TextAlign.right,
+                              child: Stack(
+                                children: [
+                                  // Decorative circles pattern
+                                  Positioned(
+                                    top: 15,
+                                    left: 25,
+                                    child: Opacity(
+                                      opacity: 0.1,
+                                      child: Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.blue.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 20,
+                                    left: 60,
+                                    child: Opacity(
+                                      opacity: 0.1,
+                                      child: Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.blue.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            // Profile section with improved layout
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Welcome text and name
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Greeting with subtle animation
+                                        TweenAnimationBuilder(
+                                          tween: Tween<double>(begin: 0, end: 1),
+                                          duration: Duration(milliseconds: 800),
+                                          builder: (context, value, child) {
+                                            return Opacity(
+                                              opacity: value,
+                                              child: Transform.translate(
+                                                offset: Offset(0, 20 * (1 - value)),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: Text(
+                                            _isAuthenticated ? "$greeting،" : "$greeting، زائر",
+                                            style: TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.blue.shade800,
+                                              shadows: [
+                                                Shadow(
+                                                  offset: Offset(0, 1),
+                                                  blurRadius: 2.0,
+                                                  color: Colors.black.withOpacity(0.1),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        
+                                        // Username with animated transition
+                                        TweenAnimationBuilder(
+                                          tween: Tween<double>(begin: 0, end: 1),
+                                          duration: Duration(milliseconds: 800),
+                                          curve: Curves.easeOutCubic,
+                                          builder: (context, value, child) {
+                                            return Opacity(
+                                              opacity: value,
+                                              child: Transform.translate(
+                                                offset: Offset(0, 15 * (1 - value)),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: AnimatedSwitcher(
+                                            duration: Duration(milliseconds: 400),
+                                            transitionBuilder: (Widget child, Animation<double> animation) {
+                                              return FadeTransition(opacity: animation, child: child);
+                                            },
+                                            child: Text(
+                                              _isAuthenticated
+                                                  ? (_userName.isNotEmpty ? _userName : '...')
+                                                  : "زائر",
+                                              key: ValueKey(_userName),
+                                              style: TextStyle(
+                                                fontSize: 30,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue.shade900,
+                                                height: 1.2,
+                                                shadows: [
+                                                  Shadow(
+                                                    offset: Offset(0, 1),
+                                                    blurRadius: 2.0,
+                                                    color: Colors.black.withOpacity(0.15),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        
+                                        // Online status indicator removed
+                                      ],
+                                    ),
+                                  ),
+                                  
+                                  // Enhanced Avatar/Profile Image
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 10,
+                                          spreadRadius: 1,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 40,
+                                      backgroundColor: Colors.white,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.blue.shade700, 
+                                              Colors.blue.shade900
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        margin: EdgeInsets.all(3),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.person_rounded,
+                                            color: Colors.white,
+                                            size: 50,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
                       ),
+                      // --- End Updated User Name Section ---
+                      
                       Container(
                         width: double.infinity,
                         constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height * 0.7),
@@ -863,8 +925,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                             SizedBox(height: 25),
                             _buildActionCardsSection(),
                             SizedBox(height: 30),
-                            if (_isAuthenticated && true) // Replace 'true' with kDebugMode or env check
-                              _buildDevelopmentToolsSection(),
                             SizedBox(height: 40),
                           ],
                         ),
@@ -1066,79 +1126,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           },
         ),
       ],
-    );
-  }
-
-  Widget _buildDevelopmentToolsSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(top: 10),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(kBorderRadius),
-        border: Border.all(color: Colors.grey.shade300, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("أدوات المطور (للاختبار)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
-              SizedBox(width: 8),
-              Icon(Icons.developer_mode, size: 20, color: Colors.grey.shade800),
-            ],
-          ),
-          SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _triggerTestNotification(context),
-                  icon: Icon(Icons.notifications_active_outlined, size: 18),
-                  label: Text("اختبار إشعار", style: TextStyle(fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal.shade600, foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _triggerCompanionTestNotification(context),
-                  icon: Icon(Icons.people, size: 18),
-                  label: Text("اختبار مرافق", style: TextStyle(fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _testMedicationDetailNavigation(context),
-                  icon: Icon(Icons.medication_liquid_rounded, size: 18),
-                  label: Text("تفاصيل تجريبية", style: TextStyle(fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple.shade600, foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -1366,5 +1353,4 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
-
 

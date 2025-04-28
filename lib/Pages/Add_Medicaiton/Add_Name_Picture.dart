@@ -549,255 +549,221 @@ class _AddNamePicturePageState extends State<AddNamePicturePage> {
           color: kBackgroundColor,
         ),
         child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned(
-                top: 15,
-                left: 10,
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(30),
-                  child: InkWell(
-                    onTap: widget.onBack,
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: Text(
+                      "إضافة دواء جديد",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.07,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
-                      child: const Icon(Icons.arrow_back, color: kPrimaryColor, size: 28),
                     ),
                   ),
-                ),
-              ),
+                  const SizedBox(height: 10),
 
-              Padding(
-                padding: EdgeInsets.only(
-                  left: horizontalPadding,
-                  right: horizontalPadding,
-                  top: verticalPadding + 35,
-                  bottom: verticalPadding,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      ShaderMask(
-                        shaderCallback: (bounds) => LinearGradient(
-                          colors: [kPrimaryColor, Color(0xFF4E7BFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ).createShader(bounds),
-                        child: Text(
-                          "إضافة دواء جديد",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: screenWidth * 0.07,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: Text(
+                      "أدخل اسم الدواء والتقط صورة له",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        color: Colors.grey.shade700,
                       ),
-                      const SizedBox(height: 10),
+                    ),
+                  ),
 
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                  const SizedBox(height: 25.0),
+
+                  _buildImagePicker(context, screenWidth),
+
+                  const SizedBox(height: 25.0),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: kCardColor,
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
-                        child: Text(
-                          "أدخل اسم الدواء والتقط صورة له",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.normal,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 25.0),
-
-                      _buildImagePicker(context, screenWidth),
-
-                      const SizedBox(height: 25.0),
-
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: kCardColor,
-                          borderRadius: BorderRadius.circular(kBorderRadius),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.grey.shade100),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      ],
+                      border: Border.all(color: Colors.grey.shade100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Icon(Icons.medication, color: kPrimaryColor),
-                                const SizedBox(width: 10),
-                                Text(
-                                  "اسم الدواء",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade800,
+                            Icon(Icons.medication, color: kPrimaryColor),
+                            const SizedBox(width: 10),
+                            Text(
+                              "اسم الدواء",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 24),
+
+                        FutureBuilder<List<String>>(
+                          future: widget.medicineNamesFuture,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        color: kPrimaryColor,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        "جاري تحميل قائمة الأدوية...",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-
-                            const Divider(height: 24),
-
-                            FutureBuilder<List<String>>(
-                              future: widget.medicineNamesFuture,
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 20.0),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const CircularProgressIndicator(
-                                            strokeWidth: 3,
-                                            color: kPrimaryColor,
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            "جاري تحميل قائمة الأدوية...",
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                          ),
-                                        ],
+                              );
+                            } else if (snapshot.hasError) {
+                              return Container(
+                                padding: const EdgeInsets.all(16.0),
+                                decoration: BoxDecoration(
+                                  color: kErrorColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(kBorderRadius),
+                                  border: Border.all(color: kErrorColor.withOpacity(0.3)),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.error_outline, color: kErrorColor, size: 36),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'خطأ في تحميل أسماء الأدوية.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color: const Color(0xFFD32F2F), // Dark red color instead of shade900
+                                          fontWeight: FontWeight.w500
                                       ),
                                     ),
-                                  );
-                                } else if (snapshot.hasError) {
-                                  return Container(
-                                    padding: const EdgeInsets.all(16.0),
-                                    decoration: BoxDecoration(
-                                      color: kErrorColor.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(kBorderRadius),
-                                      border: Border.all(color: kErrorColor.withOpacity(0.3)),
+                                    Text(
+                                      '${snapshot.error}',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color: const Color(0xFFE57373), // Lighter red color instead of shade700
+                                          fontSize: 11
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.error_outline, color: kErrorColor, size: 36),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'خطأ في تحميل أسماء الأدوية.',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                              color: const Color(0xFFD32F2F), // Dark red color instead of shade900
-                                              fontWeight: FontWeight.w500
-                                          ),
-                                        ),
-                                        Text(
-                                          '${snapshot.error}',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                              color: const Color(0xFFE57373), // Lighter red color instead of shade700
-                                              fontSize: 11
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 12),
-                                      ],
-                                    ),
-                                  );
-                                } else {
-                                  final medicineNames = snapshot.data ?? [];
-                                  return MedicineAutocomplete(
-                                    suggestions: medicineNames,
-                                    controller: widget.nameController,
-                                    focusNode: _medicineFocusNode,
-                                    onSelected: (selection) {
-                                      widget.nameController.text = selection;
-                                      _medicineFocusNode.unfocus();
-                                    },
-                                  );
-                                }
-                              },
-                            ),
-                          ],
+                                    const SizedBox(height: 12),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              final medicineNames = snapshot.data ?? [];
+                              return MedicineAutocomplete(
+                                suggestions: medicineNames,
+                                controller: widget.nameController,
+                                focusNode: _medicineFocusNode,
+                                onSelected: (selection) {
+                                  widget.nameController.text = selection;
+                                  _medicineFocusNode.unfocus();
+                                },
+                              );
+                            }
+                          },
                         ),
-                      ),
-
-                      const SizedBox(height: 30.0),
-
-                      ElevatedButton(
-                        onPressed: () {
-                          if (widget.formKey.currentState!.validate()) {
-                            _medicineFocusNode.unfocus();
-                            widget.onNext();
-                          } else {
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 55),
-                          backgroundColor: kPrimaryColor,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: kPrimaryColor.withOpacity(0.4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(kBorderRadius),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'التالي',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.arrow_forward, size: 18),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 30.0),
+
+                  ElevatedButton(
+                    onPressed: () {
+                      if (widget.formKey.currentState!.validate()) {
+                        _medicineFocusNode.unfocus();
+                        widget.onNext();
+                      } else {
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 55),
+                      backgroundColor: kPrimaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: kPrimaryColor.withOpacity(0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kBorderRadius),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'التالي',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_forward, size: 18),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

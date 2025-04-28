@@ -361,629 +361,593 @@ class AddDosagePage extends StatelessWidget {
           color: kBackgroundColor,
         ),
         child: SafeArea(
-          child: Stack(
-            children: [
-              // Back button with consistent design
-              Positioned(
-                top: 15,
-                left: 10,
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(30),
-                  child: InkWell(
-                    onTap: onBack,
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Page heading with consistent gradient styling
+                  Center(
+                    child: ShaderMask(
+                      shaderCallback: (bounds) => LinearGradient(
+                        colors: [kPrimaryColor, Color(0xFF4E7BFF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ).createShader(bounds),
+                      child: Text(
+                        "الجرعة والأوقات",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.07,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back, color: kPrimaryColor, size: 28),
                     ),
                   ),
-                ),
-              ),
 
-              // Main content
-              Padding(
-                padding: EdgeInsets.only(
-                  left: horizontalPadding,
-                  right: horizontalPadding,
-                  top: verticalPadding + 35, // Add space for back button
-                  bottom: verticalPadding,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Page heading with consistent gradient styling
-                      Center(
-                        child: ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [kPrimaryColor, Color(0xFF4E7BFF)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ).createShader(bounds),
-                          child: Text(
-                            "الجرعة والأوقات",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: screenWidth * 0.07,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                  const SizedBox(height: 10),
+
+                  // Subtitle
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: Text(
+                      "أدخل تفاصيل جرعة الدواء وأوقات تناوله",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        color: Colors.grey.shade700,
                       ),
+                    ),
+                  ),
 
-                      const SizedBox(height: 10),
+                  const SizedBox(height: 25.0),
 
-                      // Subtitle
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                  // Dosage Card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: kCardColor,
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.grey.shade100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.medication, color: kPrimaryColor),
+                            const SizedBox(width: 10),
+                            const Text(
+                              "تفاصيل الجرعة",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
-                        child: Text(
-                          "أدخل تفاصيل جرعة الدواء وأوقات تناوله",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.normal,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ),
 
-                      const SizedBox(height: 25.0),
+                        const Divider(height: 24),
 
-                      // Dosage Card
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: kCardColor,
-                          borderRadius: BorderRadius.circular(kBorderRadius),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.grey.shade100),
-                        ),
-                        child: Column(
+                        // Dosage Amount and Unit
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Icon(Icons.medication, color: kPrimaryColor),
-                                const SizedBox(width: 10),
-                                const Text(
-                                  "تفاصيل الجرعة",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const Divider(height: 24),
-
-                            // Dosage Amount and Unit
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: TextFormField(
-                                    controller: dosageController,
-                                    textAlign: TextAlign.center,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                                    ],
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    decoration: InputDecoration(
-                                      labelText: 'الجرعة',
-                                      labelStyle: TextStyle(
-                                        color: kPrimaryColor.withOpacity(0.8),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      prefixIcon: Icon(Icons.science_outlined, color: kPrimaryColor),
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      errorBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: kErrorColor),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      focusedErrorBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: kErrorColor, width: 2.0),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      errorStyle: TextStyle(
-                                        color: kErrorColor,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 16,
-                                        horizontal: 16,
-                                      ),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.trim().isEmpty) {
-                                        return 'ادخل الجرعة';
-                                      }
-                                      if (double.tryParse(value.trim()) == null) {
-                                        return 'أدخل رقماً صحيحاً';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                ),
-
-                                const SizedBox(width: 12),
-
-                                Expanded(
-                                  flex: 2,
-                                  child: DropdownButtonFormField<String>(
-                                    value: dosageUnit,
-                                    decoration: InputDecoration(
-                                      labelText: 'الوحدة',
-                                      labelStyle: TextStyle(
-                                        color: kPrimaryColor.withOpacity(0.8),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 16,
-                                        horizontal: 16,
-                                      ),
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black87,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
-                                    onChanged: onDosageUnitChanged,
-                                    items: dosageUnits
-                                        .map((unit) => DropdownMenuItem(
-                                      value: unit,
-                                      child: Text(unit),
-                                    ))
-                                        .toList(),
-                                    validator: (value) => value == null ? 'اختر الوحدة' : null,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            // Frequency section
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Frequency Type dropdown (always shown)
-                                Expanded(
-                                  flex: 1,
-                                  child: DropdownButtonFormField<String>(
-                                    value: frequencyType,
-                                    decoration: InputDecoration(
-                                      labelText: 'نوع التكرار',
-                                      labelStyle: TextStyle(
-                                        color: kPrimaryColor.withOpacity(0.8),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      prefixIcon: Icon(Icons.calendar_today, color: kPrimaryColor),
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                        borderRadius: BorderRadius.circular(kBorderRadius),
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 16,
-                                        horizontal: 16,
-                                      ),
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black87,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
-                                    onChanged: onFrequencyTypeChanged,
-                                    items: frequencyTypes
-                                        .map((type) => DropdownMenuItem(
-                                      value: type,
-                                      child: Text(type),
-                                    ))
-                                        .toList(),
-                                    validator: (value) => value == null ? 'اختر النوع' : null,
-                                  ),
-                                ),
-
-                                // Only show frequency number if the frequency type is daily
-                                if (frequencyType == 'يومي') ...[
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: DropdownButtonFormField<int>(
-                                      value: frequencyNumber,
-                                      decoration: InputDecoration(
-                                        labelText: 'عدد المرات',
-                                        labelStyle: TextStyle(
-                                          color: kPrimaryColor.withOpacity(0.8),
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        prefixIcon: Icon(Icons.repeat, color: kPrimaryColor),
-                                        filled: true,
-                                        fillColor: Colors.white,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(kBorderRadius),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
-                                          borderRadius: BorderRadius.circular(kBorderRadius),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
-                                          borderRadius: BorderRadius.circular(kBorderRadius),
-                                        ),
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                          horizontal: 16,
-                                        ),
-                                      ),
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
-                                      onChanged: onFrequencyNumberChanged,
-                                      items: frequencyNumbers
-                                          .map((num) => DropdownMenuItem(
-                                        value: num,
-                                        child: Text(num.toString()),
-                                      ))
-                                          .toList(),
-                                      validator: (value) => value == null ? 'اختر العدد' : null,
-                                    ),
-                                  ),
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: dosageController,
+                                textAlign: TextAlign.center,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                                 ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 25.0),
-
-                      // Time Selection Section (Conditional)
-                      frequencyType == 'يومي'
-                          ? Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: kCardColor,
-                          borderRadius: BorderRadius.circular(kBorderRadius),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.grey.shade100),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.access_time_filled, color: kPrimaryColor),
-                                const SizedBox(width: 10),
-                                Text(
-                                  "أوقات تناول الجرعة:",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade800,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                decoration: InputDecoration(
+                                  labelText: 'الجرعة',
+                                  labelStyle: TextStyle(
+                                    color: kPrimaryColor.withOpacity(0.8),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  prefixIcon: Icon(Icons.science_outlined, color: kPrimaryColor),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: kErrorColor),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  focusedErrorBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: kErrorColor, width: 2.0),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  errorStyle: TextStyle(
+                                    color: kErrorColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 16,
                                   ),
                                 ),
-                              ],
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'ادخل الجرعة';
+                                  }
+                                  if (double.tryParse(value.trim()) == null) {
+                                    return 'أدخل رقماً صحيحاً';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
 
-                            const Divider(height: 24),
+                            const SizedBox(width: 12),
 
-                            // Daily time selection list with improved styling
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: frequencyNumber,
-                              itemBuilder: (context, index) {
-                                final time = selectedTimes[index];
-                                final isAuto = isAutoGeneratedTimes[index];
-
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: time != null
-                                        ? kPrimaryColor.withOpacity(0.05)
-                                        : Colors.grey.shade50,
+                            Expanded(
+                              flex: 2,
+                              child: DropdownButtonFormField<String>(
+                                value: dosageUnit,
+                                decoration: InputDecoration(
+                                  labelText: 'الوحدة',
+                                  labelStyle: TextStyle(
+                                    color: kPrimaryColor.withOpacity(0.8),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(kBorderRadius),
-                                    border: Border.all(
-                                      color: time != null
-                                          ? kPrimaryColor.withOpacity(0.3)
-                                          : Colors.grey.shade300,
-                                      width: time != null ? 1.5 : 1,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 16,
+                                  ),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
+                                onChanged: onDosageUnitChanged,
+                                items: dosageUnits
+                                    .map((unit) => DropdownMenuItem(
+                                  value: unit,
+                                  child: Text(unit),
+                                ))
+                                    .toList(),
+                                validator: (value) => value == null ? 'اختر الوحدة' : null,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Frequency section
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Frequency Type dropdown (always shown)
+                            Expanded(
+                              flex: 1,
+                              child: DropdownButtonFormField<String>(
+                                value: frequencyType,
+                                decoration: InputDecoration(
+                                  labelText: 'نوع التكرار',
+                                  labelStyle: TextStyle(
+                                    color: kPrimaryColor.withOpacity(0.8),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  prefixIcon: Icon(Icons.calendar_today, color: kPrimaryColor),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(kBorderRadius),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 16,
+                                  ),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
+                                onChanged: onFrequencyTypeChanged,
+                                items: frequencyTypes
+                                    .map((type) => DropdownMenuItem(
+                                  value: type,
+                                  child: Text(type),
+                                ))
+                                    .toList(),
+                                validator: (value) => value == null ? 'اختر النوع' : null,
+                              ),
+                            ),
+
+                            // Only show frequency number if the frequency type is daily
+                            if (frequencyType == 'يومي') ...[
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  value: frequencyNumber,
+                                  decoration: InputDecoration(
+                                    labelText: 'عدد المرات',
+                                    labelStyle: TextStyle(
+                                      color: kPrimaryColor.withOpacity(0.8),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    prefixIcon: Icon(Icons.repeat, color: kPrimaryColor),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(kBorderRadius),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: kPrimaryColor, width: 2.0),
+                                      borderRadius: BorderRadius.circular(kBorderRadius),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(kBorderRadius),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                      horizontal: 16,
                                     ),
                                   ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(kBorderRadius),
-                                    child: InkWell(
-                                      onTap: () => onSelectTime(index),
-                                      borderRadius: BorderRadius.circular(kBorderRadius),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 36,
-                                              height: 36,
-                                              decoration: BoxDecoration(
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  icon: Icon(Icons.arrow_drop_down, color: kPrimaryColor),
+                                  onChanged: onFrequencyNumberChanged,
+                                  items: frequencyNumbers
+                                      .map((num) => DropdownMenuItem(
+                                    value: num,
+                                    child: Text(num.toString()),
+                                  ))
+                                      .toList(),
+                                  validator: (value) => value == null ? 'اختر العدد' : null,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 25.0),
+
+                  // Time Selection Section (Conditional)
+                  frequencyType == 'يومي'
+                      ? Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: kCardColor,
+                      borderRadius: BorderRadius.circular(kBorderRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.grey.shade100),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.access_time_filled, color: kPrimaryColor),
+                            const SizedBox(width: 10),
+                            Text(
+                              "أوقات تناول الجرعة:",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 24),
+
+                        // Daily time selection list with improved styling
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: frequencyNumber,
+                          itemBuilder: (context, index) {
+                            final time = selectedTimes[index];
+                            final isAuto = isAutoGeneratedTimes[index];
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: time != null
+                                    ? kPrimaryColor.withOpacity(0.05)
+                                    : Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(kBorderRadius),
+                                border: Border.all(
+                                  color: time != null
+                                      ? kPrimaryColor.withOpacity(0.3)
+                                      : Colors.grey.shade300,
+                                  width: time != null ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(kBorderRadius),
+                                child: InkWell(
+                                  onTap: () => onSelectTime(index),
+                                  borderRadius: BorderRadius.circular(kBorderRadius),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 36,
+                                          height: 36,
+                                          decoration: BoxDecoration(
+                                            color: time != null
+                                                ? kPrimaryColor
+                                                : Colors.grey.shade300,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '${index + 1}',
+                                              style: TextStyle(
                                                 color: time != null
-                                                    ? kPrimaryColor
-                                                    : Colors.grey.shade300,
-                                                shape: BoxShape.circle,
+                                                    ? Colors.white
+                                                    : Colors.grey.shade700,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                              child: Center(
-                                                child: Text(
-                                                  '${index + 1}',
-                                                  style: TextStyle(
-                                                    color: time != null
-                                                        ? Colors.white
-                                                        : Colors.grey.shade700,
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                time == null
+                                                    ? 'الجرعة ${index + 1}'
+                                                    : 'الجرعة ${index + 1} (${time.format(context)})',
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: time != null
+                                                      ? FontWeight.w600
+                                                      : FontWeight.normal,
+                                                  color: time != null
+                                                      ? Colors.black87
+                                                      : Colors.grey.shade700,
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                              const SizedBox(height: 4),
+                                              Row(
                                                 children: [
+                                                  Icon(
+                                                    time != null
+                                                        ? Icons.check_circle
+                                                        : Icons.access_time,
+                                                    size: 14,
+                                                    color: time != null
+                                                        ? Colors.green
+                                                        : Colors.grey.shade500,
+                                                  ),
+                                                  const SizedBox(width: 6),
                                                   Text(
                                                     time == null
-                                                        ? 'الجرعة ${index + 1}'
-                                                        : 'الجرعة ${index + 1} (${time.format(context)})',
+                                                        ? 'اضغط لاختيار الوقت'
+                                                        : TimeUtils.formatTimeOfDay(context, time),
                                                     style: TextStyle(
-                                                      fontSize: 15,
-                                                      fontWeight: time != null
-                                                          ? FontWeight.w600
-                                                          : FontWeight.normal,
+                                                      fontSize: 14,
                                                       color: time != null
                                                           ? Colors.black87
-                                                          : Colors.grey.shade700,
+                                                          : Colors.grey.shade600,
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 4),
-                                                  Row(
-                                                    children: [
-                                                      Icon(
-                                                        time != null
-                                                            ? Icons.check_circle
-                                                            : Icons.access_time,
-                                                        size: 14,
-                                                        color: time != null
-                                                            ? Colors.green
-                                                            : Colors.grey.shade500,
-                                                      ),
-                                                      const SizedBox(width: 6),
-                                                      Text(
-                                                        time == null
-                                                            ? 'اضغط لاختيار الوقت'
-                                                            : TimeUtils.formatTimeOfDay(context, time),
-                                                        style: TextStyle(
-                                                          fontSize: 14,
-                                                          color: time != null
-                                                              ? Colors.black87
-                                                              : Colors.grey.shade600,
+                                                  if (time != null && isAuto)
+                                                    Padding(
+                                                      padding: const EdgeInsets.only(right: 8),
+                                                      child: Tooltip(
+                                                        message: "وقت تم إنشاؤه تلقائيًا",
+                                                        child: Icon(
+                                                          Icons.smart_toy,
+                                                          size: 14,
+                                                          color: kSecondaryColor,
                                                         ),
                                                       ),
-                                                      if (time != null && isAuto)
-                                                        Padding(
-                                                          padding: const EdgeInsets.only(right: 8),
-                                                          child: Tooltip(
-                                                            message: "وقت تم إنشاؤه تلقائيًا",
-                                                            child: Icon(
-                                                              Icons.smart_toy,
-                                                              size: 14,
-                                                              color: kSecondaryColor,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                    ],
-                                                  ),
+                                                    ),
                                                 ],
                                               ),
-                                            ),
-                                            Container(
-                                              width: 36,
-                                              height: 36,
-                                              decoration: BoxDecoration(
-                                                color: kPrimaryColor.withOpacity(0.1),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                Icons.edit,
-                                                color: kPrimaryColor,
-                                                size: 18,
-                                              ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
-                                      ),
+                                        Container(
+                                          width: 36,
+                                          height: 36,
+                                          decoration: BoxDecoration(
+                                            color: kPrimaryColor.withOpacity(0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.edit,
+                                            color: kPrimaryColor,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                );
-                              },
-                            ),
-
-                            // Validation message if any daily time is missing
-                            if (selectedTimes.any((t) => t == null))
-                              Container(
-                                margin: const EdgeInsets.only(top: 8.0),
-                                padding: const EdgeInsets.all(8.0),
-                                decoration: BoxDecoration(
-                                  color: kErrorColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(kBorderRadius / 2),
-                                  border: Border.all(color: kErrorColor.withOpacity(0.3)),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.info_outline, color: kErrorColor, size: 18),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'الرجاء تحديد جميع الأوقات المطلوبة.',
-                                        style: TextStyle(
-                                          color: kErrorColor,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                          : _buildWeeklyScheduleSection(context),
-
-                      const SizedBox(height: 30.0),
-
-                      // Next Button with consistent styling
-                      ElevatedButton(
-                        onPressed: () {
-                          if (formKey.currentState!.validate() && allTimesSelected) {
-                            onNext();
-                          } else if (!allTimesSelected) {
-                            // Show snackbar if times are missing
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    const Icon(Icons.warning_amber_rounded, color: Colors.white),
-                                    const SizedBox(width: 12),
-                                    const Expanded(
-                                      child: Text(
-                                        'الرجاء تحديد جميع أوقات الجرعات المطلوبة',
-                                        style: TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                backgroundColor: kErrorColor,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                duration: const Duration(seconds: 3),
                               ),
                             );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 55),
-                          backgroundColor: kPrimaryColor,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: kPrimaryColor.withOpacity(0.4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(kBorderRadius),
+                          },
+                        ),
+
+                        // Validation message if any daily time is missing
+                        if (selectedTimes.any((t) => t == null))
+                          Container(
+                            margin: const EdgeInsets.only(top: 8.0),
+                            padding: const EdgeInsets.all(8.0),
+                            decoration: BoxDecoration(
+                              color: kErrorColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(kBorderRadius / 2),
+                              border: Border.all(color: kErrorColor.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.info_outline, color: kErrorColor, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'الرجاء تحديد جميع الأوقات المطلوبة.',
+                                    style: TextStyle(
+                                      color: kErrorColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'التالي',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ],
+                    ),
+                  )
+                      : _buildWeeklyScheduleSection(context),
+
+                  const SizedBox(height: 30.0),
+
+                  // Next Button with consistent styling
+                  ElevatedButton(
+                    onPressed: () {
+                      if (formKey.currentState!.validate() && allTimesSelected) {
+                        onNext();
+                      } else if (!allTimesSelected) {
+                        // Show snackbar if times are missing
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Text(
+                                    'الرجاء تحديد جميع أوقات الجرعات المطلوبة',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.arrow_forward, size: 16),
+                            backgroundColor: kErrorColor,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          ],
-                        ),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 55),
+                      backgroundColor: kPrimaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: kPrimaryColor.withOpacity(0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kBorderRadius),
                       ),
-                      const SizedBox(height: 20),
-                    ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'التالي',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_forward, size: 16),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 20),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
