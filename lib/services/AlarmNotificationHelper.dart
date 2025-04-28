@@ -59,7 +59,7 @@ class AlarmNotificationHelper {
       return;
     } else if (payload.startsWith('companion_missed_')) {
       print("[AlarmNotificationHelper] Navigating to companions page due to missed dose notification.");
-      _navigateToCompanionsPage();
+      _navigateToCompanionsPage(); // Ensure this navigates to the companion page
       return;
     }
 
@@ -325,3 +325,4 @@ void notificationTapBackground(NotificationResponse response) {
   final int? id = response.id;
   print("[BackgroundHandler] Notification tapped: id=$id, action=$actionId, payload=$payload");
 }
+
