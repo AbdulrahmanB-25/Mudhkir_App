@@ -100,6 +100,138 @@ class _DoseScheduleState extends State<DoseSchedule> {
     return _doses[normalizedDay] ?? [];
   }
 
+  Widget _buildDateAndDosesHeader() {
+    final events = _getEventsForDay(_selectedDay);
+    final doseCount = events.length;
+    
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(kBorderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: kPrimaryColor.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.calendar_today,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        DateFormat('EEEE', 'ar_SA').format(_selectedDay),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        DateFormat('d MMMM yyyy', 'ar_SA').format(_selectedDay),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      )
+                    ]
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.medication_rounded,
+                        size: 18,
+                        color: kPrimaryColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "$doseCount ${doseCount == 1 ? 'جرعة' : 'جرعات'}",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: kPrimaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(kBorderRadius),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 16,
+                  color: Colors.white.withOpacity(0.85),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  doseCount > 0
+                      ? "الجرعات المجدولة لهذا اليوم"
+                      : "لا توجد جرعات مجدولة لهذا اليوم",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withOpacity(0.85),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isLoading && _user == null) {
@@ -244,33 +376,8 @@ class _DoseScheduleState extends State<DoseSchedule> {
                         getEventsForDay: _getEventsForDay,
                       ),
 
-                      Container(
-                        margin: const EdgeInsets.only(top: 24, bottom: 12),
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: kPrimaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.event_note_rounded,
-                              size: 20,
-                              color: kPrimaryColor,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(_selectedDay),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: kPrimaryColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // Date and Doses Header Bar
+                      _buildDateAndDosesHeader(),
 
                       _buildDoseList(),
 
