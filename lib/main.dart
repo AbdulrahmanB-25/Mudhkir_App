@@ -3,7 +3,7 @@ import 'dart:io'; // Added this line
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:mudhkir_app/Pages/Companion_Details_Page.dart';
+import 'package:mudhkir_app/Features/Companions/Companion_Details_Page.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -13,24 +13,25 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your page/widget files
-import 'package:mudhkir_app/Pages/SettingsPage.dart';
-import 'package:mudhkir_app/Pages/Companions_Main_Page.dart';
-import 'package:mudhkir_app/Pages/Personal_data_Page.dart';
-import 'package:mudhkir_app/pages/Add_Medication_Page.dart' as add_dose;
-import 'package:mudhkir_app/pages/Login_Page.dart';
-import 'package:mudhkir_app/pages/Main_Page.dart';
-import 'package:mudhkir_app/pages/Signup_Page.dart';
-import 'package:mudhkir_app/pages/Welcome_Page.dart';
-import 'package:mudhkir_app/MedicationsSchedule_Utility/dose_schedule_UI.dart';
-import 'package:mudhkir_app/pages/ForgetPassword_Page.dart';
-import 'package:mudhkir_app/Widgets/AuthWrapper.dart';
-import 'package:mudhkir_app/Pages/MedicationDetail_Page.dart';
+import 'package:mudhkir_app/Features/Settings/SettingsPage.dart';
+import 'package:mudhkir_app/Features/Companions/Companions_Main_Page.dart';
+import 'package:mudhkir_app/Features/Personal_data/Personal_data_Page.dart';
+import 'package:mudhkir_app/Features/Medication/Schedule/dose_schedule_UI.dart';
+import 'package:mudhkir_app/Features/Auth/AuthWrapper.dart';
 
 // Import AlarmNotificationHelper
-import 'package:mudhkir_app/services/AlarmNotificationHelper.dart';
-import 'package:mudhkir_app/services/companion_medication_tracker.dart';
 
-import 'Pages/Medications_Schedule_Page.dart';
+
+import 'Core/Services/AlarmNotificationHelper.dart';
+import 'Features/Auth/Forget_Password/ForgetPassword_Page.dart';
+import 'Features/Auth/Login/Login_Page.dart';
+import 'Features/Auth/Signup/Signup_Page.dart';
+import 'Features/Companions/companion_medication_tracker.dart';
+import 'Features/Main/Main_Page.dart';
+import 'Features/Medication/Add/Add_Medication_Page.dart';
+import 'Features/Medication/Schedule/Medications_Schedule_Page.dart';
+import 'Features/Welcome/Welcome_Page.dart';
+import 'Features/Medication/Detail/MedicationDetail_Page.dart';
 
 // Global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -60,7 +61,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const Login(),
         '/signup': (context) => const Signup(),
         '/mainpage': (context) => const MainPage(),
-        '/add_dose': (context) => const add_dose.AddDose(),
+        '/add_dose': (context) => const AddDose(),
         '/dose_schedule': (context) => const DoseSchedule(),
         '/personal_data': (context) => const PersonalDataPage(),
         '/settings': (context) => const SettingsPage(),
