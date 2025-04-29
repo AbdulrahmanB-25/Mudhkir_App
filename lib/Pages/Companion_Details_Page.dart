@@ -386,7 +386,7 @@ class _CompanionDetailPageState extends State<CompanionDetailPage> with SingleTi
                 },
                 onFormatChanged: (format) => setState(() => _calendarFormat = format),
                 onPageChanged: (focusedDay) => _focusedDay = focusedDay,
-                availableCalendarFormats: const {CalendarFormat.month: 'شهر', CalendarFormat.week: 'اسبوع'},
+                availableCalendarFormats: const {CalendarFormat.month: 'اسبوع', CalendarFormat.week: 'شهر'},
                 headerStyle: HeaderStyle(
                   formatButtonVisible: true,
                   titleCentered: true,
@@ -455,31 +455,16 @@ class _CompanionDetailPageState extends State<CompanionDetailPage> with SingleTi
                     if (allTaken) markerColor = Colors.green.shade400;
                     else if (hasMissedDoses) markerColor = Colors.red.shade400;
 
-                    // Move marker to top of cell
+                    // Move marker to bottom of cell and make it a line
                     return Positioned(
-                      top: 1,
-                      right: 1,
-                      left: 1,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          events.length > 3 ? 3 : events.length,
-                              (index) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: markerColor,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: markerColor.withOpacity(0.5),
-                                  blurRadius: 1,
-                                  offset: const Offset(0, 0),
-                                ),
-                              ],
-                            ),
-                          ),
+                      left: 5,
+                      right: 5,
+                      bottom: 3,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: markerColor,
+                          borderRadius: BorderRadius.circular(1.5),
                         ),
                       ),
                     );
@@ -1481,19 +1466,6 @@ class EditCompanionMedicationPage extends StatelessWidget {
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
         backgroundColor: kBackgroundColor,
-        appBar: AppBar(
-          title: Text(
-            "تعديل دواء لـ $companionName",
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              color: Colors.white,
-            ),
-          ),
-          backgroundColor: kPrimaryColor,
-          elevation: 0,
-          centerTitle: true,
-        ),
         body: EditMedicationScreen(docId: medicationId, companionId: companionId),
       ),
     );

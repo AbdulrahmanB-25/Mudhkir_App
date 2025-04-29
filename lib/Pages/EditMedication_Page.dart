@@ -556,6 +556,9 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
   final GlobalKey<FormState> _page3FormKey = GlobalKey<FormState>();
   int _currentPageIndex = 0;
 
+  bool _isPage1Valid = false;
+  bool _isPage2Valid = false;
+
   @override
   void initState() {
     super.initState();
@@ -591,13 +594,54 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 
+  bool _validatePage1() {
+    if (_page1FormKey.currentState == null) return false;
+    final isValid = _page1FormKey.currentState!.validate();
+    setState(() => _isPage1Valid = isValid);
+    return isValid;
+  }
+
+  bool _validatePage2() {
+    if (_page2FormKey.currentState == null) return false;
+    final isFormValid = _page2FormKey.currentState!.validate();
+
+    bool allTimesValid = false;
+    if (dp.frequencyType == 'يومي') {
+      allTimesValid = !dp.selectedTimes.any((t) => t == null);
+    } else {
+      allTimesValid = dp.selectedWeekdays.isNotEmpty &&
+          dp.selectedWeekdays.every((day) => dp.weeklyTimes[day] != null);
+    }
+
+    final isValid = isFormValid && allTimesValid;
+    setState(() => _isPage2Valid = isValid);
+    return isValid;
+  }
+
   void _nextPage() {
     if (_currentPageIndex < 2) {
-      dp.pageController.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-      setState(() => _currentPageIndex++);
+      bool canProceed = false;
+
+      if (_currentPageIndex == 0) {
+        canProceed = _validatePage1();
+      } else if (_currentPageIndex == 1) {
+        canProceed = _validatePage2();
+      }
+
+      if (canProceed) {
+        dp.pageController.nextPage(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+        setState(() => _currentPageIndex++);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("الرجاء إكمال جميع الحقول المطلوبة"),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
     }
   }
 
@@ -613,12 +657,31 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 
   void _goToPage(int page) {
     if (page >= 0 && page <= 2 && page != _currentPageIndex) {
-      dp.pageController.animateToPage(
-        page,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-      setState(() => _currentPageIndex = page);
+      bool canProceed = true;
+
+      if (page > _currentPageIndex) {
+        if (_currentPageIndex == 0) {
+          canProceed = _validatePage1();
+        } else if (_currentPageIndex == 1 && page == 2) {
+          canProceed = _validatePage2();
+        }
+      }
+
+      if (canProceed) {
+        dp.pageController.animateToPage(
+          page,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+        setState(() => _currentPageIndex = page);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("الرجاء إكمال الخطوة الحالية أولا"),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
     }
   }
 
@@ -745,7 +808,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                   onClearEndDate: () => setState(() => dp.updateEndDate(null)),
                   onSubmit: _submitForm,
                   onBack: _previousPage,
-                  submitButtonText: widget.buttonText ?? 'تعديل الدواء', // Use the passed buttonText or default to 'تعديل الدواء'
+                  submitButtonText: widget.buttonText ?? 'تعديل الدواء',
                 ),
               ],
             ),
@@ -765,7 +828,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+          colors: [Color(0xFF2E86C1), Color(0xFF2E86C1).withOpacity(0.8)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -777,7 +840,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
           ),
         ],
       ),
-      padding: EdgeInsets.fromLTRB(10, MediaQuery.of(context).padding.top, 10, 6),
+      padding: EdgeInsets.fromLTRB(10, MediaQuery.of(context).padding.top, 10, 18), // More bottom padding
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -785,16 +848,16 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
             children: [
               Material(
                 color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   onTap: () => Navigator.pop(context),
                   child: Padding(
-                    padding: const EdgeInsets.all(6.0),
+                    padding: const EdgeInsets.all(10.0), // Larger padding
                     child: Icon(
                       Icons.arrow_back,
                       color: Colors.white,
-                      size: 20,
+                      size: 28, // Larger icon
                     ),
                   ),
                 ),
@@ -805,45 +868,45 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 20, // Larger font
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6), // Larger padding
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
                   "${_currentPageIndex + 1}/3",
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 16, // Larger font
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16), // More space
           Row(
             children: [
               _buildNavigationButton(
                 icon: Icons.arrow_back_ios_rounded,
                 onTap: _currentPageIndex > 0 ? _previousPage : null,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 14), // More space
               Expanded(
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      height: 3,
+                      height: 8, // Increased from 6
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                     Align(
@@ -851,10 +914,10 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                       child: FractionallySizedBox(
                         widthFactor: (_currentPageIndex + 1) / 3,
                         child: Container(
-                          height: 3,
+                          height: 8, // Increased from 6
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                       ),
@@ -862,23 +925,29 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: List.generate(3, (index) {
+                        bool canAccess = index <= _currentPageIndex || 
+                            (index == 1 && _isPage1Valid) ||
+                            (index == 2 && _isPage1Valid && _isPage2Valid);
+                            
                         return GestureDetector(
-                          onTap: () => _goToPage(index),
+                          onTap: canAccess ? () => _goToPage(index) : null,
                           child: Container(
-                            width: 10,
-                            height: 10,
+                            width: 24, // Increased from 18
+                            height: 24, // Increased from 18
                             decoration: BoxDecoration(
                               color: index <= _currentPageIndex
                                   ? Colors.white
-                                  : Colors.white.withOpacity(0.3),
+                                  : canAccess 
+                                      ? Colors.white.withOpacity(0.5)
+                                      : Colors.white.withOpacity(0.3),
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: Colors.white,
-                                width: 1
+                                color: canAccess ? Colors.white : Colors.white.withOpacity(0.5),
+                                width: 2.0 // Increased from 1.5
                               ),
                             ),
                             child: index < _currentPageIndex
-                                ? Icon(Icons.check, size: 6, color: kPrimaryColor)
+                                ? Icon(Icons.check, size: 14, color: Color(0xFF2E86C1)) // Increased from 10
                                 : null,
                           ),
                         );
@@ -887,13 +956,18 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 14), // More space
               _buildNavigationButton(
                 icon: Icons.arrow_forward_ios_rounded,
-                onTap: _currentPageIndex < 2 ? _nextPage : null,
+                onTap: _currentPageIndex < 2 
+                    ? (_currentPageIndex == 0 && !_isPage1Valid) || (_currentPageIndex == 1 && !_isPage2Valid)
+                        ? null 
+                        : _nextPage
+                    : null,
               ),
             ],
           ),
+          const SizedBox(height: 10), // More space at bottom
         ],
       ),
     );
@@ -907,29 +981,28 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          width: 24,
-          height: 24,
+          width: 40, // Increased from 32
+          height: 40, // Increased from 32
           decoration: BoxDecoration(
             color: isEnabled ? Colors.white.withOpacity(0.2) : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isEnabled ? Colors.white : Colors.white.withOpacity(0.2),
-              width: 1,
+              width: 2.0, // Increased from 1.5
             ),
           ),
           child: Icon(
             icon,
             color: isEnabled ? Colors.white : Colors.white.withOpacity(0.3),
-            size: 12,
+            size: 20, // Increased from 16
           ),
         ),
       ),
     );
   }
 }
-

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io'; // Added this line
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -241,12 +241,13 @@ void main() async {
   }
 
   // Initialize AlarmNotificationHelper (if it needs initialization)
-  try {
-    await AlarmNotificationHelper.initialize(navigatorKey.currentContext!);
-    print("[Notifications] AlarmNotificationHelper initialized.");
-  } catch (e) {
-    print("[Notifications] ERROR initializing AlarmNotificationHelper: $e");
-  }
+  // It's better to initialize this where context is available, e.g., in MyApp or HomePage initState
+  // try {
+  //   await AlarmNotificationHelper.initialize(navigatorKey.currentContext!); // This context is likely null here
+  //   print("[Notifications] AlarmNotificationHelper initialized.");
+  // } catch (e) {
+  //   print("[Notifications] ERROR initializing AlarmNotificationHelper: $e");
+  // }
 
   // Setup periodic companion checks
   await _setupPeriodicCompanionChecks();
@@ -257,63 +258,91 @@ void main() async {
 
 Future<void> _requestEssentialPermissions() async {
   print("[Permissions] Checking/Requesting essential permissions...");
-  
+
   // For Android 13+ (API level 33+), explicitly request POST_NOTIFICATIONS permission
   if (Platform.isAndroid) {
     var notificationStatus = await Permission.notification.status;
     print("[Permissions] Notification permission status: $notificationStatus");
-    
+
     if (notificationStatus.isDenied) {
       print("[Permissions] Requesting notification permission");
       final status = await Permission.notification.request();
       print("[Permissions] Notification permission request result: $status");
     }
-    
+
     // Request schedule exact alarm permission (crucial for Android 12+)
     var exactAlarmStatus = await Permission.scheduleExactAlarm.status;
     print("[Permissions] Schedule exact alarm permission status: $exactAlarmStatus");
-    
+
     if (exactAlarmStatus.isDenied) {
       print("[Permissions] Requesting schedule exact alarm permission");
       final status = await Permission.scheduleExactAlarm.request();
       print("[Permissions] Schedule exact alarm permission request result: $status");
     }
-    
+
     // Add diagnostic function to check notification settings
+    // Delaying this call slightly to ensure widgets are built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkNotificationPermissions();
+      // Initialize AlarmNotificationHelper here, now that binding is ready
+      // and potentially after the first frame is rendered.
+      // Still, passing context might be tricky. Consider initializing in a widget.
+      if (navigatorKey.currentContext != null) {
+        AlarmNotificationHelper.initialize(navigatorKey.currentContext!).then((_) {
+          print("[Notifications] AlarmNotificationHelper initialized post-frame.");
+          _checkNotificationPermissions(); // Run diagnostics after init
+        }).catchError((e) {
+          print("[Notifications] ERROR initializing AlarmNotificationHelper post-frame: $e");
+          _checkNotificationPermissions(); // Run diagnostics even if init fails
+        });
+      } else {
+        print("[Notifications] Cannot initialize AlarmNotificationHelper post-frame: navigatorKey.currentContext is null.");
+        _checkNotificationPermissions(); // Run diagnostics anyway
+      }
     });
   }
-  
+
   print("[Permissions] Essential permissions setup completed");
 }
 
 // Add a diagnostic function to check notification permissions after startup
 Future<void> _checkNotificationPermissions() async {
   await Future.delayed(Duration(seconds: 2)); // Wait for app to settle
-  
+
   print("[Diagnostic] Checking all notification-related permissions and settings");
-  
+
   try {
     // Check permission_handler status
     final notificationStatus = await Permission.notification.status;
     print("[Diagnostic] Permission.notification.status: $notificationStatus");
-    
+
     final alarmStatus = await Permission.scheduleExactAlarm.status;
     print("[Diagnostic] Permission.scheduleExactAlarm.status: $alarmStatus");
-    
+
     // Check Flutter Local Notifications Plugin status
-    final flutterNotificationsStatus = await AlarmNotificationHelper.checkForNotificationPermissions();
-    print("[Diagnostic] Flutter Local Notifications permission status: $flutterNotificationsStatus");
-    
+    // Use the helper method if it's initialized, otherwise skip or handle error
+    try {
+      final flutterNotificationsStatus = await AlarmNotificationHelper.checkForNotificationPermissions();
+      print("[Diagnostic] Flutter Local Notifications permission status: $flutterNotificationsStatus");
+    } catch (e) {
+      print("[Diagnostic] Could not check FLN status via helper (likely not initialized): $e");
+    }
+
+
     // Check pending notifications
-    final pendingNotifications = await AlarmNotificationHelper.getPendingNotifications();
-    print("[Diagnostic] Number of pending notifications: ${pendingNotifications.length}");
-    
+    // Use the helper method if it's initialized
+    try {
+      final pendingNotifications = await AlarmNotificationHelper.getPendingNotifications();
+      print("[Diagnostic] Number of pending notifications: ${pendingNotifications.length}");
+    } catch(e) {
+      print("[Diagnostic] Could not check pending notifications via helper (likely not initialized): $e");
+    }
+
+
     // Check notification channels (Android only)
     if (Platform.isAndroid) {
       try {
-        final plugin = AlarmNotificationHelper.notificationsPlugin
+        // Access the plugin directly if the helper isn't reliably initialized yet
+        final plugin = notificationsPlugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
         if (plugin != null) {
           final channels = await plugin.getNotificationChannels();
@@ -321,12 +350,14 @@ Future<void> _checkNotificationPermissions() async {
           channels?.forEach((channel) {
             print("[Diagnostic] Channel: ${channel.id}, Name: ${channel.name}, Importance: ${channel.importance.index}");
           });
+        } else {
+          print("[Diagnostic] Could not resolve AndroidFlutterLocalNotificationsPlugin.");
         }
       } catch (e) {
         print("[Diagnostic] Error checking notification channels: $e");
       }
     }
-    
+
     print("[Diagnostic] Notification diagnostics completed");
   } catch (e) {
     print("[Diagnostic] Error during notification diagnostics: $e");

@@ -285,28 +285,30 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
             ),
           ),
         ),
-        floatingActionButton: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.elasticOut,
-          builder: (context, value, child) {
-            return Transform.scale(
-              scale: value,
-              child: child,
-            );
-          },
-          child: FloatingActionButton.extended(
-            onPressed: _showAddCompanionDialog,
-            backgroundColor: kPrimaryColor,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.person_add_rounded),
-            label: const Text("إضافة مرافق"),
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
+        floatingActionButton: companionDataList.isEmpty
+            ? null  // Don't show FAB when list is empty - only use the in-page button
+            : TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.elasticOut,
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: child,
+                  );
+                },
+                child: FloatingActionButton.extended(
+                  onPressed: _showAddCompanionDialog,
+                  backgroundColor: kPrimaryColor,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.person_add_rounded),
+                  label: const Text("إضافة مرافق"),
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
       ),
     );
   }
@@ -355,7 +357,7 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.grey.shade800,
                 shadows: [
                   Shadow(
                     color: Colors.black.withOpacity(0.3),
@@ -695,8 +697,6 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
         : '?';
     final relationship = companion['relationship'] ?? '';
     final lastSeen = companion['lastSeen'] as DateTime?;
-    final isOnline = lastSeen != null &&
-        DateTime.now().difference(lastSeen).inMinutes <= 5;
     final doseCount = companion['upcomingDoseCount'] ?? 0;
 
     return Container(
@@ -740,7 +740,7 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
               children: [
                 Row(
                   children: [
-                    _buildCompanionAvatar(initials, isOnline),
+                    _buildCompanionAvatar(initials, true),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -885,59 +885,35 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
   }
 
   Widget _buildCompanionAvatar(String initials, bool isOnline) {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [kPrimaryColor, kSecondaryColor],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: kPrimaryColor.withOpacity(0.4),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-                spreadRadius: -2,
-              ),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [kPrimaryColor, kSecondaryColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: kPrimaryColor.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+            spreadRadius: -2,
           ),
-          child: CircleAvatar(
-            backgroundColor: Colors.transparent,
-            radius: 30,
-            child: Text(
-              initials.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+        ],
+      ),
+      child: CircleAvatar(
+        backgroundColor: Colors.transparent,
+        radius: 30,
+        child: Text(
+          initials.toUpperCase(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        Positioned(
-          bottom: 0,
-          right: 0,
-          child: Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: isOnline ? Colors.green : Colors.grey,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -1192,3 +1168,4 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
     );
   }
 }
+

@@ -83,6 +83,10 @@ class _AddDoseState extends State<AddDose> {
   final GlobalKey<FormState> _formKeyPage2 = GlobalKey<FormState>();
   final GlobalKey<FormState> _formKeyPage3 = GlobalKey<FormState>();
   int _currentPageIndex = 0; // Track current page for progress bar
+  
+  // Add state tracking for page validation
+  bool _isPage1Valid = false;
+  bool _isPage2Valid = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _dosageController = TextEditingController();
@@ -457,20 +461,79 @@ class _AddDoseState extends State<AddDose> {
 
   // --- Navigation and Submission ---
 
-  void _nextPage() {
-    if (!_pageController.hasClients) return; // Avoid error if called before mounted
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+  // Add validation methods for each page
+  bool _validatePage1() {
+    if (_formKeyPage1.currentState == null) return false;
+    final isValid = _formKeyPage1.currentState!.validate();
+    setState(() => _isPage1Valid = isValid);
+    return isValid;
   }
 
+  bool _validatePage2() {
+    if (_formKeyPage2.currentState == null) return false;
+    final isFormValid = _formKeyPage2.currentState!.validate();
+    
+    // Check if all times are selected
+    bool allTimesFilled = false;
+    if (_frequencyType == 'يومي') {
+      allTimesFilled = !_selectedTimes.any((t) => t == null);
+    } else { // weekly
+      allTimesFilled = _selectedWeekdays.isNotEmpty && 
+          _selectedWeekdays.every((day) => _weeklyTimes[day] != null);
+    }
+    
+    final isValid = isFormValid && allTimesFilled;
+    setState(() => _isPage2Valid = isValid);
+    return isValid;
+  }
+
+  // Modify _nextPage method to check validation
+  void _nextPage() {
+    if (!_pageController.hasClients) return; // Avoid error if called before mounted
+    if (_currentPageIndex < 2) {
+      bool canProceed = false;
+      
+      if (_currentPageIndex == 0) {
+        canProceed = _validatePage1();
+        if (!canProceed && _capturedImage != null && _isUploading) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('جاري تحميل الصورة... الرجاء الانتظار قبل المتابعة'))
+          );
+          return;
+        }
+      } else if (_currentPageIndex == 1) {
+        canProceed = _validatePage2();
+      } else {
+        canProceed = true;
+      }
+      
+      if (canProceed) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        setState(() => _currentPageIndex++);
+      } else {
+        // Show feedback about validation failure
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("الرجاء إكمال جميع الحقول المطلوبة"),
+            backgroundColor: Colors.red[700],
+          )
+        );
+      }
+    }
+  }
+
+  // Add this missing method
   void _previousPage() {
-    if (!_pageController.hasClients) return;
-    _pageController.previousPage(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    if (_currentPageIndex > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() => _currentPageIndex--);
+    }
   }
 
   /// Final submission logic.
@@ -736,47 +799,39 @@ class _AddDoseState extends State<AddDose> {
   // Helper method for direct navigation to specific pages
   void _goToPage(int page) {
     if (page >= 0 && page <= 2 && page != _currentPageIndex) {
-      // Add validation logic before allowing navigation
-      bool canNavigate = true;
-
-      // Only allow forward navigation if previous pages are valid
+      // We can always go back, but going forward requires validation
+      bool canProceed = true;
+      
       if (page > _currentPageIndex) {
-        // To page 1: validate page 0
-        if (page >= 1 && _currentPageIndex < 1) {
-          canNavigate = _formKeyPage1.currentState?.validate() ?? false;
-
-          // Check image upload status
-          if (canNavigate && _capturedImage != null && _isUploading) {
-            _showBlockingAlert("انتظار", "يتم تحميل الصورة حالياً. الرجاء الانتظار.");
-            canNavigate = false;
-          }
-        }
-
-        // To page 2: validate page 1
-        if (canNavigate && page >= 2 && _currentPageIndex < 2) {
-          canNavigate = _formKeyPage2.currentState?.validate() ?? false;
-
-          // Check if all times are selected
-          bool allTimesFilled = _frequencyType == 'يومي'
-              ? _selectedTimes.every((t) => t != null)
-              : (_selectedWeekdays.isEmpty || _selectedWeekdays.every((day) => _weeklyTimes[day] != null));
-
-          if (!allTimesFilled) {
+        // Check all previous pages
+        if (_currentPageIndex == 0) {
+          canProceed = _validatePage1();
+          if (!canProceed && _capturedImage != null && _isUploading) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('الرجاء تحديد جميع أوقات الجرعات المطلوبة.'))
+              const SnackBar(content: Text('جاري تحميل الصورة... الرجاء الانتظار قبل المتابعة'))
             );
-            canNavigate = false;
+            return;
           }
+        } else if (_currentPageIndex == 1 && page == 2) {
+          canProceed = _validatePage2();
         }
       }
-
-      if (canNavigate) {
+      
+      if (canProceed) {
         _pageController.animateToPage(
           page,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut,
         );
         setState(() => _currentPageIndex = page);
+      } else {
+        // Show feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("الرجاء إكمال الخطوة الحالية أولا"),
+            backgroundColor: Colors.red[700],
+          )
+        );
       }
     }
   }
@@ -932,7 +987,7 @@ class _AddDoseState extends State<AddDose> {
     );
   }
 
-  // Method to build the progress bar UI - now with larger dimensions and elements
+  // Method to build the progress bar UI with larger dimensions
   Widget _buildProgressBar() {
     final List<String> pageTitles = [
       'اسم الدواء والصورة',
@@ -955,7 +1010,7 @@ class _AddDoseState extends State<AddDose> {
           ),
         ],
       ),
-      padding: EdgeInsets.fromLTRB(10, MediaQuery.of(context).padding.top, 10, 6),
+      padding: EdgeInsets.fromLTRB(10, MediaQuery.of(context).padding.top, 10, 18), // More bottom padding
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -963,16 +1018,16 @@ class _AddDoseState extends State<AddDose> {
             children: [
               Material(
                 color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   onTap: () => Navigator.pop(context),
                   child: Padding(
-                    padding: const EdgeInsets.all(6.0),
+                    padding: const EdgeInsets.all(10.0), // Larger padding
                     child: Icon(
                       Icons.arrow_back,
                       color: Colors.white,
-                      size: 20,
+                      size: 28, // Larger icon
                     ),
                   ),
                 ),
@@ -983,45 +1038,45 @@ class _AddDoseState extends State<AddDose> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 20, // Larger font
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6), // Larger padding
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
                   "${_currentPageIndex + 1}/3",
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 16, // Larger font
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16), // More space
           Row(
             children: [
               _buildNavigationButton(
                 icon: Icons.arrow_back_ios_rounded,
                 onTap: _currentPageIndex > 0 ? _previousPage : null,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 14), // More space
               Expanded(
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      height: 3,
+                      height: 8, // Increased from 6
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                     Align(
@@ -1029,10 +1084,10 @@ class _AddDoseState extends State<AddDose> {
                       child: FractionallySizedBox(
                         widthFactor: (_currentPageIndex + 1) / 3,
                         child: Container(
-                          height: 3,
+                          height: 8, // Increased from 6
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                       ),
@@ -1040,23 +1095,30 @@ class _AddDoseState extends State<AddDose> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: List.generate(3, (index) {
+                        // Determine if this step is accessible based on validation state
+                        bool canAccess = index <= _currentPageIndex || 
+                                         (index == 1 && _isPage1Valid) || 
+                                         (index == 2 && _isPage1Valid && _isPage2Valid);
+                                         
                         return GestureDetector(
-                          onTap: () => _goToPage(index),
+                          onTap: canAccess ? () => _goToPage(index) : null,
                           child: Container(
-                            width: 10,
-                            height: 10,
+                            width: 24, // Increased from 18
+                            height: 24, // Increased from 18
                             decoration: BoxDecoration(
                               color: index <= _currentPageIndex
                                   ? Colors.white
-                                  : Colors.white.withOpacity(0.3),
+                                  : canAccess
+                                      ? Colors.white.withOpacity(0.5)
+                                      : Colors.white.withOpacity(0.3),
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: Colors.white,
-                                width: 1
+                                color: canAccess ? Colors.white : Colors.white.withOpacity(0.5),
+                                width: 2.0 // Increased from 1.5
                               ),
                             ),
                             child: index < _currentPageIndex
-                                ? Icon(Icons.check, size: 6, color: Color(0xFF2E86C1))
+                                ? Icon(Icons.check, size: 14, color: Color(0xFF2E86C1)) // Increased from 10
                                 : null,
                           ),
                         );
@@ -1065,13 +1127,18 @@ class _AddDoseState extends State<AddDose> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 14), // More space
               _buildNavigationButton(
                 icon: Icons.arrow_forward_ios_rounded,
-                onTap: _currentPageIndex < 2 ? _nextPage : null,
+                onTap: _currentPageIndex < 2 
+                    ? (_currentPageIndex == 0 && !_isPage1Valid) || (_currentPageIndex == 1 && !_isPage2Valid)
+                        ? null 
+                        : _nextPage
+                    : null,
               ),
             ],
           ),
+          const SizedBox(height: 10), // More space at bottom
         ],
       ),
     );
@@ -1085,25 +1152,25 @@ class _AddDoseState extends State<AddDose> {
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          width: 24,
-          height: 24,
+          width: 40, // Increased from 32
+          height: 40, // Increased from 32
           decoration: BoxDecoration(
             color: isEnabled ? Colors.white.withOpacity(0.2) : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isEnabled ? Colors.white : Colors.white.withOpacity(0.2),
-              width: 1,
+              width: 2.0, // Increased from 1.5
             ),
           ),
           child: Icon(
             icon,
             color: isEnabled ? Colors.white : Colors.white.withOpacity(0.3),
-            size: 12,
+            size: 20, // Increased from 16
           ),
         ),
       ),
