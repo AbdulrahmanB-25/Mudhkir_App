@@ -11,11 +11,26 @@ const Color kSecondaryColor = Color(0xFF5DADE2);
 
 class DoseScheduleServices {
   final User? user;
-
+  // Cache to avoid repeated calculations
+  Map<String, Map<DateTime, List<Map<String, dynamic>>>> _doseCache = {};
+  
   DoseScheduleServices({this.user});
 
-  Future<Map<DateTime, List<Map<String, dynamic>>>> fetchDoses(BuildContext context) async {
+  Future<Map<DateTime, List<Map<String, dynamic>>>> fetchDoses(
+      BuildContext context, {DateTime? startRangeDate, DateTime? endRangeDate}) async {
     if (user == null) return {};
+
+    // Default to current month +/- 1 month if not specified
+    final now = DateTime.now();
+    startRangeDate ??= DateTime(now.year, now.month - 1, 1);
+    endRangeDate ??= DateTime(now.year, now.month + 1, 0);
+    
+    final String cacheKey = '${startRangeDate.toIso8601String()}_${endRangeDate.toIso8601String()}';
+    
+    // Return cached data if available
+    if (_doseCache.containsKey(cacheKey)) {
+      return _doseCache[cacheKey]!;
+    }
 
     final Map<DateTime, List<Map<String, dynamic>>> doses = {};
     final String userId = user!.uid;
@@ -34,10 +49,7 @@ class DoseScheduleServices {
         final Timestamp? startTimestamp = data['startDate'] as Timestamp?;
         final Timestamp? endTimestamp = data['endDate'] as Timestamp?;
 
-        if (startTimestamp == null) {
-          print('Document ${doc.id} missing start date. Skipping.');
-          continue;
-        }
+        if (startTimestamp == null) continue;
 
         String resolvedFrequencyType = 'يومي';
         if (data.containsKey('frequencyType') && data['frequencyType'] == 'اسبوعي') {
@@ -50,148 +62,21 @@ class DoseScheduleServices {
           }
         }
 
-        print('Processing medication ${doc.id}: $medicationName, frequency type: $resolvedFrequencyType');
-
         final List<dynamic> timesRaw = data['times'] ?? [];
         final String imageUrl = data['imageUrl'] as String? ?? '';
         final String imgbbDeleteHash = data['imgbbDeleteHash'] as String? ?? '';
 
         final DateTime startDate = startTimestamp.toDate();
         final DateTime? endDate = endTimestamp?.toDate();
+        
+        // Only process dates within the specified range
+        final DateTime effectiveStartDate = startDate.isAfter(startRangeDate) ? startDate : startRangeDate;
+        final DateTime effectiveEndDate = endDate != null && endDate.isBefore(endRangeDate) ? endDate : endRangeDate;
 
         if (resolvedFrequencyType == 'يومي') {
-          DateTime currentDate = startDate;
-          while (endDate == null || !currentDate.isAfter(endDate)) {
-            final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
-
-            List<TimeOfDay> timesParsed = timesRaw
-                .map((t) => TimeUtils.parseTime(t))
-                .whereType<TimeOfDay>()
-                .toList();
-
-            if (timesParsed.isNotEmpty) {
-              doses.putIfAbsent(normalizedDate, () => []);
-              for (var time in timesParsed) {
-                doses[normalizedDate]!.add({
-                  'medicationName': medicationName,
-                  'dosage': dosage,
-                  'timeOfDay': time,
-                  'timeString': TimeUtils.formatTimeOfDay(context, time),
-                  'docId': doc.id,
-                  'imageUrl': imageUrl,
-                  'imgbbDeleteHash': imgbbDeleteHash,
-                });
-              }
-            }
-
-            currentDate = currentDate.add(const Duration(days: 1));
-            if (endDate != null && currentDate.isAfter(endDate)) break;
-            if (endDate == null && currentDate.difference(startDate).inDays > (365 * 5)) {
-              print("Warning: Daily Medication ${doc.id} has long duration; stopping iteration after 5 years.");
-              break;
-            }
-          }
+          _processDailyMedication(doses, effectiveStartDate, effectiveEndDate, timesRaw, medicationName, dosage, doc.id, imageUrl, imgbbDeleteHash, context);
         } else if (resolvedFrequencyType == 'اسبوعي') {
-          print('Weekly medication found: $medicationName');
-          print('Times raw data: $timesRaw');
-
-          final Map<int, List<TimeOfDay>> weeklySchedule = {};
-
-          for (var item in timesRaw) {
-            if (item is Map) {
-              int? dayValue;
-              dynamic timeValue;
-
-              if (item.containsKey('day')) {
-                var day = item['day'];
-                if (day is int) dayValue = day;
-                else if (day is String) dayValue = int.tryParse(day);
-                else if (day is double) dayValue = day.toInt();
-              }
-
-              timeValue = item['time'];
-
-              if (timeValue is Map && timeValue.containsKey('time')) {
-                timeValue = timeValue['time'];
-              }
-
-              if (dayValue != null && dayValue >= 1 && dayValue <= 7) {
-                final parsedTime = TimeUtils.parseTime(timeValue);
-                if (parsedTime != null) {
-                  weeklySchedule.putIfAbsent(dayValue, () => []).add(parsedTime);
-                  print("Scheduled for weekday $dayValue at $parsedTime");
-                } else {
-                  print("Could not parse time '$timeValue' for day $dayValue");
-                }
-              } else {
-                print("Invalid or missing day value in weekly schedule item: $item");
-              }
-            }
-          }
-
-          if (data.containsKey('selectedWeekdays') && data['selectedWeekdays'] is List) {
-            List<int> selectedDays = List<int>.from(
-                (data['selectedWeekdays'] as List)
-                    .map((day) => day is int ? day : int.tryParse(day.toString()))
-                    .where((day) => day != null && day >= 1 && day <= 7)
-            );
-            print("Found selectedWeekdays: $selectedDays");
-
-            List<TimeOfDay> timesForSelectedDays = timesRaw
-                .whereType<String>()
-                .map((t) => TimeUtils.parseTime(t))
-                .whereType<TimeOfDay>()
-                .toList();
-
-            if(timesForSelectedDays.isEmpty && timesRaw.isNotEmpty && timesRaw.first is Map && timesRaw.first.containsKey('time')) {
-              final firstTime = TimeUtils.parseTime(timesRaw.first['time']);
-              if (firstTime != null) timesForSelectedDays.add(firstTime);
-            }
-
-            if (timesForSelectedDays.isNotEmpty) {
-              for (int dayValue in selectedDays) {
-                weeklySchedule.putIfAbsent(dayValue, () => []).addAll(timesForSelectedDays);
-                print("Scheduled for weekday $dayValue (from selectedWeekdays) at times: $timesForSelectedDays");
-              }
-            } else {
-              print("Warning: selectedWeekdays found but no valid times could be parsed from timesRaw: $timesRaw");
-            }
-          }
-
-          if (weeklySchedule.isNotEmpty) {
-            DateTime currentDate = startDate;
-            while (endDate == null || !currentDate.isAfter(endDate)) {
-              final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
-              final int currentWeekday = normalizedDate.weekday;
-
-              if (weeklySchedule.containsKey(currentWeekday)) {
-                final List<TimeOfDay> timesForThisDay = weeklySchedule[currentWeekday]!;
-                print("Match found! Adding doses for ${normalizedDate.toIso8601String()} (weekday $currentWeekday)");
-
-                doses.putIfAbsent(normalizedDate, () => []);
-                for (var time in timesForThisDay) {
-                  doses[normalizedDate]!.add({
-                    'medicationName': medicationName,
-                    'dosage': dosage,
-                    'timeOfDay': time,
-                    'timeString': TimeUtils.formatTimeOfDay(context, time),
-                    'docId': doc.id,
-                    'imageUrl': imageUrl,
-                    'imgbbDeleteHash': imgbbDeleteHash,
-                  });
-                }
-              }
-
-              currentDate = currentDate.add(const Duration(days: 1));
-              if (endDate != null && currentDate.isAfter(endDate)) break;
-              if (endDate == null && currentDate.difference(startDate).inDays > (365 * 5)) {
-                print("Warning: Weekly Medication ${doc.id} has long duration; stopping iteration after 5 years.");
-                break;
-              }
-            }
-          } else {
-            print("Warning: No valid weekly schedule found for medication ${doc.id}. Check 'times' or 'selectedWeekdays' data.");
-          }
+          _processWeeklyMedication(doses, effectiveStartDate, effectiveEndDate, timesRaw, data, medicationName, dosage, doc.id, imageUrl, imgbbDeleteHash, context);
         }
       }
 
@@ -206,12 +91,152 @@ class DoseScheduleServices {
           return (a['medicationName'] as String).compareTo(b['medicationName'] as String);
         });
       });
-
+      
+      // Cache the result
+      _doseCache[cacheKey] = doses;
       return doses;
     } catch (e, stackTrace) {
       print('Error fetching doses: $e');
-      print(stackTrace);
       return {};
+    }
+  }
+  
+  void _processDailyMedication(
+      Map<DateTime, List<Map<String, dynamic>>> doses,
+      DateTime startDate,
+      DateTime endDate,
+      List<dynamic> timesRaw,
+      String medicationName,
+      String dosage,
+      String docId,
+      String imageUrl,
+      String imgbbDeleteHash,
+      BuildContext context) {
+
+    // Pre-parse all times for better performance
+    List<TimeOfDay> timesParsed = timesRaw
+        .map((t) => TimeUtils.parseTime(t))
+        .whereType<TimeOfDay>()
+        .toList();
+        
+    if (timesParsed.isEmpty) return;
+
+    // More efficient calculation of days between dates
+    int dayDifference = endDate.difference(startDate).inDays;
+    
+    for (int i = 0; i <= dayDifference; i++) {
+      final DateTime currentDate = startDate.add(Duration(days: i));
+      final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
+      
+      doses.putIfAbsent(normalizedDate, () => []);
+      for (var time in timesParsed) {
+        doses[normalizedDate]!.add({
+          'medicationName': medicationName,
+          'dosage': dosage,
+          'timeOfDay': time,
+          'timeString': TimeUtils.formatTimeOfDay(context, time),
+          'docId': docId,
+          'imageUrl': imageUrl,
+          'imgbbDeleteHash': imgbbDeleteHash,
+        });
+      }
+    }
+  }
+  
+  void _processWeeklyMedication(
+      Map<DateTime, List<Map<String, dynamic>>> doses,
+      DateTime startDate,
+      DateTime endDate,
+      List<dynamic> timesRaw,
+      Map<String, dynamic> data,
+      String medicationName,
+      String dosage,
+      String docId,
+      String imageUrl,
+      String imgbbDeleteHash,
+      BuildContext context) {
+
+    final Map<int, List<TimeOfDay>> weeklySchedule = {};
+
+    // Process day-specific times
+    for (var item in timesRaw) {
+      if (item is Map) {
+        int? dayValue;
+        dynamic timeValue;
+
+        if (item.containsKey('day')) {
+          var day = item['day'];
+          if (day is int) dayValue = day;
+          else if (day is String) dayValue = int.tryParse(day);
+          else if (day is double) dayValue = day.toInt();
+        }
+
+        timeValue = item['time'];
+        if (timeValue is Map && timeValue.containsKey('time')) {
+          timeValue = timeValue['time'];
+        }
+
+        if (dayValue != null && dayValue >= 1 && dayValue <= 7) {
+          final parsedTime = TimeUtils.parseTime(timeValue);
+          if (parsedTime != null) {
+            weeklySchedule.putIfAbsent(dayValue, () => []).add(parsedTime);
+          }
+        }
+      }
+    }
+
+    // Process selectedWeekdays
+    if (data.containsKey('selectedWeekdays') && data['selectedWeekdays'] is List) {
+      List<int> selectedDays = List<int>.from(
+          (data['selectedWeekdays'] as List)
+              .map((day) => day is int ? day : int.tryParse(day.toString()))
+              .where((day) => day != null && day >= 1 && day <= 7)
+      );
+
+      List<TimeOfDay> timesForSelectedDays = timesRaw
+          .whereType<String>()
+          .map((t) => TimeUtils.parseTime(t))
+          .whereType<TimeOfDay>()
+          .toList();
+
+      if(timesForSelectedDays.isEmpty && timesRaw.isNotEmpty && timesRaw.first is Map && timesRaw.first.containsKey('time')) {
+        final firstTime = TimeUtils.parseTime(timesRaw.first['time']);
+        if (firstTime != null) timesForSelectedDays.add(firstTime);
+      }
+
+      if (timesForSelectedDays.isNotEmpty) {
+        for (int dayValue in selectedDays) {
+          weeklySchedule.putIfAbsent(dayValue, () => []).addAll(timesForSelectedDays);
+        }
+      }
+    }
+
+    if (weeklySchedule.isEmpty) return;
+    
+    // More efficient date iteration
+    int dayDifference = endDate.difference(startDate).inDays;
+    
+    for (int i = 0; i <= dayDifference; i++) {
+      final DateTime currentDate = startDate.add(Duration(days: i));
+      final int currentWeekday = currentDate.weekday;
+      
+      if (weeklySchedule.containsKey(currentWeekday)) {
+        final List<TimeOfDay> timesForThisDay = weeklySchedule[currentWeekday]!;
+        final DateTime normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
+        
+        doses.putIfAbsent(normalizedDate, () => []);
+        for (var time in timesForThisDay) {
+          doses[normalizedDate]!.add({
+            'medicationName': medicationName,
+            'dosage': dosage,
+            'timeOfDay': time,
+            'timeString': TimeUtils.formatTimeOfDay(context, time),
+            'docId': docId,
+            'imageUrl': imageUrl,
+            'imgbbDeleteHash': imgbbDeleteHash,
+          });
+        }
+      }
     }
   }
 

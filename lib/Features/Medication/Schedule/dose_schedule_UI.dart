@@ -18,11 +18,68 @@ const Color kBackgroundColor = Color(0xFFF5F8FA);
 const double kBorderRadius = 16.0;
 const double kSpacing = 16.0;
 
+// Global image cache
+class ImageCache {
+  static final Map<String, File> _fileCache = {};
+  static final Map<String, Completer<File?>> _inProgressDownloads = {};
+
+  static Future<File?> getImage(String url) async {
+    // Return from cache if available
+    if (_fileCache.containsKey(url)) {
+      return _fileCache[url];
+    }
+
+    // Wait for already in-progress download
+    if (_inProgressDownloads.containsKey(url)) {
+      return _inProgressDownloads[url]!.future;
+    }
+
+    // Start new download
+    final completer = Completer<File?>();
+    _inProgressDownloads[url] = completer;
+
+    _downloadAndSaveImage(url).then((file) {
+      if (file != null) {
+        _fileCache[url] = file;
+      }
+      completer.complete(file);
+      _inProgressDownloads.remove(url);
+    }).catchError((e) {
+      completer.complete(null);
+      _inProgressDownloads.remove(url);
+    });
+
+    return completer.future;
+  }
+
+  static Future<File?> _downloadAndSaveImage(String url) async {
+    final uri = Uri.tryParse(url);
+    if (url.isEmpty || uri == null || !uri.isAbsolute) {
+      return null;
+    }
+
+    try {
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final Directory directory = await getTemporaryDirectory();
+        final String filePath = '${directory.path}/${url.hashCode}.png';
+        File file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        return file;
+      }
+    } catch (e) {
+      print("Error downloading image: $e");
+    }
+    return null;
+  }
+}
+
 class EnlargeableImage extends StatefulWidget {
   final String imageUrl;
   final double width;
   final double height;
   final String docId;
+  final String uniqueKey; // Add this parameter for unique identification
 
   const EnlargeableImage({
     super.key,
@@ -30,6 +87,7 @@ class EnlargeableImage extends StatefulWidget {
     required this.width,
     required this.height,
     required this.docId,
+    this.uniqueKey = '', // Default to empty string
   });
 
   @override
@@ -42,38 +100,15 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
   @override
   void initState() {
     super.initState();
-    _imageFileFuture = _downloadAndSaveImage(widget.imageUrl);
+    _imageFileFuture = ImageCache.getImage(widget.imageUrl);
   }
 
   @override
   void didUpdateWidget(covariant EnlargeableImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.imageUrl != widget.imageUrl) {
-      _imageFileFuture = _downloadAndSaveImage(widget.imageUrl);
+      _imageFileFuture = ImageCache.getImage(widget.imageUrl);
     }
-  }
-
-  Future<File?> _downloadAndSaveImage(String url) async {
-    final uri = Uri.tryParse(url);
-    if (url.isEmpty || uri == null || !uri.isAbsolute) {
-      print("Invalid or empty URL for download: $url");
-      return null;
-    }
-    try {
-      final response = await http.get(uri);
-      if (response.statusCode == 200) {
-        final Directory directory = await getTemporaryDirectory();
-        final String filePath = '${directory.path}/${url.hashCode}.png';
-        File file = File(filePath);
-        await file.writeAsBytes(response.bodyBytes);
-        return file;
-      } else {
-        print("Failed to download image ($url). Status: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Error downloading image ($url): $e");
-    }
-    return null;
   }
 
   void _openEnlargedImage(BuildContext context, File imageFile) {
@@ -105,7 +140,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
                 ),
                 body: Center(
                   child: Hero(
-                    tag: 'medication_image_${widget.docId}_${widget.imageUrl.hashCode}',
+                    tag: _getUniqueHeroTag(),
                     child: InteractiveViewer(
                       panEnabled: true,
                       minScale: 0.5,
@@ -120,6 +155,15 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
         },
       ),
     );
+  }
+
+  // Create a new method to generate the unique hero tag
+  String _getUniqueHeroTag() {
+    final String baseTag = 'medication_image_${widget.docId}_${widget.imageUrl.hashCode}';
+    if (widget.uniqueKey.isNotEmpty) {
+      return '${baseTag}_${widget.uniqueKey}';
+    }
+    return baseTag;
   }
 
   @override
@@ -153,7 +197,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
           );
         } else if (snapshot.hasData && snapshot.data != null) {
           return Hero(
-            tag: 'medication_image_${widget.docId}_${widget.imageUrl.hashCode}',
+            tag: _getUniqueHeroTag(),
             child: GestureDetector(
               onTap: () => _openEnlargedImage(context, snapshot.data!),
               child: Container(
@@ -607,6 +651,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
                     width: 50,
                     height: 50,
                     docId: widget.docId,
+                    uniqueKey: widget.nextDose.replaceAll(RegExp(r'[^0-9]'), ''), // Use the time as a unique identifier
                   ),
                   const SizedBox(width: 12),
 
@@ -921,3 +966,4 @@ class CalendarWidget extends StatelessWidget {
     );
   }
 }
+

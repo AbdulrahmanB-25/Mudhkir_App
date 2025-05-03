@@ -5,8 +5,6 @@ import 'package:intl/intl.dart';
 import '../Schedule/time_utils.dart';
 
 
-//TODO : WARNAING FOR DOSAGE TIME
-//TODO : AUTO TIMEING RESET
 
 
 const Color kPrimaryColor = Color(0xFF2E86C1);

@@ -1,5 +1,4 @@
 import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,28 +6,18 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'dart:ui' as ui;
-
-// Import your services and widgets
-
 import 'package:mudhkir_app/Features/Companions/companion_medication_tracker.dart';
-
 import '../../Core/Services/AlarmNotificationHelper.dart';
 import '../../Shared/Widgets/bottom_navigation.dart';
 import '../../main.dart';
 
-// Import SharedPreferences keys from main.dart (adjust path if needed)
-
-
-// --- Constants ---
 const Color kPrimaryColor = Color(0xFF2E86C1);
-const Cololor = Color(0xFF5DADE2);
+const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kErrorColor = Color(0xFFFF6B6B);
 const Color kBackgroundColor = Color(0xFFF5F8FA);
 const Color kCardColor = Colors.white;
 const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
-// --- End Constants ---
-
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -42,12 +31,12 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   String _closestMedName = '';
   String _closestMedTimeStr = '';
   String _closestMedDocId = '';
-  bool _isLoadingMed = true; // Specifically for the 'Upcoming Dose' UI tile
-  bool _isInitializing = true; // Tracks overall initial loading/checking state
+  bool _isLoadingMed = true;
+  bool _isInitializing = true;
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
   bool _isAuthenticated = false;
-  User? _currentUser; // Store current user
+  User? _currentUser;
 
   @override
   void initState() {
@@ -61,7 +50,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       curve: Curves.easeIn,
     );
 
-    FirebaseAuth.instance.authStateChanges().listen(_handleAuthStateChange);
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      _handleAuthStateChange(user);
+    });
     _initializePage();
   }
 
@@ -79,7 +70,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   Future<void> _handleAuthStateChange(User? user, {bool isInitialLoad = false}) async {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     final newAuthStatus = user != null;
     final authChanged = _isAuthenticated != newAuthStatus;
@@ -104,7 +97,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
       await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
-      print("[Auth] User logged out or guest. Notifications cancelled and state cleared.");
 
       if (authChanged && !isInitialLoad) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -127,7 +119,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   Future<void> _loadUserDataAndSchedule() async {
-    if (!mounted || !_isAuthenticated || _currentUser == null) return;
+    if (!mounted || !_isAuthenticated || _currentUser == null) {
+      if (mounted) setState(() => _isLoadingMed = false);
+      return;
+    }
 
     if (!_isLoadingMed && mounted) {
       setState(() => _isLoadingMed = true);
@@ -135,7 +130,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     await _loadUserName();
     await _scheduleAllUserMedications(_currentUser!.uid);
-    // --- Fetch and schedule companion medications on every refresh ---
     await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
     await _loadClosestMedDisplayData();
   }
@@ -147,23 +141,20 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   Future<void> _scheduleAllUserMedications(String userId) async {
-    if (!mounted) return;
-    print("[Scheduling] Starting scheduling process for user $userId...");
+    if (!mounted) {
+      return;
+    }
 
-    // Ensure notification channels are configured before scheduling
     try {
       await AlarmNotificationHelper.ensureChannelsSetup();
-      print("[Scheduling] Ensured notification channels are set up.");
     } catch (e) {
       print("[Scheduling] ERROR ensuring notification channels setup: $e");
-      // Optionally handle this error, though scheduling might still work if channels exist
     }
 
     await AlarmNotificationHelper.cancelAllNotifications();
-    print("[Scheduling] Cancelled previous notifications.");
 
     List<Map<String, dynamic>> upcomingDoses = [];
-    int scheduledCount = 0; // Counter for scheduled notifications
+    int scheduledCount = 0;
 
     try {
       final medsSnapshot = await FirebaseFirestore.instance
@@ -172,17 +163,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           .collection('medicines')
           .get();
 
-      print("[Scheduling] Fetched ${medsSnapshot.docs.length} medication documents.");
-
       final tz.Location local = tz.local;
       final tz.TZDateTime now = tz.TZDateTime.now(local);
-
-      // Calculate start and end of today for filtering today's doses
-      final tz.TZDateTime todayStart = tz.TZDateTime(local, now.year, now.month, now.day);
-      final tz.TZDateTime tomorrowStart = todayStart.add(const Duration(days: 1));
-
-      print("[Scheduling] Current time: $now (Local)");
-      print("[Scheduling] Today's window for next dose check: $todayStart to $tomorrowStart");
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
@@ -192,24 +174,20 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final endTimestamp = data['endDate'] as Timestamp?;
 
         if (startTimestamp == null) {
-          print("[Scheduling] Skipping '$medName' ($docId): Missing start date.");
           continue;
         }
 
         final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), local);
         final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), local) : null;
 
-        // Basic filtering: Skip if medication hasn't started or has already ended
         final tz.TZDateTime todayFloor = tz.TZDateTime(local, now.year, now.month, now.day);
         final tz.TZDateTime startDayFloor = tz.TZDateTime(local, startDate.year, startDate.month, startDate.day);
         if (todayFloor.isBefore(startDayFloor)) {
-          print("[Scheduling] Skipping '$medName' ($docId): Start date ($startDate) is in the future.");
           continue;
         }
         if (endDate != null) {
           final tz.TZDateTime endDayFloor = tz.TZDateTime(local, endDate.year, endDate.month, endDate.day);
           if (todayFloor.isAfter(endDayFloor)) {
-            print("[Scheduling] Skipping '$medName' ($docId): End date ($endDate) has passed.");
             continue;
           }
         }
@@ -217,11 +195,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final frequencyType = data['frequencyType'] as String? ?? 'يومي';
         final List<dynamic> timesRaw = data['times'] ?? [];
 
-        // Schedule doses within a reasonable future window (e.g., 48 hours)
         final Duration scheduleWindow = Duration(hours: 48);
         final tz.TZDateTime scheduleUntil = now.add(scheduleWindow);
-
-        print("[Scheduling] Calculating doses for '$medName' ($docId) until $scheduleUntil");
 
         List<tz.TZDateTime> nextDoseTimes = _calculateNextDoseTimes(
             now: now,
@@ -231,27 +206,19 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             frequencyType: frequencyType,
             timesRaw: timesRaw);
 
-        print("[Scheduling] Found ${nextDoseTimes.length} potential dose times for '$medName' ($docId) in the window.");
-
         for (tz.TZDateTime doseTime in nextDoseTimes) {
-          // Ensure generateNotificationId is available in AlarmNotificationHelper
           final notificationId = AlarmNotificationHelper.generateNotificationId(docId, doseTime.toUtc());
 
-          print("[Scheduling] Attempting to schedule '$medName' (ID: $notificationId) for $doseTime (Local)");
-
           try {
-            // Ensure scheduleAlarmNotification is available and takes 'id'
             await AlarmNotificationHelper.scheduleAlarmNotification(
               id: notificationId,
               title: "💊 تذكير بجرعة دواء",
               body: "حان الآن موعد تناول جرعة دواء '$medName'.",
-              scheduledTime: doseTime.toLocal(), // Pass local time for scheduling
+              scheduledTime: doseTime.toLocal(),
               medicationId: docId,
             );
-            scheduledCount++; // Increment counter
-            print("[Scheduling] Successfully scheduled/updated notification ID $notificationId for $docId at $doseTime");
+            scheduledCount++;
 
-            // Store all upcoming doses for processing, not just today's doses
             if (doseTime.isAfter(now)) {
               upcomingDoses.add({'docId': docId, 'time': doseTime});
             }
@@ -261,36 +228,21 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         }
       }
 
-      print("[Scheduling] Total notifications scheduled/updated in this run: $scheduledCount");
-
       final prefs = await SharedPreferences.getInstance();
 
-      // Filter doses to only include today's doses for display purposes
-      List<Map<String, dynamic>> todayDoses = upcomingDoses
-          .where((dose) {
-        final doseTime = dose['time'] as tz.TZDateTime;
-        return doseTime.isAfter(now) &&
-            doseTime.isAfter(todayStart) &&
-            doseTime.isBefore(tomorrowStart);
-      }).toList();
+      if (upcomingDoses.isNotEmpty) {
+        upcomingDoses.sort((a, b) => (a['time'] as tz.TZDateTime).compareTo(b['time'] as tz.TZDateTime));
 
-      print("[Scheduling] Found ${todayDoses.length} doses for today out of ${upcomingDoses.length} total upcoming doses");
+        final absoluteNextDose = upcomingDoses.first;
+        final absoluteNextDoseTime = absoluteNextDose['time'] as tz.TZDateTime;
+        final absoluteNextDoseDocId = absoluteNextDose['docId'] as String;
 
-      if (todayDoses.isNotEmpty) {
-        // Sort today's doses to find the closest one
-        todayDoses.sort((a, b) => (a['time'] as tz.TZDateTime).compareTo(b['time'] as tz.TZDateTime));
-        final nextDose = todayDoses.first;
-        final nextDoseTime = nextDose['time'] as tz.TZDateTime;
-        final nextDoseDocId = nextDose['docId'] as String;
+        await prefs.setString(PREF_NEXT_DOSE_DOC_ID, absoluteNextDoseDocId);
+        await prefs.setString(PREF_NEXT_DOSE_TIME_ISO, absoluteNextDoseTime.toUtc().toIso8601String());
 
-        await prefs.setString(PREF_NEXT_DOSE_DOC_ID, nextDoseDocId);
-        await prefs.setString(PREF_NEXT_DOSE_TIME_ISO, nextDoseTime.toUtc().toIso8601String());
-        print("[Scheduling] Next dose for today stored for confirmation: $nextDoseDocId at $nextDoseTime (Local)");
       } else {
-        // No doses for today, clear stored next dose
         await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
         await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
-        print("[Scheduling] No upcoming doses found for today.");
       }
 
     } catch (e) {
@@ -299,7 +251,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
       await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
     }
-    print("[Scheduling] Scheduling process finished.");
   }
 
   List<tz.TZDateTime> _calculateNextDoseTimes({
@@ -361,7 +312,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
 
     int safetyBreak = 0;
-    const int maxDaysToCheck = 5;
+    const int maxDaysToCheck = 7;
 
     while (currentDay.isBefore(scheduleUntil) && safetyBreak < maxDaysToCheck) {
       safetyBreak++;
@@ -385,12 +336,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           tz.TZDateTime potentialDoseTime = tz.TZDateTime(
               local, currentDay.year, currentDay.month, currentDay.day, tod.hour, tod.minute);
 
-          if (potentialDoseTime.isAfter(now) &&
-              potentialDoseTime.isBefore(scheduleUntil) &&
-              (endDate == null || potentialDoseTime.isBefore(endDate))
-          )
-          {
-            doseTimes.add(potentialDoseTime);
+          if (potentialDoseTime.isAfter(now) && potentialDoseTime.isBefore(scheduleUntil)) {
+            if (endDate == null || potentialDoseTime.isBefore(endDate)) {
+              doseTimes.add(potentialDoseTime);
+            }
           }
         }
       }
@@ -406,9 +355,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     return doseTimes;
   }
 
+
   Future<void> _checkAndShowConfirmationIfNeeded() async {
-    if (!mounted || !_isAuthenticated) return;
-    print("[Confirmation] Checking for needed confirmation...");
+    if (!mounted || !_isAuthenticated) {
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final nextDoseDocId = prefs.getString(PREF_NEXT_DOSE_DOC_ID);
@@ -418,46 +369,37 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     String confirmationKey = '';
     String? timeIsoForNav;
 
+    final DateFormat logTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss ZZZZ', 'en_US');
+
     if (nextDoseDocId != null && nextDoseTimeIso != null) {
       try {
         final DateTime nextDoseTimeUTC = DateTime.parse(nextDoseTimeIso);
         final tz.TZDateTime nextDoseTimeLocal = tz.TZDateTime.from(nextDoseTimeUTC, tz.local);
         final tz.TZDateTime nowLocal = tz.TZDateTime.now(tz.local);
 
-        print("[Confirmation] Found stored next dose: $nextDoseDocId at $nextDoseTimeLocal (Local)");
-        print("[Confirmation] Current time: $nowLocal (Local)");
+        print("[Confirmation Time Check] Now (Local): ${logTimeFormat.format(nowLocal)} vs Stored Next Dose (Local): ${logTimeFormat.format(nextDoseTimeLocal)}");
 
         if (nowLocal.isAfter(nextDoseTimeLocal)) {
-          print("[Confirmation] Stored dose time has passed.");
           confirmationKey = '${PREF_CONFIRMATION_SHOWN_PREFIX}${nextDoseDocId}_${nextDoseTimeIso}';
           final bool alreadyShown = prefs.getBool(confirmationKey) ?? false;
 
           if (!alreadyShown) {
-            print("[Confirmation] Confirmation not shown yet. Preparing to navigate.");
             shouldNavigate = true;
             timeIsoForNav = nextDoseTimeIso;
-          } else {
-            print("[Confirmation] Confirmation already shown for this dose ($confirmationKey).");
           }
-        } else {
-          print("[Confirmation] Stored dose time is still in the future.");
         }
       } catch (e) {
         print("[Confirmation] Error parsing stored dose time '$nextDoseTimeIso': $e");
         await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
         await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
       }
-    } else {
-      print("[Confirmation] No next dose info found in SharedPreferences.");
     }
 
     if (shouldNavigate && nextDoseDocId != null && confirmationKey.isNotEmpty && timeIsoForNav != null) {
       await prefs.setBool(confirmationKey, true);
-      print("[Confirmation] Marked $confirmationKey as shown.");
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          print("[Confirmation] Navigating to details page for confirmation: $nextDoseDocId");
           Navigator.of(context).pushNamed(
             '/medication_detail',
             arguments: {
@@ -467,27 +409,24 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               'confirmationKey': confirmationKey,
             },
           ).then((result) {
-            print("[Confirmation] Returned from MedicationDetailPage. Result: $result");
             if (result == true && mounted) {
-              print("[Confirmation] Re-scheduling alarms after confirmation/reschedule.");
               if (_currentUser != null) {
                 setState(() => _isLoadingMed = true);
                 _loadUserDataAndSchedule();
               }
             } else if (mounted) {
-              print("[Confirmation] No action taken on detail page or returned false.");
+              _loadClosestMedDisplayData();
             }
           });
         }
       });
-    } else if (mounted) {
-      print("[Confirmation] No navigation needed.");
     }
   }
 
   Future<void> _loadUserName() async {
-    if (!mounted || !_isAuthenticated || _currentUser == null) return;
-    print("[DataLoad] Loading username...");
+    if (!mounted || !_isAuthenticated || _currentUser == null) {
+      return;
+    }
     try {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -499,24 +438,24 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final data = userDoc.data() as Map<String, dynamic>;
         fetchedName = data['username'] as String? ?? 'مستخدم';
       }
-      print("[DataLoad] Username fetched: $fetchedName");
       if (mounted) {
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('userName', fetchedName);
         setState(() { _userName = fetchedName; });
       }
     } catch (e) {
-      print("[DataLoad] Error loading username: $e");
+      print("[DataLoad User] Error loading username: $e");
       if (mounted) { setState(() => _userName = 'مستخدم'); }
     }
   }
 
   Future<void> _loadClosestMedDisplayData() async {
     if (!mounted || !_isAuthenticated || _currentUser == null) {
-      if(mounted) setState(() => _isLoadingMed = false);
+      if (mounted) {
+        setState(() => _isLoadingMed = false);
+      }
       return;
     }
-    print("[DataLoad] Loading closest med display data...");
 
     final prefs = await SharedPreferences.getInstance();
     final nextDocId = prefs.getString(PREF_NEXT_DOSE_DOC_ID);
@@ -524,46 +463,82 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     String displayMedName = '';
     String displayMedTime = '';
+    String displayDocId = '';
+
+    final DateFormat logTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss ZZZZ', 'en_US');
 
     if (nextDocId != null && nextTimeIso != null) {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUser!.uid)
-            .collection('medicines')
-            .doc(nextDocId)
-            .get();
-
-        if (doc.exists) {
-          displayMedName = doc.data()?['name'] as String? ?? 'دواء غير مسمى';
-        } else {
-          displayMedName = 'الدواء غير موجود';
-          print("[DataLoad] Warning: Medication doc $nextDocId not found for display.");
-        }
-
         final nextTimeUTC = DateTime.parse(nextTimeIso);
-        final nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, tz.local);
-        displayMedTime = _formatTimeOfDay(context, TimeOfDay.fromDateTime(nextTimeLocal));
-        print("[DataLoad] Display data: $displayMedName at $displayMedTime");
+        final tz.Location local = tz.local;
+        final nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, local);
+        final nowLocal = tz.TZDateTime.now(local);
 
+        final tz.TZDateTime todayStart = tz.TZDateTime(local, nowLocal.year, nowLocal.month, nowLocal.day);
+        final tz.TZDateTime tomorrowStart = todayStart.add(const Duration(days: 1));
+
+        print("[DataLoad Display Time Check] Now (Local): ${logTimeFormat.format(nowLocal)}");
+        print("[DataLoad Display Time Check] Stored Next Dose (Local): ${logTimeFormat.format(nextTimeLocal)}");
+        print("[DataLoad Display Time Check] Tomorrow Starts (Local): ${logTimeFormat.format(tomorrowStart)}");
+
+        if (nowLocal.isAfter(nextTimeLocal)) {
+          await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
+          await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
+          displayMedName = '';
+          displayMedTime = '';
+          displayDocId = '';
+        } else if (!nextTimeLocal.isBefore(tomorrowStart)) {
+          displayMedName = '';
+          displayMedTime = '';
+          displayDocId = '';
+        } else {
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_currentUser!.uid)
+              .collection('medicines')
+              .doc(nextDocId)
+              .get();
+
+          if (doc.exists) {
+            displayMedName = doc.data()?['name'] as String? ?? 'دواء غير مسمى';
+          } else {
+            displayMedName = '';
+            await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
+            await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
+          }
+
+          if (displayMedName.isNotEmpty) {
+            displayMedTime = _formatTimeOfDay(context, TimeOfDay.fromDateTime(nextTimeLocal));
+            displayDocId = nextDocId;
+          } else {
+            displayMedTime = '';
+            displayDocId = '';
+          }
+        }
       } catch (e) {
-        print("[DataLoad] Error fetching display data for closest med $nextDocId: $e");
+        print("[DataLoad Display] Error processing display data for closest med $nextDocId: $e");
         displayMedName = '';
         displayMedTime = 'خطأ';
+        displayDocId = '';
+        await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
+        await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
       }
     } else {
-      print("[DataLoad] No stored next dose info found for display.");
+      displayMedName = '';
+      displayMedTime = '';
+      displayDocId = '';
     }
 
     if (mounted) {
       setState(() {
         _closestMedName = displayMedName;
         _closestMedTimeStr = displayMedTime;
-        _closestMedDocId = nextDocId ?? '';
+        _closestMedDocId = displayDocId;
         _isLoadingMed = false;
       });
     }
   }
+
 
   TimeOfDay? _parseTime(String timeStr) {
     try {
@@ -598,7 +573,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   Future<String?> _getRandomMedicationId() async {
-    if (!_isAuthenticated || _currentUser == null) return null;
+    if (!_isAuthenticated || _currentUser == null) {
+      return null;
+    }
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -606,9 +583,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           .collection('medicines')
           .limit(1)
           .get();
-      return snapshot.docs.isNotEmpty ? snapshot.docs.first.id : null;
+      final id = snapshot.docs.isNotEmpty ? snapshot.docs.first.id : null;
+      return id;
     } catch (e) {
-      print('Error getting random medication ID: $e');
+      print('[Util] Error getting random medication ID: $e');
       return null;
     }
   }
@@ -616,7 +594,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   void _onItemTapped(int index) {
     if (_selectedIndex == index && index == 0) {
       if (_isAuthenticated && _currentUser != null && !_isLoadingMed) {
-        print("[Navigation] Home tapped again, refreshing...");
         setState(() => _isLoadingMed = true );
         _loadUserDataAndSchedule();
       }
@@ -694,7 +671,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             child: RefreshIndicator(
               onRefresh: () async {
                 if (_isAuthenticated && _currentUser != null) {
-                  print("[Refresh] User triggered refresh.");
                   setState(() => _isLoadingMed = true);
                   await _loadUserDataAndSchedule();
                 }
@@ -706,20 +682,18 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
                     children: [
-                      // --- Updated User Name Section ---
                       Container(
                         width: double.infinity,
                         height: 130,
                         child: Stack(
                           children: [
-                            // Background container with improved styling and login-like gradient
                             Container(
                               width: double.infinity,
                               height: 170,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    Colors.blue.shade50, 
+                                    Colors.blue.shade50,
                                     Colors.white.withOpacity(0.8),
                                     Colors.blue.shade100,
                                   ],
@@ -741,7 +715,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                               ),
                               child: Stack(
                                 children: [
-                                  // Decorative circles pattern
                                   Positioned(
                                     top: 15,
                                     left: 25,
@@ -775,20 +748,16 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                 ],
                               ),
                             ),
-                            
-                            // Profile section with improved layout
                             Padding(
                               padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Welcome text and name
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Greeting with subtle animation
                                         TweenAnimationBuilder(
                                           tween: Tween<double>(begin: 0, end: 1),
                                           duration: Duration(milliseconds: 800),
@@ -817,8 +786,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                             ),
                                           ),
                                         ),
-                                        
-                                        // Username with animated transition
                                         TweenAnimationBuilder(
                                           tween: Tween<double>(begin: 0, end: 1),
                                           duration: Duration(milliseconds: 800),
@@ -858,13 +825,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                             ),
                                           ),
                                         ),
-                                        
-                                        // Online status indicator removed
                                       ],
                                     ),
                                   ),
-                                  
-                                  // Enhanced Avatar/Profile Image
                                   Container(
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
@@ -885,7 +848,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                                           shape: BoxShape.circle,
                                           gradient: LinearGradient(
                                             colors: [
-                                              Colors.blue.shade700, 
+                                              Colors.blue.shade700,
                                               Colors.blue.shade900
                                             ],
                                             begin: Alignment.topLeft,
@@ -909,8 +872,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                           ],
                         ),
                       ),
-                      // --- End Updated User Name Section ---
-                      
                       Container(
                         width: double.infinity,
                         constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height * 0.7),
@@ -1202,9 +1163,11 @@ class DoseTile extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(kBorderRadius),
         child: InkWell(
-          // Remove tap handler to disable navigation
           splashColor: kPrimaryColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(kBorderRadius),
+          onTap: () {
+            // Navigator.pushNamed(context, '/medication_detail', arguments: {'docId': docId});
+          },
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -1355,4 +1318,3 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
-

@@ -8,7 +8,6 @@ import 'dart:ui' as ui;
 import 'dose_schedule_UI.dart';
 import 'dose_schedule_services.dart';
 
-
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kBackgroundColor = Color(0xFFF5F8FA);
@@ -30,6 +29,8 @@ class _DoseScheduleState extends State<DoseSchedule> {
   DateTime _focusedDay = DateTime.now();
   bool _isLoading = true;
   late DoseScheduleServices _services;
+  DateTime? _lastFetchStart;
+  DateTime? _lastFetchEnd;
 
   @override
   void initState() {
@@ -54,11 +55,11 @@ class _DoseScheduleState extends State<DoseSchedule> {
       });
       setState(() => _isLoading = false);
     } else {
-      _fetchDoses();
+      _fetchDosesForVisibleRange();
     }
   }
 
-  Future<void> _fetchDoses() async {
+  Future<void> _fetchDosesForVisibleRange() async {
     if (!mounted || _user == null) return;
 
     setState(() {
@@ -66,21 +67,40 @@ class _DoseScheduleState extends State<DoseSchedule> {
     });
 
     try {
-      final doses = await _services.fetchDoses(context);
+      final year = _focusedDay.year;
+      final month = _focusedDay.month;
+
+      final fetchStart = DateTime(year, month - 1, 1);
+      final fetchEnd = DateTime(year, month + 2, 0);
+
+      if (_lastFetchStart != null && _lastFetchEnd != null) {
+        if (!fetchStart.isBefore(_lastFetchStart!) && !fetchEnd.isAfter(_lastFetchEnd!)) {
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+
+      final doses = await _services.fetchDoses(
+        context,
+        startRangeDate: fetchStart,
+        endRangeDate: fetchEnd,
+      );
 
       if (mounted) {
         setState(() {
           _doses = doses;
           _isLoading = false;
+          _lastFetchStart = fetchStart;
+          _lastFetchEnd = fetchEnd;
         });
       }
-    } catch (e, stackTrace) {
-      print('Error in _fetchDoses: $e');
-      print(stackTrace);
+    } catch (e) {
+      print('Error in _fetchDosesForVisibleRange: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _doses = {};
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -95,6 +115,12 @@ class _DoseScheduleState extends State<DoseSchedule> {
     }
   }
 
+  Future<void> _fetchDoses() async {
+    _lastFetchStart = null;
+    _lastFetchEnd = null;
+    await _fetchDosesForVisibleRange();
+  }
+
   List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
     final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
     return _doses[normalizedDay] ?? [];
@@ -103,7 +129,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
   Widget _buildDateAndDosesHeader() {
     final events = _getEventsForDay(_selectedDay);
     final doseCount = events.length;
-    
+
     return Container(
       margin: const EdgeInsets.only(top: 16),
       decoration: BoxDecoration(
@@ -174,7 +200,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       )
-                    ]
+                    ],
                   ),
                   child: Row(
                     children: [
@@ -329,64 +355,65 @@ class _DoseScheduleState extends State<DoseSchedule> {
           child: SafeArea(
             child: _isLoading
                 ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(color: kPrimaryColor),
-                  const SizedBox(height: 16),
-                  Text(
-                    "جاري تحميل الجدول...",
-                    style: TextStyle(
-                      color: kPrimaryColor,
-                      fontWeight: FontWeight.w500,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(color: kPrimaryColor),
+                        const SizedBox(height: 16),
+                        Text(
+                          "جاري تحميل الجدول...",
+                          style: TextStyle(
+                            color: kPrimaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _fetchDoses,
+                    color: kPrimaryColor,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(kSpacing),
+                        child: Column(
+                          children: [
+                            CalendarWidget(
+                              focusedDay: _focusedDay,
+                              selectedDay: _selectedDay,
+                              calendarFormat: _calendarFormat,
+                              onDaySelected: (selectedDay, focusedDay) {
+                                if (!isSameDay(_selectedDay, selectedDay)) {
+                                  setState(() {
+                                    _selectedDay = selectedDay;
+                                    _focusedDay = focusedDay;
+                                  });
+                                }
+                              },
+                              onFormatChanged: (format) {
+                                if (_calendarFormat != format) {
+                                  setState(() => _calendarFormat = format);
+                                }
+                              },
+                              onPageChanged: (focusedDay) {
+                                _focusedDay = focusedDay;
+                                _fetchDosesForVisibleRange();
+                              },
+                              getEventsForDay: _getEventsForDay,
+                            ),
+
+                            // Date and Doses Header Bar
+                            _buildDateAndDosesHeader(),
+
+                            _buildDoseList(),
+
+                            const SizedBox(height: 30),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
-            )
-                : RefreshIndicator(
-              onRefresh: _fetchDoses,
-              color: kPrimaryColor,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(kSpacing),
-                  child: Column(
-                    children: [
-                      CalendarWidget(
-                        focusedDay: _focusedDay,
-                        selectedDay: _selectedDay,
-                        calendarFormat: _calendarFormat,
-                        onDaySelected: (selectedDay, focusedDay) {
-                          if (!isSameDay(_selectedDay, selectedDay)) {
-                            setState(() {
-                              _selectedDay = selectedDay;
-                              _focusedDay = focusedDay;
-                            });
-                          }
-                        },
-                        onFormatChanged: (format) {
-                          if (_calendarFormat != format) {
-                            setState(() => _calendarFormat = format);
-                          }
-                        },
-                        onPageChanged: (focusedDay) {
-                          _focusedDay = focusedDay;
-                        },
-                        getEventsForDay: _getEventsForDay,
-                      ),
-
-                      // Date and Doses Header Bar
-                      _buildDateAndDosesHeader(),
-
-                      _buildDoseList(),
-
-                      const SizedBox(height: 30),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           ),
         ),
       ),
@@ -400,39 +427,40 @@ class _DoseScheduleState extends State<DoseSchedule> {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 30),
         child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-        Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: kSecondaryColor.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.medication_liquid_outlined,
-          size: 48,
-          color: kSecondaryColor,
-        ),
-      ),
-    const SizedBox(height: 16),
-    Text(
-    "لا توجد جرعات لهذا اليوم",
-    style: TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.bold,
-    color: kPrimaryColor.withOpacity(0.7),
-    ),
-    textAlign: TextAlign.center,
-    ),
-    const SizedBox(height: 8),
-    Text(
-    "أضف دواءً جديدًا باستخدام زر الإضافة",
-    style: TextStyle(                fontSize: 14,
-      color: Colors.grey.shade600,
-    ),
-      textAlign: TextAlign.center,
-    ),
-            ],
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kSecondaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.medication_liquid_outlined,
+                size: 48,
+                color: kSecondaryColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "لا توجد جرعات لهذا اليوم",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kPrimaryColor.withOpacity(0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "أضف دواءً جديدًا باستخدام زر الإضافة",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
     }
