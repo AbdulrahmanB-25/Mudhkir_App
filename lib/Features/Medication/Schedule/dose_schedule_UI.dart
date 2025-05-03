@@ -567,15 +567,16 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
+        // Refresh the page by calling onDataChanged callback
         widget.onDataChanged();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text("فشل حذف الدواء"),
-              backgroundColor: Colors.red.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            )
+          SnackBar(
+            content: const Text("فشل حذف الدواء"),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          )
         );
       }
     }

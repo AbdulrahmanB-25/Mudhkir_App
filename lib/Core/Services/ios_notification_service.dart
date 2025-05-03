@@ -4,45 +4,44 @@ import 'package:timezone/timezone.dart' as tz;
 import 'notification_service.dart';
 
 class IOSNotificationService implements NotificationService {
-  final FlutterLocalNotificationsPlugin _notificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  
+  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+
   @override
   FlutterLocalNotificationsPlugin get notificationsPlugin => _notificationsPlugin;
-  
+
   @override
   Future<void> initialize(
-    BuildContext context, 
-    void Function(NotificationResponse) onNotificationResponse,
-    void Function(NotificationResponse)? onBackgroundNotificationResponse
-  ) async {
+      BuildContext context,
+      void Function(NotificationResponse) onNotificationResponse,
+      void Function(NotificationResponse)? onBackgroundNotificationResponse
+      ) async {
     final iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    
+
     final initSettings = InitializationSettings(
-      android: null, // Only iOS settings
+      android: null,
       iOS: iosInit,
     );
-    
+
     await _notificationsPlugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: onNotificationResponse,
       onDidReceiveBackgroundNotificationResponse: onBackgroundNotificationResponse,
     );
-    
+
     await setupNotificationChannels();
     await requestPermissions();
   }
-  
+
   @override
   Future<void> setupNotificationChannels() async {
     final iosPlugin = _notificationsPlugin
         .resolvePlatformSpecificImplementation<
         IOSFlutterLocalNotificationsPlugin>();
-        
+
     if (iosPlugin == null) return;
 
     final category = DarwinNotificationCategory(
@@ -69,34 +68,30 @@ class IOSNotificationService implements NotificationService {
       category,
     ]);
   }
-  
-  // Helper method to set notification categories
+
   Future<void> _setNotificationCategories(
-    IOSFlutterLocalNotificationsPlugin plugin, 
-    List<DarwinNotificationCategory> categories
-  ) async {
-    // This is a workaround since the method is not directly available
-    // In a real implementation, we would use the actual method from the plugin
+      IOSFlutterLocalNotificationsPlugin plugin,
+      List<DarwinNotificationCategory> categories
+      ) async {
     try {
-      // The plugin might expose this method in the future
     } catch (e) {
       debugPrint("[IOSNotificationService] Error setting notification categories: $e");
     }
   }
-  
+
   @override
   Future<void> requestPermissions() async {
     final iosPlugin = _notificationsPlugin
         .resolvePlatformSpecificImplementation<
         IOSFlutterLocalNotificationsPlugin>();
-        
+
     await iosPlugin?.requestPermissions(
       alert: true,
       badge: true,
       sound: true,
     );
   }
-  
+
   @override
   Future<void> scheduleAlarmNotification({
     required int id,
@@ -105,17 +100,26 @@ class IOSNotificationService implements NotificationService {
     required DateTime scheduledTime,
     required String medicationId,
     bool isSnoozed = false,
+    bool isCompanionCheck = false,
     RepeatInterval? repeatInterval,
   }) async {
+    final isCompanionNotification = isCompanionCheck ||
+        title.contains("تذكير جرعة مرافق") ||
+        medicationId.startsWith("companion_");
+
+    final categoryIdentifier = isCompanionNotification
+        ? ''
+        : 'medication_category';
+
     final iosDetails = DarwinNotificationDetails(
-      sound: 'medication_alarm.ogg', // Make sure this file exists in iOS project
-      categoryIdentifier: 'medication_category',
+      sound: 'medication_alarm.ogg',
+      categoryIdentifier: categoryIdentifier,
       interruptionLevel: InterruptionLevel.timeSensitive,
       presentSound: true,
     );
 
     final details = NotificationDetails(
-      android: null, // Only iOS details
+      android: null,
       iOS: iosDetails,
     );
 
@@ -125,11 +129,10 @@ class IOSNotificationService implements NotificationService {
     tz.TZDateTime effectiveScheduledTime = tzTime;
 
     if (repeatInterval != null && tzTime.isBefore(tzNow)) {
-      // Handle repeat intervals if time is in the past
       effectiveScheduledTime = _adjustTimeForRepeat(tzNow, scheduledTime, repeatInterval);
     }
     else if (repeatInterval == null && tzTime.isBefore(tzNow.subtract(const Duration(seconds: 1)))) {
-      return; // Skip if one-time notification and time is in the past
+      return;
     }
 
     try {
@@ -146,7 +149,7 @@ class IOSNotificationService implements NotificationService {
         body,
         effectiveScheduledTime,
         details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Add this parameter
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: medicationId,
         matchDateTimeComponents: matchDateTimeComponents,
       );
@@ -155,21 +158,20 @@ class IOSNotificationService implements NotificationService {
     }
   }
 
-  // Helper method to adjust time for repeat intervals
   tz.TZDateTime _adjustTimeForRepeat(
-    tz.TZDateTime now, 
-    DateTime scheduledTime, 
-    RepeatInterval repeatInterval
-  ) {
+      tz.TZDateTime now,
+      DateTime scheduledTime,
+      RepeatInterval repeatInterval
+      ) {
     final TimeOfDay timeOfDay = TimeOfDay.fromDateTime(scheduledTime);
-    
+
     if (repeatInterval == RepeatInterval.daily) {
       return _nextInstanceOfTime(now.toLocal(), timeOfDay);
     } else if (repeatInterval == RepeatInterval.weekly) {
       return _nextInstanceOfWeekday(now.toLocal(), scheduledTime.weekday, timeOfDay);
     }
-    
-    return now.add(const Duration(minutes: 1)); // Fallback
+
+    return now.add(const Duration(minutes: 1));
   }
 
   tz.TZDateTime _nextInstanceOfTime(DateTime from, TimeOfDay tod) {
@@ -190,7 +192,7 @@ class IOSNotificationService implements NotificationService {
     }
     return scheduledDate;
   }
-  
+
   @override
   Future<void> cancelNotification(int id) async {
     try {
@@ -199,7 +201,7 @@ class IOSNotificationService implements NotificationService {
       debugPrint("[IOSNotificationService] Error canceling notification $id: $e");
     }
   }
-  
+
   @override
   Future<void> cancelAllNotifications() async {
     try {
@@ -208,7 +210,7 @@ class IOSNotificationService implements NotificationService {
       debugPrint("[IOSNotificationService] Error canceling all notifications: $e");
     }
   }
-  
+
   @override
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
     try {
@@ -218,7 +220,7 @@ class IOSNotificationService implements NotificationService {
       return [];
     }
   }
-  
+
   @override
   Future<bool?> checkNotificationPermissions() async {
     try {
@@ -231,4 +233,3 @@ class IOSNotificationService implements NotificationService {
     }
   }
 }
-

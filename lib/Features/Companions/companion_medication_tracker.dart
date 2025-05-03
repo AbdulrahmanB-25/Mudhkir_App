@@ -1,12 +1,13 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../Core/Services/AlarmNotificationHelper.dart';
 
-// Class to store companion medication data for comparison
 class CompanionMedicationData {
   final String companionId;
   final String companionName;
@@ -25,15 +26,21 @@ class CompanionMedicationData {
     if (companionId != other.companionId || companionName != other.companionName) return false;
     if (medications.length != other.medications.length) return false;
 
-    // Compare each medication
-    for (int i = 0; i < medications.length; i++) {
-      if (medications[i] != other.medications[i]) return false;
+    List<MedicationData> sortedMeds = List.from(medications)..sort((a, b) => a.id.compareTo(b.id));
+    List<MedicationData> otherSortedMeds = List.from(other.medications)..sort((a, b) => a.id.compareTo(b.id));
+
+    for (int i = 0; i < sortedMeds.length; i++) {
+      if (sortedMeds[i] != otherSortedMeds[i]) return false;
     }
     return true;
   }
 
   @override
-  int get hashCode => Object.hash(companionId, companionName, Object.hashAll(medications));
+  int get hashCode {
+    List<MedicationData> sortedMeds = List.from(medications)..sort((a, b) => a.id.compareTo(b.id));
+    return Object.hash(companionId, companionName, Object.hashAll(sortedMeds));
+  }
+
 }
 
 class MedicationData {
@@ -66,13 +73,18 @@ class MedicationData {
   }
 
   @override
-  int get hashCode => Object.hash(id, name, frequencyType, Object.hashAll(times), startDate, endDate);
+  int get hashCode {
+    List<String> sortedTimes = List.from(times.map((t) => t.toString()))..sort();
+    return Object.hash(id, name, frequencyType, Object.hashAll(sortedTimes), startDate.millisecondsSinceEpoch, endDate?.millisecondsSinceEpoch);
+  }
+
 
   static bool _areTimesEqual(List<dynamic> a, List<dynamic> b) {
     if (a.length != b.length) return false;
-
-    for (int i = 0; i < a.length; i++) {
-      if (a[i].toString() != b[i].toString()) return false;
+    List<String> sortedA = List.from(a.map((t) => t.toString()))..sort();
+    List<String> sortedB = List.from(b.map((t) => t.toString()))..sort();
+    for (int i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] != sortedB[i]) return false;
     }
     return true;
   }
@@ -82,10 +94,8 @@ class CompanionMedicationTracker {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Store last fetched data
   static List<CompanionMedicationData>? _lastFetchedCompanionData;
 
-  /// Schedule a check for this medication dose at the given time
   static Future<void> scheduleCompanionDoseCheck({
     required String companionId,
     required String companionName,
@@ -93,18 +103,13 @@ class CompanionMedicationTracker {
     required String medicationName,
     required DateTime scheduledTime,
   }) async {
-    print("[CompanionMedicationTracker] scheduleCompanionDoseCheck called with companionId=$companionId, companionName=$companionName, medicationId=$medicationId, medicationName=$medicationName, scheduledTime=$scheduledTime");
     final user = _auth.currentUser;
     if (user == null) {
-      print("[CompanionMedicationTracker] No authenticated user found. Cannot schedule companion dose check.");
-      debugPrint("No authenticated user found. Cannot schedule companion dose check.");
       return;
     }
 
     try {
       final int checkId = generateCompanionCheckId(companionId, medicationId, scheduledTime);
-
-      print("[CompanionMedicationTracker] Storing companion dose check: companionId=$companionId, medicationId=$medicationId, checkId=$checkId");
 
       await _firestore
           .collection('users')
@@ -120,21 +125,16 @@ class CompanionMedicationTracker {
         'processed': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
-
-      print("[CompanionMedicationTracker] Successfully stored companion dose check with ID $checkId");
     } catch (e) {
       print("[CompanionMedicationTracker] Error storing companion dose check: $e");
-      debugPrint("Error storing companion dose check: $e");
     }
   }
 
-  /// Check if a companion has taken their medication
   static Future<bool> performCompanionDoseCheck({
     required String companionId,
     required String medicationId,
     required DateTime scheduledTime,
   }) async {
-    print("[CompanionMedicationTracker] performCompanionDoseCheck called with companionId=$companionId, medicationId=$medicationId, scheduledTime=$scheduledTime");
     try {
       final startOfDay = DateTime(scheduledTime.year, scheduledTime.month, scheduledTime.day);
 
@@ -146,15 +146,11 @@ class CompanionMedicationTracker {
 
       final docSnapshot = await docRef.get();
       if (!docSnapshot.exists) {
-        print("[CompanionMedicationTracker] Medication $medicationId not found for companion $companionId");
-        debugPrint("Medication $medicationId not found for companion $companionId");
         return false;
       }
 
       final data = docSnapshot.data()!;
       final List<dynamic> missedDoses = data['missedDoses'] ?? [];
-
-      print("[CompanionMedicationTracker] Checking missedDoses: $missedDoses");
 
       for (final dose in missedDoses) {
         if (dose is Map<String, dynamic>) {
@@ -168,73 +164,52 @@ class CompanionMedicationTracker {
             if (doseDate.isAtSameMomentAs(startOfDay) &&
                 (doseTime.hour == scheduledTime.hour &&
                     (doseTime.minute - scheduledTime.minute).abs() < 15)) {
-              print("[CompanionMedicationTracker] Found confirmation for dose at $scheduledTime, status: taken");
-              debugPrint("Found confirmation for dose at $scheduledTime, status: taken");
               return true;
             }
           }
         }
       }
-
-      print("[CompanionMedicationTracker] No confirmation found for dose at $scheduledTime");
-      debugPrint("No confirmation found for dose at $scheduledTime");
       return false;
     } catch (e) {
       print("[CompanionMedicationTracker] Error checking companion dose: $e");
-      debugPrint("Error checking companion dose: $e");
       return false;
     }
   }
 
-  /// Send a notification to the user that the companion hasn't taken their medication
   static Future<void> sendCompanionMissedDoseNotification({
     required String companionName,
     required String medicationName,
     required DateTime scheduledTime,
   }) async {
-    print("[CompanionMedicationTracker] sendCompanionMissedDoseNotification called with companionName=$companionName, medicationName=$medicationName, scheduledTime=$scheduledTime");
     try {
       final formattedTime = _formatTimeOfDay(TimeOfDay.fromDateTime(scheduledTime));
-
       final int notificationId = DateTime.now().microsecondsSinceEpoch % 100000000;
       final payload = "companion_missed_${notificationId.toString()}";
-
-      print("[CompanionMedicationTracker] Sending companion missed dose notification: $companionName missed $medicationName at $formattedTime");
 
       await AlarmNotificationHelper.scheduleAlarmNotification(
         id: notificationId,
         title: "تنبيه: $companionName لم يتناول الدواء",
         body: "يبدو أن $companionName لم يتناول $medicationName المُجدول في $formattedTime. تحقق من حالتهم.",
-        scheduledTime: DateTime.now().add(const Duration(seconds: 2)),
+        scheduledTime: tz.TZDateTime.now(tz.local).add(const Duration(seconds: 2)),
         medicationId: payload,
         isCompanionCheck: true,
       );
-
-      print("[CompanionMedicationTracker] Successfully sent companion missed dose notification");
     } catch (e) {
       print("[CompanionMedicationTracker] Error sending companion missed dose notification: $e");
-      debugPrint("Error sending companion missed dose notification: $e");
     }
   }
 
-  /// Process background notification to check companion doses
   static Future<void> processCompanionDoseCheck(String payload) async {
-    print("[CompanionMedicationTracker] processCompanionDoseCheck called with payload=$payload");
     if (!payload.startsWith("companion_check_")) {
-      print("[CompanionMedicationTracker] Invalid payload for companion dose check: $payload");
-      debugPrint("Invalid payload for companion dose check: $payload");
       return;
     }
 
     final user = _auth.currentUser;
     if (user == null) {
-      print("[CompanionMedicationTracker] No authenticated user found. Cannot process companion dose check.");
-      debugPrint("No authenticated user found. Cannot process companion dose check.");
       return;
     }
 
     final medicationId = payload.replaceFirst("companion_check_", "");
-    print("[CompanionMedicationTracker] Processing companion dose check for medication ID: $medicationId");
 
     try {
       final checksQuery = await _firestore
@@ -245,8 +220,6 @@ class CompanionMedicationTracker {
           .where('processed', isEqualTo: false)
           .get();
 
-      print("[CompanionMedicationTracker] Found ${checksQuery.docs.length} unprocessed companion dose checks for medication ID: $medicationId");
-
       for (final doc in checksQuery.docs) {
         final data = doc.data();
         final companionId = data['companionId'] as String?;
@@ -254,25 +227,15 @@ class CompanionMedicationTracker {
         final medicationName = data['medicationName'] as String?;
         final scheduledTimeTs = data['scheduledTime'] as Timestamp?;
 
-        print("[CompanionMedicationTracker] Processing doc: $data");
-
         if (companionId != null && companionName != null &&
             medicationName != null && scheduledTimeTs != null) {
 
           final scheduledTime = scheduledTimeTs.toDate();
-          print("[CompanionMedicationTracker] Checking if $companionName took $medicationName at $scheduledTime");
-
           final wasTaken = await performCompanionDoseCheck(
             companionId: companionId,
             medicationId: medicationId,
             scheduledTime: scheduledTime,
           );
-
-          if (!wasTaken) {
-            print("[CompanionMedicationTracker] $companionName did not take $medicationName.");
-          } else {
-            print("[CompanionMedicationTracker] $companionName has taken the medication.");
-          }
 
           await _firestore
               .collection('users')
@@ -284,21 +247,16 @@ class CompanionMedicationTracker {
       }
     } catch (e) {
       print("[CompanionMedicationTracker] Error processing companion dose check: $e");
-      debugPrint("Error processing companion dose check: $e");
     }
   }
 
-  /// Run a background check for all pending companion doses
   static Future<void> runPendingChecks() async {
-    print("[CompanionMedicationTracker] runPendingChecks called");
     final user = _auth.currentUser;
     if (user == null) {
-      print("[CompanionMedicationTracker] No authenticated user found.");
       return;
     }
 
     try {
-      debugPrint("Running pending companion dose checks");
       final now = DateTime.now();
       final checkTime = Timestamp.fromDate(now);
 
@@ -310,11 +268,8 @@ class CompanionMedicationTracker {
           .where('scheduledTime', isLessThan: checkTime)
           .get();
 
-      print("[CompanionMedicationTracker] Found ${pendingChecksQuery.docs.length} pending checks to process");
-
       for (final doc in pendingChecksQuery.docs) {
         final data = doc.data();
-        print("[CompanionMedicationTracker] Processing pending check: $data");
         final companionId = data['companionId'] as String?;
         final companionName = data['companionName'] as String?;
         final medicationId = data['medicationId'] as String?;
@@ -333,50 +288,37 @@ class CompanionMedicationTracker {
           );
 
           if (!wasTaken) {
-            print("[CompanionMedicationTracker] Sending missed dose notification for $companionName, $medicationName at $scheduledTime");
             await sendCompanionMissedDoseNotification(
               companionName: companionName,
               medicationName: medicationName,
               scheduledTime: scheduledTime,
             );
           }
-
           await doc.reference.update({'processed': true});
         }
       }
     } catch (e) {
       print("[CompanionMedicationTracker] Error running pending companion dose checks: $e");
-      debugPrint("Error running pending companion dose checks: $e");
     }
   }
 
-  /// Generate a unique ID for companion check notifications
   static int generateCompanionCheckId(String companionId, String medicationId, DateTime time) {
-    print("[CompanionMedicationTracker] generateCompanionCheckId called with companionId=$companionId, medicationId=$medicationId, time=$time");
     final timeHash = time.millisecondsSinceEpoch ~/ 60000;
     final combHash = '${companionId}_${medicationId}_$timeHash'.hashCode;
     final result = 0x3C000000 + (combHash & 0x0FFFFFFF);
-    print("[CompanionMedicationTracker] Generated checkId: $result");
     return result;
   }
 
-  /// Format a time for display in notifications
   static String _formatTimeOfDay(TimeOfDay time) {
     final hour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.hour >= 12 ? 'مساءً' : 'صباحاً';
-    final formatted = '$hour:$minute $period';
-    print("[CompanionMedicationTracker] _formatTimeOfDay: $formatted");
-    return formatted;
+    return '$hour:$minute $period';
   }
 
-  /// Fetch all companion medications and schedule notifications for their upcoming doses (today only)
   static Future<void> fetchAndScheduleCompanionMedications() async {
-    print("[CompanionMedicationTracker] fetchAndScheduleCompanionMedications called");
     final user = _auth.currentUser;
     if (user == null) {
-      print("[CompanionMedicationTracker] No authenticated user found. Cannot fetch companion medications.");
-      debugPrint("No authenticated user found. Cannot fetch companion medications.");
       return;
     }
 
@@ -388,18 +330,17 @@ class CompanionMedicationTracker {
           .collection('companions')
           .get();
 
-      print("[CompanionMedicationTracker] Found ${companionsSnapshot.docs.length} companions.");
-
       final tz.Location local = tz.local;
       final now = tz.TZDateTime.now(local);
       final todayStart = tz.TZDateTime(local, now.year, now.month, now.day);
       final todayEnd = todayStart.add(const Duration(days: 1));
+      final DateFormat logTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss ZZZZ', 'en_US');
+
 
       for (final companionDoc in companionsSnapshot.docs) {
         final companionData = companionDoc.data();
         final companionName = companionData['name'] ?? '';
         final companionEmail = companionData['email'] ?? '';
-        print("[CompanionMedicationTracker] Processing companion: ${companionDoc.id}, name: $companionName, email: $companionEmail");
 
         String? companionUserId;
         if (companionEmail is String && companionEmail.isNotEmpty) {
@@ -410,13 +351,10 @@ class CompanionMedicationTracker {
               .get();
           if (query.docs.isNotEmpty) {
             companionUserId = query.docs.first.id;
-            print("[CompanionMedicationTracker] Found companion userId by email: $companionUserId");
           } else {
-            print("[CompanionMedicationTracker] No user found for companion email: $companionEmail");
             continue;
           }
         } else {
-          print("[CompanionMedicationTracker] Companion email missing or invalid.");
           continue;
         }
 
@@ -426,9 +364,6 @@ class CompanionMedicationTracker {
             .collection('medicines')
             .get();
 
-        print("[CompanionMedicationTracker] Found ${medsSnapshot.docs.length} medicines for companion $companionUserId");
-
-        // Store medications for this companion
         final List<MedicationData> medications = [];
 
         for (final medDoc in medsSnapshot.docs) {
@@ -440,28 +375,23 @@ class CompanionMedicationTracker {
           final startTimestamp = medData['startDate'] as Timestamp?;
           final endTimestamp = medData['endDate'] as Timestamp?;
 
-          print("[CompanionMedicationTracker] Processing medication: $medicationId, name: $medicationName, frequencyType: $frequencyType");
-
           if (startTimestamp == null) {
-            print("[CompanionMedicationTracker] Skipping medication $medicationId: startTimestamp is null");
             continue;
           }
 
           final startDate = startTimestamp.toDate();
           final endDate = endTimestamp?.toDate();
 
-          // Add medication to the list
           medications.add(MedicationData(
             id: medicationId,
             name: medicationName,
             frequencyType: frequencyType,
-            times: List.from(timesRaw), // Create a copy to ensure consistency
+            times: List.from(timesRaw),
             startDate: startDate,
             endDate: endDate,
           ));
         }
 
-        // Add companion with medications to our data list
         newCompanionData.add(CompanionMedicationData(
           companionId: companionUserId!,
           companionName: companionName,
@@ -469,25 +399,15 @@ class CompanionMedicationTracker {
         ));
       }
 
-      // Compare with last fetched data
       bool hasChanges = true;
       if (_lastFetchedCompanionData != null) {
-        // Simple comparison based on length first
         if (_lastFetchedCompanionData!.length == newCompanionData.length) {
-          // Deeper comparison using our equality operators
           hasChanges = false;
-          for (int i = 0; i < newCompanionData.length; i++) {
-            bool foundMatch = false;
-            for (int j = 0; j < _lastFetchedCompanionData!.length; j++) {
-              if (newCompanionData[i].companionId == _lastFetchedCompanionData![j].companionId) {
-                foundMatch = true;
-                if (newCompanionData[i] != _lastFetchedCompanionData![j]) {
-                  hasChanges = true;
-                  break;
-                }
-              }
-            }
-            if (!foundMatch || hasChanges) {
+          List<CompanionMedicationData> sortedOld = List.from(_lastFetchedCompanionData!)..sort((a, b) => a.companionId.compareTo(b.companionId));
+          List<CompanionMedicationData> sortedNew = List.from(newCompanionData)..sort((a, b) => a.companionId.compareTo(b.companionId));
+
+          for (int i = 0; i < sortedNew.length; i++) {
+            if (sortedNew[i] != sortedOld[i]) {
               hasChanges = true;
               break;
             }
@@ -495,41 +415,41 @@ class CompanionMedicationTracker {
         }
       }
 
+
       if (!hasChanges) {
         print("[CompanionMedicationTracker] No changes detected in companion medications. Skipping update.");
         return;
       }
-
       print("[CompanionMedicationTracker] Changes detected in companion medications. Updating notifications...");
 
-      // Save the new data for next comparison
+
       _lastFetchedCompanionData = newCompanionData;
 
-      // Schedule notifications for updated data
-      await _scheduleCompanionNotifications(newCompanionData, now, todayStart, todayEnd);
-
+      await _scheduleCompanionNotifications(newCompanionData, now, todayStart, todayEnd, logTimeFormat);
       print("[CompanionMedicationTracker] Companion medications for today fetched and notifications scheduled.");
-      debugPrint("Companion medications for today fetched and notifications scheduled.");
-    } catch (e) {
-      print("[CompanionMedicationTracker] Error fetching/scheduling companion medications: $e");
-      debugPrint("Error fetching/scheduling companion medications: $e");
+
+
+    } catch (e, stackTrace) {
+      print("[CompanionMedicationTracker] Error fetching/scheduling companion medications: $e\n$stackTrace");
     }
   }
 
   static Future<void> _scheduleCompanionNotifications(
-    List<CompanionMedicationData> companionData,
-    tz.TZDateTime now,
-    tz.TZDateTime todayStart,
-    tz.TZDateTime todayEnd
-  ) async {
+      List<CompanionMedicationData> companionData,
+      tz.TZDateTime now,
+      tz.TZDateTime todayStart,
+      tz.TZDateTime todayEnd,
+      DateFormat logTimeFormat
+      ) async {
     final tz.Location local = tz.local;
 
-    // Cancel existing companion notifications if needed
-    // This is optional but helps ensure we don't have duplicates
     try {
       final pendingNotifications = await AlarmNotificationHelper.getPendingNotifications();
       for (final notification in pendingNotifications) {
-        if (notification.payload?.startsWith('companion_') ?? false) {
+        final payload = notification.payload ?? '';
+        // Cancel only companion reminders, not missed alerts
+        if (payload.startsWith('companion_check_') || (payload.isNotEmpty && !payload.startsWith('companion_missed_') && notification.title?.contains('جرعة مرافق') == true)) {
+          print("[Companion Schedule] Canceling existing companion notification ID: ${notification.id}");
           await AlarmNotificationHelper.cancelNotification(notification.id);
         }
       }
@@ -537,12 +457,12 @@ class CompanionMedicationTracker {
       print("[CompanionMedicationTracker] Error canceling existing notifications: $e");
     }
 
-    // Schedule new notifications
     for (final companion in companionData) {
       for (final medication in companion.medications) {
-        // Skip medications that are outside the valid date range
-        if (now.isBefore(tz.TZDateTime.from(medication.startDate, local)) || 
-            (medication.endDate != null && now.isAfter(tz.TZDateTime.from(medication.endDate!, local)))) {
+        final tzStartDate = tz.TZDateTime.from(medication.startDate, local);
+        final tzEndDate = medication.endDate != null ? tz.TZDateTime.from(medication.endDate!, local) : null;
+
+        if (now.isBefore(tzStartDate) || (tzEndDate != null && now.isAfter(tzEndDate))) {
           continue;
         }
 
@@ -563,42 +483,62 @@ class CompanionMedicationTracker {
               final parsed = _parseTime(t['time']);
               if (parsed != null) {
                 int day = t['day'] is int ? t['day'] : int.tryParse(t['day'].toString()) ?? 0;
-                if (day == now.weekday) parsedTimes.add(parsed);
+                // Ensure day matches Flutter's weekday (Mon=1, Sun=7)
+                int flutterWeekday = (day == 0) ? 7 : day; // Assuming 0 was Sunday from JS? Adjust if needed.
+                if (flutterWeekday == now.weekday) parsedTimes.add(parsed);
               }
             }
           }
         }
 
         for (final tod in parsedTimes) {
-          final doseTime = tz.TZDateTime(local, now.year, now.month, now.day, tod.hour, tod.minute);
-          print("[CompanionMedicationTracker] Considering doseTime: $doseTime (current time: $now)");
-          
-          // Check if the dose is for today and *strictly* in the future
-          if (doseTime.isAfter(now) && doseTime.isBefore(todayEnd)) {
-            final notificationId = AlarmNotificationHelper.generateNotificationId(medication.id, doseTime.toUtc());
-            print("[CompanionMedicationTracker] Dose time $doseTime is valid for scheduling (ID: $notificationId)");
-            
-            try {
-              await AlarmNotificationHelper.scheduleAlarmNotification(
-                id: notificationId,
-                title: "💊 تذكير جرعة مرافق",
-                body: "حان موعد جرعة ${medication.name} للمرافق ${companion.companionName}.",
-                scheduledTime: doseTime.toLocal(), // Pass local DateTime
-                medicationId: medication.id,
-                isCompanionCheck: true,
-              );
-              print("[CompanionMedicationTracker] Successfully requested scheduling for companion dose ID $notificationId");
-            } catch (e) {
-              print("[CompanionMedicationTracker] ERROR requesting scheduling for companion notification ID $notificationId: $e");
+          // Calculate potential dose time for today
+          tz.TZDateTime doseTime = tz.TZDateTime(local, now.year, now.month, now.day, tod.hour, tod.minute);
+
+          // If the calculated dose time for today is in the past, calculate it for the next valid day (tomorrow or next week day)
+          if (doseTime.isBefore(now)) {
+            if (medication.frequencyType == 'اسبوعي') {
+              tz.TZDateTime nextDay = now.add(Duration(days:1));
+              while(nextDay.weekday != doseTime.weekday) { // Find the next occurrence of that weekday
+                nextDay = nextDay.add(Duration(days:1));
+              }
+              doseTime = tz.TZDateTime(local, nextDay.year, nextDay.month, nextDay.day, tod.hour, tod.minute);
+            } else { // Daily
+              doseTime = doseTime.add(Duration(days:1));
+            }
+            print("[Companion Schedule Check] Original dose time ${logTimeFormat.format(tz.TZDateTime(local, now.year, now.month, now.day, tod.hour, tod.minute))} was in the past. Adjusted to next occurrence: ${logTimeFormat.format(doseTime)}");
+          }
+
+
+          print("[Companion Schedule Check] Considering Dose Time: ${logTimeFormat.format(doseTime)} (Now: ${logTimeFormat.format(now)})");
+
+          // Schedule if it's after now and within the 48-hour window (or just check if it's after now)
+          // Let's simplify to just schedule if it's in the future
+          if (doseTime.isAfter(now)) {
+            // Check against end date if it exists
+            if (tzEndDate == null || doseTime.isBefore(tzEndDate)) {
+              print("[Companion Schedule Check] Scheduling dose for ${medication.name} at ${logTimeFormat.format(doseTime)}");
+              // Use a payload indicating it's a check/reminder
+              final checkPayload = "companion_check_${medication.id}";
+              final notificationId = AlarmNotificationHelper.generateNotificationId(checkPayload, doseTime.toUtc());
+
+              try {
+                await AlarmNotificationHelper.scheduleAlarmNotification(
+                  id: notificationId,
+                  title: "💊 تذكير جرعة مرافق",
+                  body: "حان موعد جرعة ${medication.name} للمرافق ${companion.companionName}.",
+                  scheduledTime: doseTime,
+                  medicationId: checkPayload, // Use the check payload
+                  isCompanionCheck: true,
+                );
+              } catch (e) {
+                print("[CompanionMedicationTracker] ERROR requesting scheduling for companion notification ID $notificationId: $e");
+              }
+            } else {
+              print("[Companion Schedule Check] Skipping dose for ${medication.name} at ${logTimeFormat.format(doseTime)} (After End Date: ${logTimeFormat.format(tzEndDate!)})");
             }
           } else {
-            if (doseTime.isBefore(now)) {
-              print("[CompanionMedicationTracker] Skipping doseTime $doseTime - it's in the past.");
-            } else if (!doseTime.isBefore(todayEnd)) {
-              print("[CompanionMedicationTracker] Skipping doseTime $doseTime - it's after today's end.");
-            } else {
-              print("[CompanionMedicationTracker] Skipping doseTime $doseTime - unknown reason (should be future and before todayEnd).");
-            }
+            print("[Companion Schedule Check] Skipping dose for ${medication.name} at ${logTimeFormat.format(doseTime)} (Is NOT After Now)");
           }
         }
       }
@@ -606,9 +546,7 @@ class CompanionMedicationTracker {
   }
 
   static TimeOfDay? _parseTime(String timeStr) {
-    print("[CompanionMedicationTracker] _parseTime called with timeStr=$timeStr");
     try {
-      // Handle Arabic AM/PM
       String normalized = timeStr.trim();
       bool isPM = false;
       bool isAM = false;
@@ -626,20 +564,25 @@ class CompanionMedicationTracker {
         int hour = int.parse(parts[0]);
         int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
 
-        // Apply AM/PM logic
         if (isPM && hour < 12) hour += 12;
-        if (isAM && hour == 12) hour = 0;
+        if (isAM && hour == 12) hour = 0; // 12 AM is 00:00
+
+        // Handle 12 PM (remains 12)
+        if(!isPM && !isAM && hour == 12) {
+          // Could be 12 noon (12:xx) or 12 midnight (00:xx) - ambiguous without AM/PM
+          // Assuming 24h format if AM/PM isn't present, so 12 is noon.
+          // If it's guaranteed to be 12h format string, this needs adjustment.
+        }
+
 
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-          final result = TimeOfDay(hour: hour, minute: minute);
-          print("[CompanionMedicationTracker] _parseTime result: $result");
-          return result;
+          return TimeOfDay(hour: hour, minute: minute);
         }
       }
     } catch (e) {
-      print("[CompanionMedicationTracker] _parseTime error: $e");
+      print("[CompanionMedicationTracker] _parseTime error parsing '$timeStr': $e");
     }
+    print("[CompanionMedicationTracker] _parseTime failed to parse '$timeStr'");
     return null;
   }
 }
-

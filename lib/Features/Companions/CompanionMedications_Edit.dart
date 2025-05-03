@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:timezone/timezone.dart' as tz; // Add this import
 
 import '../../Core/Services/AlarmNotificationHelper.dart';
 import '../Medication/Edit/EditMedication_Page.dart';
-
 
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
@@ -64,8 +64,12 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
         id: AlarmNotificationHelper.generateNotificationId(widget.medicationId, DateTime.now()),
         title: "💊 تذكير بجرعة دواء",
         body: "تم تحديث بيانات الدواء. تأكد من الجرعات الجديدة.",
-        scheduledTime: DateTime.now().add(const Duration(seconds: 5)), // Example time
+        scheduledTime: tz.TZDateTime.from(
+          DateTime.now().add(const Duration(seconds: 5)),
+          tz.local,
+        ), // Convert DateTime to TZDateTime
         medicationId: widget.medicationId,
+        isCompanionCheck: true, // Add required parameter
       );
       
       if (mounted) {

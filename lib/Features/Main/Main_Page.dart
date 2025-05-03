@@ -214,8 +214,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               id: notificationId,
               title: "💊 تذكير بجرعة دواء",
               body: "حان الآن موعد تناول جرعة دواء '$medName'.",
-              scheduledTime: doseTime.toLocal(),
+              scheduledTime: doseTime,
               medicationId: docId,
+              isCompanionCheck: false,
             );
             scheduledCount++;
 
@@ -1166,7 +1167,6 @@ class DoseTile extends StatelessWidget {
           splashColor: kPrimaryColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(kBorderRadius),
           onTap: () {
-            // Navigator.pushNamed(context, '/medication_detail', arguments: {'docId': docId});
           },
           child: Padding(
             padding: const EdgeInsets.all(16),
