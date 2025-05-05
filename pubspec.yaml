@@ -89,8 +89,8 @@ flutter:
     - assets/icons/
     - assets/logo.png
     - assets/icons/transpartnt_logo.png
-    - android/app/src/main/res/drawable/ic_stat_ic_notification.png
-    - android/app/src/main/res/drawable-v21/ic_stat_ic_notification.png
+    - android/app/src/main/res/drawable/ic_notification.png
+    - android/app/src/main/res/drawable-v21/ic_notification.png
     - assets/Mediciens/trade_names.json
     - .env
     - android/app/src/main/res/raw/medication_alarm.ogg
