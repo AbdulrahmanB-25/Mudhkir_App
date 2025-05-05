@@ -88,6 +88,9 @@ class AlarmNotificationHelper {
       await _initializeWithContext(context);
       await checkAndLogPermissions();
 
+      // Request exact alarm permission
+      await checkAndRequestExactAlarmPermission(context);
+
       // Process any pending notifications that were scheduled before initialization
       await _processPendingNotifications();
 
@@ -904,3 +907,4 @@ class AlarmNotificationHelper {
     }
   }
 }
+

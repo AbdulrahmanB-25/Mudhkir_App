@@ -438,7 +438,7 @@ class AndroidNotificationService implements NotificationService {
 
   tz.TZDateTime _nextInstanceOfTime(tz.TZDateTime from, TimeOfDay tod) {
     // Create a date with the same day as 'from' but with the target time
-    tz.TZDateTime sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day, tod.hour, tod.minute);
+    tz.TZDateTime sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day, tod.hour, tod.minute,0);
 
     // If the time has already passed today, move to tomorrow
     if (sched.isBefore(from)) {

@@ -26,6 +26,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
         AlarmNotificationHelper.completeInitialization(context);
       }
     });
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      _handleAuthStateChange(user);
+    });
   }
 
   Future<void> _handleAuthStateChange(User? user) async {
@@ -35,9 +38,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
       _isLoading = false;
     });
     if (!wasAuthenticated && _isAuthenticated) {
-      await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
-      await setupPeriodicCompanionChecks();
+      _postAuthenticationTasks();
     }
+  }
+
+  Future<void> _postAuthenticationTasks() async {
+    await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
+    await setupPeriodicCompanionChecks();
   }
 
   @override
@@ -47,7 +54,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.active) {
           User? user = snapshot.data;
-          _handleAuthStateChange(user);
           if (_isLoading) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
