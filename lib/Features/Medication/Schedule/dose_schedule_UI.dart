@@ -448,7 +448,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
           builder: (context) => EditMedicationScreen(docId: widget.docId),
         ),
       );
-      widget.onDataChanged();
+      widget.onDataChanged(); // Call onDataChanged to refresh the schedule page
     }
   }
 

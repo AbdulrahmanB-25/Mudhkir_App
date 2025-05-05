@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:timezone/timezone.dart' as tz; // Add this import
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../Core/Services/AlarmNotificationHelper.dart';
 import '../Medication/Edit/EditMedication_Page.dart';
@@ -32,20 +32,21 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   bool _isRescheduling = false;
+  bool _isTestingNotification = false;
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      vsync: this, 
-      duration: const Duration(milliseconds: 500)
+        vsync: this,
+        duration: const Duration(milliseconds: 500)
     );
-    
+
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeIn,
     );
-    
+
     _animationController.forward();
   }
 
@@ -57,21 +58,32 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
 
   Future<void> _rescheduleNotifications() async {
     setState(() => _isRescheduling = true);
-    
+
     try {
       await AlarmNotificationHelper.cancelAllNotifications();
+
+      // Get Saudi Arabia timezone (UTC+3)
+      final tz.Location utcPlus3Location = tz.getLocation('Asia/Riyadh');
+
+      // Create a TZDateTime object for right now + 30 seconds in UTC+3
+      final tz.TZDateTime scheduledTime = tz.TZDateTime.now(utcPlus3Location).add(const Duration(seconds: 30));
+
+      // Log times for debugging
+      print("Current time (UTC+3): ${tz.TZDateTime.now(utcPlus3Location)}");
+      print("Scheduled time (UTC+3): $scheduledTime");
+
+      // Use TZDateTime for the notification ID generation
+      final int notificationId = AlarmNotificationHelper.generateNotificationId(widget.medicationId, scheduledTime);
+
       await AlarmNotificationHelper.scheduleAlarmNotification(
-        id: AlarmNotificationHelper.generateNotificationId(widget.medicationId, DateTime.now()),
+        id: notificationId,
         title: "💊 تذكير بجرعة دواء",
         body: "تم تحديث بيانات الدواء. تأكد من الجرعات الجديدة.",
-        scheduledTime: tz.TZDateTime.from(
-          DateTime.now().add(const Duration(seconds: 5)),
-          tz.local,
-        ), // Convert DateTime to TZDateTime
+        scheduledTime: scheduledTime,
         medicationId: widget.medicationId,
-        isCompanionCheck: true, // Add required parameter
+        isCompanionCheck: true,
       );
-      
+
       if (mounted) {
         _showSuccessSnackBar("تم تحديث بيانات الدواء وإعادة جدولة الإشعارات بنجاح");
       }
@@ -85,7 +97,28 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
       }
     }
   }
-  
+
+  Future<void> _testImmediateNotification() async {
+    setState(() => _isTestingNotification = true);
+
+    try {
+      // Show an immediate test notification
+      await AlarmNotificationHelper.showTestNotification();
+
+      if (mounted) {
+        _showSuccessSnackBar("تم إرسال إشعار اختباري. يجب أن يظهر خلال 5 ثوانٍ.");
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar("حدث خطأ أثناء إرسال الإشعار الاختباري: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTestingNotification = false);
+      }
+    }
+  }
+
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -111,7 +144,7 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
       ),
     );
   }
-  
+
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -157,7 +190,7 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
               ),
             ),
           ),
-          
+
           // Main content
           SafeArea(
             child: FadeTransition(
@@ -185,7 +218,7 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
                             ),
                           ),
                         ),
-                        
+
                         Expanded(
                           child: Text(
                             "تعديل دواء لـ ${widget.companionName}",
@@ -198,12 +231,28 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
                             ),
                           ),
                         ),
-                        
-                        SizedBox(width: 40),
+
+                        // Add a test notification button
+                        Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: _testImmediateNotification,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Icon(
+                                Icons.notifications_active,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  
+
                   // EditMedicationScreen
                   Expanded(
                     child: EditMedicationScreen(
@@ -217,9 +266,9 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
               ),
             ),
           ),
-          
+
           // Loading overlay
-          if (_isRescheduling)
+          if (_isRescheduling || _isTestingNotification)
             Container(
               color: Colors.black.withOpacity(0.3),
               child: Center(
@@ -238,8 +287,8 @@ class _CompanionMedicationsEditPageState extends State<CompanionMedicationsEditP
                           strokeWidth: 3,
                         ),
                         const SizedBox(height: 20),
-                        const Text(
-                          "جاري إعادة جدولة الإشعارات...",
+                        Text(
+                          _isTestingNotification ? "جاري إرسال إشعار اختباري..." : "جاري إعادة جدولة الإشعارات...",
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

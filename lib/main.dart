@@ -102,7 +102,6 @@ Future<void> setupPeriodicCompanionChecks() async {
   }
 }
 
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -131,7 +130,7 @@ Future<void> main() async {
   // 4. Initialize Notifications (basic, without context)
   print("[Main Init] Initializing AlarmNotificationHelper (no context)...");
   await AlarmNotificationHelper.initialize(null);
-  print("[Main Init] AlarmNotificationHelper initialized.");
+  print("[Main Init] AlarmNotificationHelper initialized (context-dependent features will be initialized later).");
 
   // 5. Initialize AndroidAlarmManager (if on Android)
   if (Platform.isAndroid) {
@@ -148,7 +147,6 @@ Future<void> main() async {
   print("[Main Init] Running app...");
   runApp(const MyApp());
 }
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

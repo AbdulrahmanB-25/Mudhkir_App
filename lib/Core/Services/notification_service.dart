@@ -6,7 +6,11 @@ import 'dart:io' show Platform;
 import 'android_notification_service.dart';
 import 'ios_notification_service.dart';
 
+/// Abstract class defining the interface for platform-specific notification services.
+/// Implementations handle scheduling and managing notifications appropriately for
+/// each supported platform (Android/iOS).
 abstract class NotificationService {
+  /// Factory constructor that returns the appropriate platform-specific implementation
   factory NotificationService() {
     if (Platform.isAndroid) {
       return AndroidNotificationService();
@@ -16,14 +20,27 @@ abstract class NotificationService {
     throw UnsupportedError('Unsupported platform for notifications');
   }
 
+  /// Access to the underlying notification plugin
   FlutterLocalNotificationsPlugin get notificationsPlugin;
 
-  Future<void> initialize(BuildContext context,
+  /// Setup and initialization methods
+
+  /// Initialize the notification service with callbacks for handling interactions
+  Future<void> initialize(
+      BuildContext context,
       void Function(NotificationResponse) onNotificationResponse,
-      void Function(NotificationResponse)? onBackgroundNotificationResponse);
+      void Function(NotificationResponse)? onBackgroundNotificationResponse
+      );
+
+  /// Set up any platform-specific notification channels or categories
   Future<void> setupNotificationChannels();
+
+  /// Request necessary permissions from the user to show notifications
   Future<void> requestPermissions();
 
+  /// Notification scheduling methods
+
+  /// Schedule a medication alarm notification with specific parameters
   Future<void> scheduleAlarmNotification({
     required int id,
     required String title,
@@ -35,8 +52,17 @@ abstract class NotificationService {
     RepeatInterval? repeatInterval,
   });
 
+  /// Notification management methods
+
+  /// Cancel a specific notification by ID
   Future<void> cancelNotification(int id);
+
+  /// Cancel all pending notifications
   Future<void> cancelAllNotifications();
+
+  /// Get a list of all currently pending notifications
   Future<List<PendingNotificationRequest>> getPendingNotifications();
+
+  /// Check if notification permissions are granted
   Future<bool?> checkNotificationPermissions();
 }

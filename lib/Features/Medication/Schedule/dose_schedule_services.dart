@@ -16,6 +16,12 @@ class DoseScheduleServices {
   
   DoseScheduleServices({this.user});
 
+  // Add this public method to clear the cache
+  void clearCache() {
+    _doseCache.clear();
+    print("Dose cache cleared."); // Optional: for debugging
+  }
+
   Future<Map<DateTime, List<Map<String, dynamic>>>> fetchDoses(
       BuildContext context, {DateTime? startRangeDate, DateTime? endRangeDate}) async {
     if (user == null) return {};
@@ -400,6 +406,9 @@ class DoseScheduleServices {
           .collection('medicines')
           .doc(docId)
           .delete();
+          
+      // Clear the cache after successful deletion to force a fresh fetch
+      _doseCache.clear();
 
       return true;
     } catch (e) {
@@ -438,3 +447,4 @@ class DoseScheduleServices {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 }
+

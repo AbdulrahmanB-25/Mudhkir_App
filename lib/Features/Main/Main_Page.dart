@@ -37,6 +37,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   late Animation<double> _fadeInAnimation;
   bool _isAuthenticated = false;
   User? _currentUser;
+  final tz.Location utcPlus3Location = tz.getLocation('Asia/Riyadh'); // Get the UTC+3 location (Saudi Arabia timezone)
 
   @override
   void initState() {
@@ -49,6 +50,13 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       parent: _animationController,
       curve: Curves.easeIn,
     );
+
+    // Complete the notification initialization with context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AlarmNotificationHelper.completeInitialization(context);
+      }
+    });
 
     FirebaseAuth.instance.authStateChanges().listen((user) {
       _handleAuthStateChange(user);
@@ -163,8 +171,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           .collection('medicines')
           .get();
 
-      final tz.Location local = tz.local;
-      final tz.TZDateTime now = tz.TZDateTime.now(local);
+      // Use UTC+3 timezone location
+      final tz.TZDateTime now = tz.TZDateTime.now(utcPlus3Location);
+
+      print("[Scheduling] Current time in UTC+3: ${now.toString()}");
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
@@ -177,16 +187,19 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           continue;
         }
 
-        final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), local);
-        final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), local) : null;
+        // Convert timestamps to UTC+3 times
+        final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), utcPlus3Location);
+        final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), utcPlus3Location) : null;
 
-        final tz.TZDateTime todayFloor = tz.TZDateTime(local, now.year, now.month, now.day);
-        final tz.TZDateTime startDayFloor = tz.TZDateTime(local, startDate.year, startDate.month, startDate.day);
+        // Date-only comparisons using UTC+3 timezone
+        final tz.TZDateTime todayFloor = tz.TZDateTime(utcPlus3Location, now.year, now.month, now.day);
+        final tz.TZDateTime startDayFloor = tz.TZDateTime(utcPlus3Location, startDate.year, startDate.month, startDate.day);
+
         if (todayFloor.isBefore(startDayFloor)) {
           continue;
         }
         if (endDate != null) {
-          final tz.TZDateTime endDayFloor = tz.TZDateTime(local, endDate.year, endDate.month, endDate.day);
+          final tz.TZDateTime endDayFloor = tz.TZDateTime(utcPlus3Location, endDate.year, endDate.month, endDate.day);
           if (todayFloor.isAfter(endDayFloor)) {
             continue;
           }
@@ -207,9 +220,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             timesRaw: timesRaw);
 
         for (tz.TZDateTime doseTime in nextDoseTimes) {
-          final notificationId = AlarmNotificationHelper.generateNotificationId(docId, doseTime.toUtc());
+          final notificationId = AlarmNotificationHelper.generateNotificationId(docId, doseTime);
 
           try {
+            print("[Scheduling] Scheduling notification for med '$medName' at ${doseTime.toString()} (UTC+3)");
             await AlarmNotificationHelper.scheduleAlarmNotification(
               id: notificationId,
               title: "💊 تذكير بجرعة دواء",
@@ -238,8 +252,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final absoluteNextDoseTime = absoluteNextDose['time'] as tz.TZDateTime;
         final absoluteNextDoseDocId = absoluteNextDose['docId'] as String;
 
+        print("[Scheduling] Storing next dose: ${absoluteNextDoseTime.toString()} (UTC+3) for med $absoluteNextDoseDocId");
+
+        // Store the time in ISO format but with explicit timezone info
         await prefs.setString(PREF_NEXT_DOSE_DOC_ID, absoluteNextDoseDocId);
-        await prefs.setString(PREF_NEXT_DOSE_TIME_ISO, absoluteNextDoseTime.toUtc().toIso8601String());
+        await prefs.setString(PREF_NEXT_DOSE_TIME_ISO, absoluteNextDoseTime.toString());
 
       } else {
         await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
@@ -263,7 +280,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     required List<dynamic> timesRaw,
   }) {
     List<tz.TZDateTime> doseTimes = [];
-    final tz.Location local = tz.local;
 
     List<TimeOfDay> parsedTimesOfDay = [];
     List<int>? weeklyDays;
@@ -306,8 +322,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (parsedTimesOfDay.isEmpty) return [];
 
-    tz.TZDateTime currentDay = tz.TZDateTime(local, now.year, now.month, now.day);
-    final tz.TZDateTime startDayFloor = tz.TZDateTime(local, startDate.year, startDate.month, startDate.day);
+    // Use UTC+3 for all date calculations
+    tz.TZDateTime currentDay = tz.TZDateTime(utcPlus3Location, now.year, now.month, now.day);
+    final tz.TZDateTime startDayFloor = tz.TZDateTime(utcPlus3Location, startDate.year, startDate.month, startDate.day);
+
     if(currentDay.isBefore(startDayFloor)){
       currentDay = startDayFloor;
     }
@@ -319,7 +337,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       safetyBreak++;
 
       if (endDate != null) {
-        final tz.TZDateTime endDayFloor = tz.TZDateTime(local, endDate.year, endDate.month, endDate.day);
+        final tz.TZDateTime endDayFloor = tz.TZDateTime(utcPlus3Location, endDate.year, endDate.month, endDate.day);
         if(currentDay.isAfter(endDayFloor)) break;
       }
 
@@ -334,9 +352,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
       if (checkThisDay) {
         for (TimeOfDay tod in parsedTimesOfDay) {
+          // Create the potential dose time in UTC+3
           tz.TZDateTime potentialDoseTime = tz.TZDateTime(
-              local, currentDay.year, currentDay.month, currentDay.day, tod.hour, tod.minute);
+              utcPlus3Location, currentDay.year, currentDay.month, currentDay.day, tod.hour, tod.minute);
 
+          // Compare using UTC+3 time
           if (potentialDoseTime.isAfter(now) && potentialDoseTime.isBefore(scheduleUntil)) {
             if (endDate == null || potentialDoseTime.isBefore(endDate)) {
               doseTimes.add(potentialDoseTime);
@@ -356,7 +376,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     return doseTimes;
   }
 
-
   Future<void> _checkAndShowConfirmationIfNeeded() async {
     if (!mounted || !_isAuthenticated) {
       return;
@@ -374,11 +393,22 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (nextDoseDocId != null && nextDoseTimeIso != null) {
       try {
-        final DateTime nextDoseTimeUTC = DateTime.parse(nextDoseTimeIso);
-        final tz.TZDateTime nextDoseTimeLocal = tz.TZDateTime.from(nextDoseTimeUTC, tz.local);
-        final tz.TZDateTime nowLocal = tz.TZDateTime.now(tz.local);
+        // Parse the stored time with timezone awareness (should be in UTC+3 format)
+        tz.TZDateTime nextDoseTimeLocal;
 
-        print("[Confirmation Time Check] Now (Local): ${logTimeFormat.format(nowLocal)} vs Stored Next Dose (Local): ${logTimeFormat.format(nextDoseTimeLocal)}");
+        try {
+          // Try parsing as stored TZDateTime string (new format)
+          nextDoseTimeLocal = tz.TZDateTime.parse(utcPlus3Location, nextDoseTimeIso);
+        } catch (_) {
+          // Fall back to parsing as UTC ISO string (old format)
+          final DateTime nextDoseTimeUTC = DateTime.parse(nextDoseTimeIso);
+          nextDoseTimeLocal = tz.TZDateTime.from(nextDoseTimeUTC, utcPlus3Location);
+        }
+
+        // Get current time in UTC+3
+        final tz.TZDateTime nowLocal = tz.TZDateTime.now(utcPlus3Location);
+
+        print("[Confirmation] Now (UTC+3): ${logTimeFormat.format(nowLocal)} vs Next Dose (UTC+3): ${logTimeFormat.format(nextDoseTimeLocal)}");
 
         if (nowLocal.isAfter(nextDoseTimeLocal)) {
           confirmationKey = '${PREF_CONFIRMATION_SHOWN_PREFIX}${nextDoseDocId}_${nextDoseTimeIso}';
@@ -470,29 +500,40 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (nextDocId != null && nextTimeIso != null) {
       try {
-        final nextTimeUTC = DateTime.parse(nextTimeIso);
-        final tz.Location local = tz.local;
-        final nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, local);
-        final nowLocal = tz.TZDateTime.now(local);
+        // Parse the time with UTC+3 timezone awareness
+        tz.TZDateTime nextTimeLocal;
 
-        final tz.TZDateTime todayStart = tz.TZDateTime(local, nowLocal.year, nowLocal.month, nowLocal.day);
-        final tz.TZDateTime tomorrowStart = todayStart.add(const Duration(days: 1));
+        try {
+          // Try parsing as stored TZDateTime string (new format)
+          nextTimeLocal = tz.TZDateTime.parse(utcPlus3Location, nextTimeIso);
+        } catch (_) {
+          // Fall back to parsing as UTC ISO string (old format)
+          final DateTime nextTimeUTC = DateTime.parse(nextTimeIso);
+          nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, utcPlus3Location);
+        }
 
-        print("[DataLoad Display Time Check] Now (Local): ${logTimeFormat.format(nowLocal)}");
-        print("[DataLoad Display Time Check] Stored Next Dose (Local): ${logTimeFormat.format(nextTimeLocal)}");
-        print("[DataLoad Display Time Check] Tomorrow Starts (Local): ${logTimeFormat.format(tomorrowStart)}");
+        // Get current time in UTC+3
+        final tz.TZDateTime nowLocal = tz.TZDateTime.now(utcPlus3Location);
 
+        // Get DateTime objects for today and tomorrow in UTC+3 for comparison
+        final DateTime todayDate = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+        final DateTime medicationDate = DateTime(nextTimeLocal.year, nextTimeLocal.month, nextTimeLocal.day);
+        final DateTime tomorrowDate = todayDate.add(const Duration(days: 1));
+
+        print("[DataLoad Display] Now (UTC+3): ${logTimeFormat.format(nowLocal)}");
+        print("[DataLoad Display] Next Dose (UTC+3): ${logTimeFormat.format(nextTimeLocal)}");
+        print("[DataLoad Display] Today: $todayDate, Next Dose Day: $medicationDate, Tomorrow: $tomorrowDate");
+
+        // Check if the dose time has passed
         if (nowLocal.isAfter(nextTimeLocal)) {
+          print("[DataLoad Display] Medication time has passed, clearing data");
           await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
           await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
           displayMedName = '';
           displayMedTime = '';
           displayDocId = '';
-        } else if (!nextTimeLocal.isBefore(tomorrowStart)) {
-          displayMedName = '';
-          displayMedTime = '';
-          displayDocId = '';
         } else {
+          // Time is in the future - fetch and display the medication
           final doc = await FirebaseFirestore.instance
               .collection('users')
               .doc(_currentUser!.uid)
@@ -502,22 +543,22 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
           if (doc.exists) {
             displayMedName = doc.data()?['name'] as String? ?? 'دواء غير مسمى';
+            displayDocId = nextDocId;
+
+            // Format the time with proper UTC+3 timezone awareness
+            displayMedTime = _formatTimeWithDate(nextTimeLocal);
+
+            print("[DataLoad Display] Medicine found: $displayMedName, Formatted time: $displayMedTime");
           } else {
+            print("[DataLoad Display] Medicine document not found, clearing data");
             displayMedName = '';
             await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
             await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
           }
-
-          if (displayMedName.isNotEmpty) {
-            displayMedTime = _formatTimeOfDay(context, TimeOfDay.fromDateTime(nextTimeLocal));
-            displayDocId = nextDocId;
-          } else {
-            displayMedTime = '';
-            displayDocId = '';
-          }
         }
-      } catch (e) {
-        print("[DataLoad Display] Error processing display data for closest med $nextDocId: $e");
+      } catch (e, stackTrace) {
+        print("[DataLoad Display] Error processing display data: $e");
+        print("[DataLoad Display] Stack trace: $stackTrace");
         displayMedName = '';
         displayMedTime = 'خطأ';
         displayDocId = '';
@@ -540,6 +581,44 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
   }
 
+  // Format time with correct AM/PM and date if needed
+  String _formatTimeWithDate(tz.TZDateTime dateTime) {
+    try {
+      // Get current time in UTC+3 for comparison
+      final tz.TZDateTime now = tz.TZDateTime.now(utcPlus3Location);
+
+      // Compare dates for "today", "tomorrow" or specific date display
+      final bool isToday = dateTime.year == now.year &&
+          dateTime.month == now.month &&
+          dateTime.day == now.day;
+
+      final bool isTomorrow = dateTime.year == now.year &&
+          dateTime.month == now.month &&
+          dateTime.day == (now.day + 1);
+
+      // Format the time portion
+      final TimeOfDay tod = TimeOfDay.fromDateTime(dateTime);
+      final int hour = tod.hourOfPeriod == 0 ? 12 : tod.hourOfPeriod;
+      final String minute = tod.minute.toString().padLeft(2, '0');
+      final String period = tod.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
+      String timeStr = '$hour:$minute $period';
+
+      // Add appropriate date indicator if needed
+      if (isTomorrow) {
+        timeStr += " (غداً)";
+      } else if (!isToday) {
+        final DateFormat dateFormat = DateFormat('dd/MM', 'ar');
+        final String formattedDate = dateFormat.format(dateTime);
+        timeStr += " ($formattedDate)";
+      }
+
+      return timeStr;
+    } catch (e) {
+      print("[TimeFormat] Error formatting time: $e");
+      // Fallback formatting
+      return "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
+    }
+  }
 
   TimeOfDay? _parseTime(String timeStr) {
     try {
@@ -912,8 +991,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   String _getGreeting(int hour) {
-    if (hour >= 4 && hour < 12) return "صباح الخير";
-    if (hour >= 12 && hour < 17) return "مساء الخير";
+    // Use Saudi Arabia's timezone for the greeting
+    final utcPlus3Hour = (DateTime.now().toUtc().hour + 3) % 24;
+
+    if (utcPlus3Hour >= 4 && utcPlus3Hour < 12) return "صباح الخير";
+    if (utcPlus3Hour >= 12 && utcPlus3Hour < 17) return "مساء الخير";
     return "مساء الخير";
   }
 

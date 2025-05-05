@@ -116,8 +116,14 @@ class _DoseScheduleState extends State<DoseSchedule> {
   }
 
   Future<void> _fetchDoses() async {
+    // Clear the service cache first to ensure fresh data after edits/deletes
+    _services.clearCache(); 
+    
+    // Reset local fetch range flags
     _lastFetchStart = null;
     _lastFetchEnd = null;
+    
+    // Proceed to fetch data for the currently focused range
     await _fetchDosesForVisibleRange();
   }
 
@@ -484,3 +490,4 @@ class _DoseScheduleState extends State<DoseSchedule> {
     );
   }
 }
+
