@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 // Assuming notification utility is correctly imported from main.dart or its own file
 // Make sure this import path is correct for your project structure
 
+import '../../../Core/Services/AlarmNotificationHelper.dart';
 import 'Add_Dosage.dart';
 import 'Add_Name_Picture.dart';
 import 'Add_Start_&_End_Date.dart'; // Or potentially a dedicated notification service file
@@ -681,6 +682,9 @@ class _AddDoseState extends State<AddDose> {
           .add(newMedicine);
 
       print("✅ Medication added with ID: ${docRef.id}");
+
+      // Schedule all medications after adding
+      await AlarmNotificationHelper.scheduleAllUserMedications(user.uid);
 
       // ---  Schedule Notifications ---
       // Use a base notification ID and increment for uniqueness within this add operation

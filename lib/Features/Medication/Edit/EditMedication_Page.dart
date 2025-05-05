@@ -10,11 +10,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../../Core/Services/AlarmNotificationHelper.dart';
 import '../Add/Add_Dosage.dart' show AddDosagePage;
 import '../Add/Add_Name_Picture.dart';
 import '../Add/Add_Start_&_End_Date.dart' show AddStartEndDatePage;
-
-
 
 class TimeUtils {
   static final DateFormat _timeFormat = DateFormat('h:mm a', 'ar');
@@ -431,6 +430,9 @@ class EditMedicationDataProvider {
           .doc(docId)
           .update(updatedData);
       print("Firestore update successful.");
+
+      // Schedule all medications after editing
+      await AlarmNotificationHelper.scheduleAllUserMedications(ownerId);
     } catch (e, stackTrace) {
       print("Error updating Firestore: $e");
       print(stackTrace);
@@ -530,7 +532,6 @@ class EditMedicationDataProvider {
     }
   }
 }
-
 
 class EditMedicationScreen extends StatefulWidget {
   final String docId;
@@ -1007,3 +1008,4 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
+

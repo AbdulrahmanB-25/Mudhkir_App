@@ -24,6 +24,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         AlarmNotificationHelper.completeInitialization(context);
+        AlarmNotificationHelper.scheduleAllUserMedications(FirebaseAuth.instance.currentUser!.uid); // Schedule all medications
       }
     });
     FirebaseAuth.instance.authStateChanges().listen((user) {
@@ -72,3 +73,4 @@ class _AuthWrapperState extends State<AuthWrapper> {
     );
   }
 }
+

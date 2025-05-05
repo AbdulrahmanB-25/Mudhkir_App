@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'dart:ui' as ui;
+import 'dart:async';
 import 'package:mudhkir_app/Features/Companions/companion_medication_tracker.dart';
 import '../../Core/Services/AlarmNotificationHelper.dart';
 import '../../Shared/Widgets/bottom_navigation.dart';
@@ -60,6 +61,21 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     FirebaseAuth.instance.authStateChanges().listen((user) {
       _handleAuthStateChange(user);
     });
+
+    // Subscribe to Firestore medicines collection and schedule immediately
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('medicines')
+          .snapshots()
+          .listen((_) async {
+        if (mounted) {
+          await _scheduleAllUserMedications(user.uid);
+        }
+      });
+    }
     _initializePage();
   }
 
@@ -119,7 +135,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (isInitialLoad && mounted) {
       setState(() => _isInitializing = false);
-      if(!_animationController.isAnimating){
+      if (!_animationController.isAnimating) {
         _animationController.forward();
       }
     }
@@ -136,7 +152,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
 
     await _loadUserName();
+
+    // Always schedule medications
     await _scheduleAllUserMedications(_currentUser!.uid);
+
     await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
 
     // Also ensure periodic checks are set up
@@ -284,6 +303,21 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }) {
     List<tz.TZDateTime> doseTimes = [];
 
+    // Create a clean "now" time with 0 seconds for better comparison
+    final tz.TZDateTime nowRounded = tz.TZDateTime(
+      riyadhTimezone,
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      0,
+      0
+    );
+    
+    print("[Scheduling Calc] Now exact: ${now.toString()}");
+    print("[Scheduling Calc] Now rounded: ${nowRounded.toString()}");
+
     List<TimeOfDay> parsedTimesOfDay = [];
     List<int>? weeklyDays;
 
@@ -329,7 +363,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     tz.TZDateTime currentDay = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day);
     final tz.TZDateTime startDayFloor = tz.TZDateTime(riyadhTimezone, startDate.year, startDate.month, startDate.day);
 
-    if(currentDay.isBefore(startDayFloor)){
+    if (currentDay.isBefore(startDayFloor)) {
       currentDay = startDayFloor;
     }
 
@@ -341,7 +375,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
       if (endDate != null) {
         final tz.TZDateTime endDayFloor = tz.TZDateTime(riyadhTimezone, endDate.year, endDate.month, endDate.day);
-        if(currentDay.isAfter(endDayFloor)) break;
+        if (currentDay.isAfter(endDayFloor)) break;
       }
 
       bool checkThisDay = false;
@@ -355,15 +389,35 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
       if (checkThisDay) {
         for (TimeOfDay tod in parsedTimesOfDay) {
-          // Create the potential dose time in Riyadh timezone
+          // Create the potential dose time in Riyadh timezone with zero seconds and milliseconds
           tz.TZDateTime potentialDoseTime = tz.TZDateTime(
-              riyadhTimezone, currentDay.year, currentDay.month, currentDay.day, tod.hour, tod.minute);
+              riyadhTimezone, 
+              currentDay.year, 
+              currentDay.month, 
+              currentDay.day, 
+              tod.hour, 
+              tod.minute,
+              0, // Explicitly zero out seconds
+              0  // Explicitly zero out milliseconds
+          );
 
-          // Compare using Riyadh timezone
-          if (potentialDoseTime.isAfter(now) && potentialDoseTime.isBefore(scheduleUntil)) {
+          // More precise comparison with now
+          final bool isExactlyNow = potentialDoseTime.year == nowRounded.year && 
+                                   potentialDoseTime.month == nowRounded.month && 
+                                   potentialDoseTime.day == nowRounded.day &&
+                                   potentialDoseTime.hour == nowRounded.hour && 
+                                   potentialDoseTime.minute == nowRounded.minute;
+                                   
+          final bool isInFuture = potentialDoseTime.isAfter(nowRounded) || isExactlyNow;
+
+          // Compare using Riyadh timezone and include exact current time
+          if (isInFuture && potentialDoseTime.isBefore(scheduleUntil)) {
             if (endDate == null || potentialDoseTime.isBefore(endDate)) {
+              print("[Scheduling Calc] Adding dose time: ${potentialDoseTime.toString()}, isExactlyNow: $isExactlyNow");
               doseTimes.add(potentialDoseTime);
             }
+          } else {
+            print("[Scheduling Calc] Skipping dose time: ${potentialDoseTime.toString()} (not in valid time range)");
           }
         }
       }
@@ -475,11 +529,15 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       if (mounted) {
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('userName', fetchedName);
-        setState(() { _userName = fetchedName; });
+        setState(() {
+          _userName = fetchedName;
+        });
       }
     } catch (e) {
       print("[DataLoad User] Error loading username: $e");
-      if (mounted) { setState(() => _userName = 'مستخدم'); }
+      if (mounted) {
+        setState(() => _userName = 'مستخدم');
+      }
     }
   }
 
@@ -676,7 +734,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   void _onItemTapped(int index) {
     if (_selectedIndex == index && index == 0) {
       if (_isAuthenticated && _currentUser != null && !_isLoadingMed) {
-        setState(() => _isLoadingMed = true );
+        setState(() => _isLoadingMed = true);
         _loadUserDataAndSchedule();
       }
       return;
@@ -694,7 +752,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         if (ModalRoute.of(context)?.settings.name != '/') {
           Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
-        if (mounted) setState(() { _selectedIndex = index; });
+        if (mounted) setState(() {
+          _selectedIndex = index;
+        });
         break;
       case 1:
         routeName = "/personal_data";
@@ -707,11 +767,15 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     }
 
     if (routeName != null) {
-      if (mounted) setState(() { _selectedIndex = index; });
+      if (mounted) setState(() {
+        _selectedIndex = index;
+      });
       Navigator.pushNamed(context, routeName).then((_) {
         if (mounted) {
-          setState(() { _selectedIndex = 0; });
-          if(_isAuthenticated && _currentUser != null) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+          if (_isAuthenticated && _currentUser != null) {
             _loadClosestMedDisplayData();
           }
         }
@@ -729,8 +793,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         body: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [kPrimaryColor,kPrimaryColor.withOpacity(0.8),kBackgroundColor.withOpacity(0.9),kBackgroundColor,],
-              begin: Alignment.topCenter, end: Alignment.bottomCenter, stops: const [0.0, 0.3, 0.7, 1.0],
+              colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8), kBackgroundColor.withOpacity(0.9), kBackgroundColor],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: const [0.0, 0.3, 0.7, 1.0],
             ),
           ),
           child: Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -745,8 +811,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         body: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [kPrimaryColor,kPrimaryColor.withOpacity(0.8),kBackgroundColor.withOpacity(0.9),kBackgroundColor,],
-              begin: Alignment.topCenter, end: Alignment.bottomCenter, stops: const [0.0, 0.3, 0.7, 1.0],
+              colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8), kBackgroundColor.withOpacity(0.9), kBackgroundColor],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: const [0.0, 0.3, 0.7, 1.0],
             ),
           ),
           child: SafeArea(
@@ -961,7 +1029,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
-                          boxShadow: [ BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, -5)) ],
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: Offset(0, -5))],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1012,7 +1080,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [kPrimaryColor.withOpacity(0.1), Colors.blue.shade50.withOpacity(0.5)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(kBorderRadius),
             border: Border.all(color: kPrimaryColor.withOpacity(0.2), width: 1),
@@ -1030,7 +1099,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                     child: ElevatedButton(
                       onPressed: () => Navigator.pushNamed(context, '/register'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent, foregroundColor: kPrimaryColor, elevation: 0,
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: kPrimaryColor,
+                        elevation: 0,
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: kPrimaryColor)),
                       ),
@@ -1042,7 +1113,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                     child: ElevatedButton(
                       onPressed: () => Navigator.pushNamed(context, '/login'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: kPrimaryColor, foregroundColor: Colors.white, elevation: 0,
+                        backgroundColor: kPrimaryColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
                         padding: EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
@@ -1071,12 +1144,12 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         _isLoadingMed
             ? _buildLoadingIndicator()
             : _closestMedName.isEmpty
-            ? _buildEmptyDoseIndicator()
-            : DoseTile(
-          medicationName: _closestMedName,
-          nextDose: _closestMedTimeStr,
-          docId: _closestMedDocId,
-        ),
+                ? _buildEmptyDoseIndicator()
+                : DoseTile(
+                    medicationName: _closestMedName,
+                    nextDose: _closestMedTimeStr,
+                    docId: _closestMedDocId,
+                  ),
       ],
     );
   }
@@ -1135,7 +1208,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           children: [
             Expanded(
               child: EnhancedActionCard(
-                icon: Icons.add_circle_outline, label: "إضافة دواء", color: Colors.green.shade600,
+                icon: Icons.add_circle_outline,
+                label: "إضافة دواء",
+                color: Colors.green.shade600,
                 onTap: () {
                   if (_isAuthenticated) {
                     Navigator.pushNamed(context, '/add_dose').then((_) {
@@ -1144,23 +1219,29 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
                         _loadUserDataAndSchedule();
                       }
                     });
-                  } else { _showLoginRequiredDialog("إضافة دواء"); }
+                  } else {
+                    _showLoginRequiredDialog("إضافة دواء");
+                  }
                 },
               ),
             ),
             SizedBox(width: 16),
             Expanded(
               child: EnhancedActionCard(
-                icon: Icons.calendar_today_rounded, label: "جدول الأدوية", color: kPrimaryColor,
+                icon: Icons.calendar_today_rounded,
+                label: "جدول الأدوية",
+                color: kPrimaryColor,
                 onTap: () {
                   if (_isAuthenticated) {
-                    Navigator.pushNamed(context, '/dose_schedule').then((_){
+                    Navigator.pushNamed(context, '/dose_schedule').then((_) {
                       if (mounted && _currentUser != null) {
                         setState(() => _isLoadingMed = true);
                         _loadUserDataAndSchedule();
                       }
                     });
-                  } else { _showLoginRequiredDialog("جدول الأدوية"); }
+                  } else {
+                    _showLoginRequiredDialog("جدول الأدوية");
+                  }
                 },
               ),
             ),
@@ -1168,10 +1249,17 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         ),
         SizedBox(height: 16),
         EnhancedActionCard(
-          icon: Icons.people_alt_rounded, label: "المرافقين", description: "إدارة ومتابعة حالة المرافقين.", color: Colors.orange.shade700, isHorizontal: true,
+          icon: Icons.people_alt_rounded,
+          label: "المرافقين",
+          description: "إدارة ومتابعة حالة المرافقين.",
+          color: Colors.orange.shade700,
+          isHorizontal: true,
           onTap: () {
-            if (_isAuthenticated) { Navigator.pushNamed(context, '/companions'); }
-            else { _showLoginRequiredDialog("المرافقين"); }
+            if (_isAuthenticated) {
+              Navigator.pushNamed(context, '/companions');
+            } else {
+              _showLoginRequiredDialog("المرافقين");
+            }
           },
         ),
       ],
@@ -1209,7 +1297,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
               icon: Icon(Icons.login_rounded, size: 18),
               label: Text('تسجيل الدخول'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimaryColor, foregroundColor: Colors.white,
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () {
@@ -1242,7 +1331,7 @@ class DoseTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(kBorderRadius),
-        boxShadow: [ BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: Offset(0, 2)) ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: Offset(0, 2))],
         border: Border.all(color: kPrimaryColor.withOpacity(0.2), width: 1.5),
       ),
       child: Material(
@@ -1251,8 +1340,7 @@ class DoseTile extends StatelessWidget {
         child: InkWell(
           splashColor: kPrimaryColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(kBorderRadius),
-          onTap: () {
-          },
+          onTap: () {},
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -1280,7 +1368,8 @@ class DoseTile extends StatelessWidget {
 
   Widget _buildMedicationIcon() {
     return Container(
-      width: 56, height: 56,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(12),

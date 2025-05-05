@@ -5,8 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_init;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Features/Companions/companion_medication_tracker.dart';
-
+import '../../Features/Medication/Add/Add_Medication_Page.dart';
 import '../../main.dart';
 import 'notification_service.dart';
 
@@ -15,40 +16,28 @@ class AlarmNotificationHelper {
   static FlutterLocalNotificationsPlugin get notificationsPlugin => _service.notificationsPlugin;
   static bool _isInitialized = false;
   static final DateFormat _logDateFormat = DateFormat('yyyy-MM-dd HH:mm:ss.SSS ZZZZ');
-
-  // Define Riyadh timezone location for Saudi Arabia
   static late tz.Location _riyadhTimezone;
-
-  // Debug flag for verbose logging
   static const bool _debugMode = true;
 
   static Future<void> initialize(BuildContext? context) async {
     debugLog("Starting initialization...");
     tz_init.initializeTimeZones();
-
-    // Set up Riyadh timezone location
-    _riyadhTimezone = tz.getLocation('Asia/Riyadh'); // Saudi Arabia timezone
-    tz.setLocalLocation(_riyadhTimezone); // Set as default local timezone
-
+    _riyadhTimezone = tz.getLocation('Asia/Riyadh');
+    tz.setLocalLocation(_riyadhTimezone);
     debugLog("Time zones initialized with Riyadh timezone (Asia/Riyadh)");
     debugLog("Current time in Riyadh: ${tz.TZDateTime.now(_riyadhTimezone)}");
     debugLog("Current time in UTC: ${DateTime.now().toUtc()}");
     debugLog("Device time: ${DateTime.now()}");
-
-    // Perform initial notification check
     await _checkNotificationSettings();
-
     if (context != null) {
       await _initializeWithContext(context);
     } else {
       debugLog("Timezone data ready. Waiting for context...");
     }
-
     await ensureChannelsSetup();
     debugLog("Initialization complete");
   }
 
-  // Helper method for consistent debug logging
   static void debugLog(String message) {
     if (_debugMode) {
       final timestamp = _logDateFormat.format(DateTime.now());
@@ -58,23 +47,17 @@ class AlarmNotificationHelper {
     }
   }
 
-  // Check notification settings and log potential issues
   static Future<void> _checkNotificationSettings() async {
     try {
       final androidPlugin = _service.notificationsPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-
       if (androidPlugin != null) {
-        // Check if notifications are enabled
         final bool? areEnabled = await androidPlugin.areNotificationsEnabled();
         debugLog("Notification permission status: ${areEnabled == true ? 'GRANTED' : 'NOT GRANTED'}");
-
         if (areEnabled != true) {
           debugLog("⚠️ WARNING: Notifications are not enabled for this app!");
           debugLog("⚠️ User needs to grant notification permission in settings");
         }
-
-        // Check for additional permissions on Android 12+
         debugLog("Checking for exact alarm permission...");
       }
     } catch (e) {
@@ -87,14 +70,8 @@ class AlarmNotificationHelper {
       debugLog("Completing initialization with context.");
       await _initializeWithContext(context);
       await checkAndLogPermissions();
-
-      // Request exact alarm permission
       await checkAndRequestExactAlarmPermission(context);
-
-      // Process any pending notifications that were scheduled before initialization
       await _processPendingNotifications();
-
-      // Schedule a test notification 10 seconds in the future
       if (_debugMode) {
         debugLog("Scheduling test notification for debugging...");
         await showTestNotification();
@@ -104,15 +81,9 @@ class AlarmNotificationHelper {
 
   static Future<void> _initializeWithContext(BuildContext context) async {
     debugLog("Initializing notification service with context.");
-    await _service.initialize(
-        context,
-        _onNotificationResponse,
-        notificationTapBackground
-    );
+    await _service.initialize(context, _onNotificationResponse, notificationTapBackground);
     _isInitialized = true;
     debugLog("Service initialized");
-
-    // Request notification permissions now that we have context
     final androidPlugin = _service.notificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
@@ -143,27 +114,21 @@ class AlarmNotificationHelper {
     final payload = response.payload ?? '';
     final id = response.id ?? 0;
     final actionId = response.actionId ?? 'TAP';
-    final timestamp = _logDateFormat.format(DateTime.now());
-
     debugLog("--------------------------------------------------");
     debugLog("Notification response received:");
     debugLog("  ID: $id");
     debugLog("  Action ID: $actionId");
     debugLog("  Payload: $payload");
     debugLog("--------------------------------------------------");
-
     if (payload.isEmpty) {
       debugLog("No payload found in notification response.");
       return;
     }
-
     if (payload.startsWith('companion_reminder_')) {
       debugLog("Processing companion reminder notification with payload: $payload");
       _navigateToCompanionsPage();
-
-      // Also process as a check since we've combined the notifications
       final medicationId = payload.replaceFirst("companion_reminder_", "");
-      CompanionMedicationTracker.processCompanionDoseCheck("companion_check_" + medicationId);
+      CompanionMedicationTracker.processCompanionDoseCheck("companion_check_$medicationId");
       return;
     } else if (payload.startsWith('companion_check_')) {
       debugLog("Processing companion check notification with payload: $payload");
@@ -174,11 +139,10 @@ class AlarmNotificationHelper {
       _navigateToCompanionsPage();
       return;
     }
-
-    if (response.actionId == 'TAKE_ACTION') {
+    if (actionId == 'TAKE_ACTION') {
       debugLog("Take action triggered for notification with payload: $payload");
       _navigateToMedicationDetail(payload, markAsTaken: true);
-    } else if (response.actionId == 'SNOOZE_ACTION') {
+    } else if (actionId == 'SNOOZE_ACTION') {
       debugLog("Snooze action triggered for notification with payload: $payload");
       _handleSnooze(id, payload);
     } else {
@@ -193,7 +157,6 @@ class AlarmNotificationHelper {
       debugLog("Navigator key is null, can't navigate to companions page");
       return;
     }
-
     try {
       debugLog("Navigating to companions page");
       await navigatorKey.currentState?.pushNamed('/companions');
@@ -209,12 +172,10 @@ class AlarmNotificationHelper {
       debugLog("Medication ID is empty, cannot navigate.");
       return;
     }
-
     if (navigatorKey.currentState == null || navigatorKey.currentContext == null) {
       debugLog("Navigator state or context is null, cannot navigate.");
       return;
     }
-
     try {
       final currentRoute = ModalRoute.of(navigatorKey.currentContext!);
       if (currentRoute?.settings.name == '/medication_detail') {
@@ -224,7 +185,6 @@ class AlarmNotificationHelper {
           return;
         }
       }
-
       debugLog("Pushing /medication_detail route for $medicationId");
       await navigatorKey.currentState?.pushNamed(
         '/medication_detail',
@@ -236,7 +196,6 @@ class AlarmNotificationHelper {
         },
       );
       debugLog("Navigation to /medication_detail successful.");
-
     } catch (e, stackTrace) {
       debugLog("Error navigating to medication detail: $e\n$stackTrace");
     }
@@ -246,10 +205,8 @@ class AlarmNotificationHelper {
     const Duration snoozeDuration = Duration(minutes: 5);
     final tz.TZDateTime now = tz.TZDateTime.now(_riyadhTimezone);
     final tz.TZDateTime snoozeTime = now.add(snoozeDuration);
-
     final int newId = generateNotificationId(medicationId, snoozeTime) ^ 0x1A2B3C4D;
     debugLog("Original ID: $originalId, Scheduling Snooze ID: $newId for time: ${_logDateFormat.format(snoozeTime)}");
-
     try {
       await scheduleAlarmNotification(
         id: newId,
@@ -259,7 +216,6 @@ class AlarmNotificationHelper {
         medicationId: medicationId,
         isSnoozed: true,
         isCompanionCheck: false,
-        repeatInterval: null,
       );
       debugLog("Successfully scheduled snoozed notification $newId");
     } catch (e) {
@@ -277,54 +233,39 @@ class AlarmNotificationHelper {
     bool isCompanionCheck = false,
     RepeatInterval? repeatInterval,
   }) async {
-    // Make sure we're using Riyadh timezone
-    tz.TZDateTime scheduledRiyadhTime = ensureRiyadhTime(scheduledTime);
+    var scheduledRiyadhTime = tz.TZDateTime(
+      _riyadhTimezone,
+      scheduledTime.year,
+      scheduledTime.month,
+      scheduledTime.day,
+      scheduledTime.hour,
+      scheduledTime.minute,
+      0,
+      0,
+    );
+
+    final tz.TZDateTime nowExact = tz.TZDateTime.now(_riyadhTimezone);
+    final tz.TZDateTime now = tz.TZDateTime(
+      _riyadhTimezone,
+      nowExact.year,
+      nowExact.month,
+      nowExact.day,
+      nowExact.hour,
+      nowExact.minute,
+      0,
+      0,
+    );
 
     debugLog("Scheduling notification:");
     debugLog("- ID: $id");
     debugLog("- Title: $title");
     debugLog("- Body: $body");
-    debugLog("- Original time: ${_logDateFormat.format(scheduledTime)}");
     debugLog("- Adjusted time (Riyadh): ${_logDateFormat.format(scheduledRiyadhTime)}");
-    debugLog("- Payload: $medicationId");
-    debugLog("- Current time (Riyadh): ${_logDateFormat.format(tz.TZDateTime.now(_riyadhTimezone))}");
-    debugLog("- Current time (UTC): ${_logDateFormat.format(DateTime.now().toUtc())}");
+    debugLog("- Current time (Riyadh): ${_logDateFormat.format(now)}");
+    debugLog("- Exact current time: ${_logDateFormat.format(nowExact)}");
+    debugLog("- Time difference in minutes: ${scheduledRiyadhTime.difference(now).inMinutes}");
+    debugLog("- Time difference in seconds: ${scheduledRiyadhTime.difference(nowExact).inSeconds}");
 
-    if (!_isInitialized) {
-      debugLog("⚠️ WARNING: Trying to schedule notification before initialization!");
-
-      // Create a pending notification request to schedule once initialization completes
-      final pendingRequest = {
-        'id': id,
-        'title': title,
-        'body': body,
-        'scheduledTime': scheduledRiyadhTime,
-        'medicationId': medicationId,
-        'isSnoozed': isSnoozed,
-        'isCompanionCheck': isCompanionCheck,
-        'repeatInterval': repeatInterval?.toString(),
-      };
-
-      // Save it to shared preferences
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final pendingRequests = prefs.getStringList('pending_notifications') ?? [];
-        pendingRequests.add(pendingRequest.toString());
-        await prefs.setStringList('pending_notifications', pendingRequests);
-        debugLog("Saved pending notification request for ID $id to be processed after initialization");
-      } catch (e) {
-        debugLog("ERROR saving pending notification: $e");
-      }
-
-      // Proceed anyway - it might work if the plugin is partially initialized
-    }
-
-    final now = tz.TZDateTime.now(_riyadhTimezone);
-    final int secondsDifference = scheduledRiyadhTime.difference(now).inSeconds;
-
-    debugLog("Time difference: $secondsDifference seconds");
-
-    // Cancel any existing notification with this ID first
     try {
       await _service.cancelNotification(id);
       debugLog("Cancelled any existing notification with ID: $id");
@@ -332,13 +273,15 @@ class AlarmNotificationHelper {
       debugLog("Error cancelling existing notification: $e");
     }
 
-    // For immediate notifications (within 20 seconds)
-    if (secondsDifference < 20) {
-      debugLog("Notification time within $secondsDifference seconds, showing immediately");
+    final bool isExactlyNow = scheduledRiyadhTime.year == now.year &&
+                             scheduledRiyadhTime.month == now.month &&
+                             scheduledRiyadhTime.day == now.day &&
+                             scheduledRiyadhTime.hour == now.hour &&
+                             scheduledRiyadhTime.minute == now.minute;
 
+    if (isExactlyNow) {
+      debugLog("Scheduling immediate notification since time is exactly now");
       final String channelId = 'medication_alarms_v2';
-      final String channelName = 'Medication Alarms';
-
       try {
         await _service.notificationsPlugin.show(
           id,
@@ -347,24 +290,19 @@ class AlarmNotificationHelper {
           NotificationDetails(
             android: AndroidNotificationDetails(
               channelId,
-              channelName,
+              'Medication Alarms',
               channelDescription: 'Critical medication reminders',
               importance: Importance.max,
               priority: Priority.high,
               playSound: true,
               enableVibration: true,
-              enableLights: true,
-              vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
-              category: AndroidNotificationCategory.alarm,
-              fullScreenIntent: true,
-              autoCancel: true,
               sound: RawResourceAndroidNotificationSound('medication_alarm'),
               audioAttributesUsage: AudioAttributesUsage.alarm,
             ),
           ),
           payload: medicationId,
         );
-        debugLog("Immediate notification sent successfully with ID: $id");
+        debugLog("Immediate notification sent with ID: $id");
       } catch (e) {
         debugLog("ERROR showing immediate notification: $e");
       }
@@ -372,11 +310,11 @@ class AlarmNotificationHelper {
     }
 
     try {
-      // Check if the scheduled time is in the past
       if (scheduledRiyadhTime.isBefore(now)) {
-        // If the time is in the past, adjust based on repeat interval
+        debugLog("Scheduled time is in the past: ${scheduledRiyadhTime.toString()} vs ${now.toString()}");
+        
         if (repeatInterval != null) {
-          final oldTime = scheduledRiyadhTime.toString();
+          final String oldTime = scheduledRiyadhTime.toString();
           scheduledRiyadhTime = _adjustTimeForRepeat(now, scheduledRiyadhTime, repeatInterval);
           debugLog("Adjusted past time from $oldTime to future: ${scheduledRiyadhTime.toString()}");
         } else {
@@ -385,36 +323,16 @@ class AlarmNotificationHelper {
         }
       }
 
-      // Schedule the notification using the service
       await _service.scheduleAlarmNotification(
         id: id,
         title: title,
         body: body,
-        scheduledTime: scheduledRiyadhTime, // Use the Riyadh timezone time for scheduling
+        scheduledTime: scheduledRiyadhTime,
         medicationId: medicationId,
         isSnoozed: isSnoozed,
         isCompanionCheck: isCompanionCheck,
         repeatInterval: repeatInterval,
       );
-
-      // Also schedule a verification notification 1 minute after the main one
-      // This helps verify that scheduling works correctly
-      if (_debugMode) {
-        final verificationTime = scheduledRiyadhTime.add(Duration(minutes: 1));
-        final verificationId = id + 1000000; // Use a different ID
-
-        await _service.scheduleAlarmNotification(
-          id: verificationId,
-          title: "✅ تأكيد جدولة الإشعار",
-          body: "تم جدولة إشعار الدواء الأصلي #$id بنجاح",
-          scheduledTime: verificationTime,
-          medicationId: "verify_$medicationId",
-          isSnoozed: false,
-          isCompanionCheck: true,
-          repeatInterval: null,
-        );
-        debugLog("Verification notification scheduled with ID: $verificationId for: ${verificationTime.toString()}");
-      }
 
       debugLog("Future notification scheduled with ID: $id for time: ${scheduledRiyadhTime.toString()}");
     } catch (e, stackTrace) {
@@ -423,29 +341,150 @@ class AlarmNotificationHelper {
     }
   }
 
-  // New method to process pending notifications
+  static List<tz.TZDateTime> _calculateDoseTimes({
+    required tz.TZDateTime now,
+    required tz.TZDateTime startDate,
+    tz.TZDateTime? endDate,
+    required String frequencyType,
+    required List<dynamic> timesRaw,
+  }) {
+    final Set<tz.TZDateTime> doseTimeSet = {};
+    
+    final tz.TZDateTime nowRounded = tz.TZDateTime(
+      _riyadhTimezone,
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      0,
+      0,
+    );
+    
+    final tz.TZDateTime today = tz.TZDateTime(_riyadhTimezone, now.year, now.month, now.day);
+    if (today.isBefore(startDate)) return [];
+
+    if (frequencyType == 'يومي') {
+      for (var time in timesRaw) {
+        final parsedTime = TimeUtils.parseTime(time as String);
+        if (parsedTime != null) {
+          final tz.TZDateTime dt = tz.TZDateTime(
+            _riyadhTimezone,
+            today.year,
+            today.month,
+            today.day,
+            parsedTime.hour,
+            parsedTime.minute,
+            0,
+            0,
+          );
+          
+          final bool isInFuture = dt.isAfter(nowRounded) || 
+                                 (dt.year == nowRounded.year && 
+                                  dt.month == nowRounded.month && 
+                                  dt.day == nowRounded.day && 
+                                  dt.hour == nowRounded.hour && 
+                                  dt.minute == nowRounded.minute);
+                                  
+          if (isInFuture && (endDate == null || dt.isBefore(endDate))) {
+            doseTimeSet.add(dt);
+            debugLog("Adding dose time: ${dt.toString()}, comparison with now: $isInFuture");
+          } else {
+            debugLog("Skipping dose time (past or after end): ${dt.toString()}");
+          }
+        }
+      }
+    } else if (frequencyType == 'اسبوعي') {
+      // ...existing weekly frequency code...
+    }
+
+    final List<tz.TZDateTime> doseTimes = doseTimeSet.toList();
+    doseTimes.sort();
+    return doseTimes;
+  }
+
+  static Future<void> scheduleAllUserMedications(String userId) async {
+    debugLog("Scheduling all medications for user: $userId");
+    try {
+      await ensureChannelsSetup();
+      debugLog("Cancelling all existing notifications");
+      await cancelAllNotifications();
+      final medsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('medicines')
+          .get();
+      final tz.TZDateTime now = tz.TZDateTime.now(_riyadhTimezone);
+      Set<String> scheduledNotificationKeys = {};
+      for (var doc in medsSnapshot.docs) {
+        final data = doc.data();
+        final docId = doc.id;
+        final medName = data['name'] as String? ?? 'Unnamed Medication';
+        final Timestamp? startTs = data['startDate'] as Timestamp?;
+        final Timestamp? endTs = data['endDate'] as Timestamp?;
+        if (startTs == null) continue;
+        final tz.TZDateTime startDate = tz.TZDateTime.from(startTs.toDate(), _riyadhTimezone);
+        final tz.TZDateTime? endDate = endTs != null ? tz.TZDateTime.from(endTs.toDate(), _riyadhTimezone) : null;
+        final String frequencyType = data['frequencyType'] as String? ?? 'daily';
+        final List<dynamic> timesRaw = data['times'] ?? [];
+        final List<tz.TZDateTime> doseTimes = _calculateDoseTimes(
+          now: now,
+          startDate: startDate,
+          endDate: endDate,
+          frequencyType: frequencyType,
+          timesRaw: timesRaw,
+        );
+        for (var doseTime in doseTimes) {
+          String notificationKey = "${docId}_${doseTime.year}_${doseTime.month}_${doseTime.day}_${doseTime.hour}_${doseTime.minute}";
+          if (scheduledNotificationKeys.contains(notificationKey)) {
+            debugLog("Skipping duplicate notification for $docId at ${doseTime.toString()}");
+            continue;
+          }
+          scheduledNotificationKeys.add(notificationKey);
+          final int notificationId = generateNotificationId(docId, doseTime);
+          try {
+            await scheduleAlarmNotification(
+              id: notificationId,
+              title: "💊 Medication Reminder",
+              body: "It's time to take your medication: $medName.",
+              scheduledTime: doseTime,
+              medicationId: docId,
+              isCompanionCheck: false,
+            );
+          } catch (e) {
+            debugLog("Error scheduling notification for $docId: $e");
+          }
+        }
+      }
+      debugLog("Scheduled ${scheduledNotificationKeys.length} unique notifications");
+    } catch (e) {
+      debugLog("Error scheduling medications: $e");
+    }
+  }
+
+  static int generateNotificationId(String docId, tz.TZDateTime scheduledTime) {
+    final tz.TZDateTime timeRiyadh = ensureRiyadhTime(scheduledTime);
+    final int docHash = docId.hashCode;
+    final int dateHash = timeRiyadh.year * 10000 + timeRiyadh.month * 100 + timeRiyadh.day;
+    final int timeHash = timeRiyadh.hour * 100 + timeRiyadh.minute;
+    final int combinedHash = ((docHash ^ dateHash ^ timeHash) & 0x7FFFFFFF);
+    debugLog("Generated notification ID: $combinedHash for docId: $docId, time: ${timeRiyadh.toString()}");
+    return combinedHash;
+  }
+
   static Future<void> _processPendingNotifications() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final pendingRequests = prefs.getStringList('pending_notifications');
-
+      final List<String>? pendingRequests = prefs.getStringList('pending_notifications');
       if (pendingRequests == null || pendingRequests.isEmpty) {
         debugLog("No pending notification requests found");
         return;
       }
-
       debugLog("Processing ${pendingRequests.length} pending notification requests");
       await prefs.remove('pending_notifications');
-
-      // Process each request
-      for (final requestStr in pendingRequests) {
+      for (final String requestStr in pendingRequests) {
         try {
-          // Parse the request (simplified - in real code you'd need more robust parsing)
-          // For demonstration purposes only - you would need real parsing logic
           debugLog("Processing pending request: $requestStr");
-
-          // This is just a placeholder since parsing a string representation of a Map is complex
-          // You would need to use JSON encoding/decoding in a real implementation
           debugLog("Actual pending notification processing would happen here");
         } catch (e) {
           debugLog("Error processing pending request: $e");
@@ -456,24 +495,24 @@ class AlarmNotificationHelper {
     }
   }
 
-  // Helper method to ensure a time is in Riyadh timezone
   static tz.TZDateTime ensureRiyadhTime(tz.TZDateTime time) {
     if (time.location.name != _riyadhTimezone.name) {
-      debugLog("Converting time from ${time.location.name} to Riyadh timezone (Asia/Riyadh)");
-      // Convert to Riyadh timezone
       return tz.TZDateTime.from(time.toLocal(), _riyadhTimezone);
     }
     return time;
   }
 
-  static tz.TZDateTime _adjustTimeForRepeat(tz.TZDateTime now, tz.TZDateTime scheduledTime, RepeatInterval repeatInterval) {
-    final tod = TimeOfDay.fromDateTime(scheduledTime);
+  static tz.TZDateTime _adjustTimeForRepeat(
+      tz.TZDateTime now,
+      tz.TZDateTime scheduledTime,
+      RepeatInterval repeatInterval,
+      ) {
+    final TimeOfDay tod = TimeOfDay.fromDateTime(scheduledTime);
     if (repeatInterval == RepeatInterval.daily) {
       return _nextInstanceOfTime(now, tod);
     } else if (repeatInterval == RepeatInterval.weekly) {
       return _nextInstanceOfWeekday(now, scheduledTime.weekday, tod);
     }
-    // Default fallback
     return now.add(Duration(minutes: 5));
   }
 
@@ -485,12 +524,9 @@ class AlarmNotificationHelper {
     required String payload,
     required DateTime startDate,
   }) async {
-    // Convert startDate to Riyadh timezone if not already
     final tz.TZDateTime startDateRiyadh = tz.TZDateTime.from(startDate, _riyadhTimezone);
     final tz.TZDateTime firstOccurrence = _nextInstanceOfTime(startDateRiyadh, timeOfDay);
-
     debugLog("Daily Repeating ID: $id, First Occurrence: ${firstOccurrence.toString()}");
-
     return scheduleAlarmNotification(
       id: id,
       title: title,
@@ -511,12 +547,9 @@ class AlarmNotificationHelper {
     required String payload,
     required DateTime startDate,
   }) async {
-    // Convert startDate to Riyadh timezone if not already
     final tz.TZDateTime startDateRiyadh = tz.TZDateTime.from(startDate, _riyadhTimezone);
     final tz.TZDateTime firstOccurrence = _nextInstanceOfWeekday(startDateRiyadh, weekday, timeOfDay);
-
     debugLog("Weekly Repeating ID: $id, First Occurrence: ${firstOccurrence.toString()}");
-
     return scheduleAlarmNotification(
       id: id,
       title: title,
@@ -529,116 +562,77 @@ class AlarmNotificationHelper {
   }
 
   static tz.TZDateTime _nextInstanceOfTime(tz.TZDateTime from, TimeOfDay tod) {
-    // Make sure 'from' is in Riyadh timezone
-    tz.TZDateTime fromRiyadh = ensureRiyadhTime(from);
-
-    // Create a date with the given time in Riyadh timezone
+    final tz.TZDateTime fromRiyadh = ensureRiyadhTime(from);
     tz.TZDateTime scheduledDate = tz.TZDateTime(
+      _riyadhTimezone,
+      fromRiyadh.year,
+      fromRiyadh.month,
+      fromRiyadh.day,
+      tod.hour,
+      tod.minute,
+    );
+    if (scheduledDate.isBefore(fromRiyadh) || scheduledDate.isAtSameMomentAs(fromRiyadh)) {
+      scheduledDate = tz.TZDateTime(
         _riyadhTimezone,
         fromRiyadh.year,
         fromRiyadh.month,
-        fromRiyadh.day,
+        fromRiyadh.day + 1,
         tod.hour,
-        tod.minute
-    );
-
-    // If the time already passed today, schedule for tomorrow
-    if (scheduledDate.isBefore(fromRiyadh) || scheduledDate.isAtSameMomentAs(fromRiyadh)) {
-      scheduledDate = tz.TZDateTime(
-          _riyadhTimezone,
-          fromRiyadh.year,
-          fromRiyadh.month,
-          fromRiyadh.day + 1,
-          tod.hour,
-          tod.minute
+        tod.minute,
       );
     }
-
     debugLog("Next instance of time: ${scheduledDate.toString()} (Riyadh)");
     return scheduledDate;
   }
 
-  static tz.TZDateTime _nextInstanceOfWeekday(tz.TZDateTime from, int weekday, TimeOfDay tod) {
-    // Make sure 'from' is in Riyadh timezone
-    tz.TZDateTime fromRiyadh = ensureRiyadhTime(from);
-
-    // Get the next instance of the specified time
-    tz.TZDateTime scheduledDate = _nextInstanceOfTime(fromRiyadh, tod);
-
-    // Keep adding days until we hit the target weekday
+  static tz.TZDateTime _nextInstanceOfWeekday(
+      tz.TZDateTime from,
+      int weekday,
+      TimeOfDay tod,
+      ) {
+    tz.TZDateTime scheduledDate = _nextInstanceOfTime(ensureRiyadhTime(from), tod);
     while (scheduledDate.weekday != weekday) {
       scheduledDate = tz.TZDateTime(
-          _riyadhTimezone,
-          scheduledDate.year,
-          scheduledDate.month,
-          scheduledDate.day + 1,
-          tod.hour,
-          tod.minute
+        _riyadhTimezone,
+        scheduledDate.year,
+        scheduledDate.month,
+        scheduledDate.day + 1,
+        tod.hour,
+        tod.minute,
       );
     }
-
     debugLog("Next instance of weekday $weekday: ${scheduledDate.toString()} (Riyadh)");
     return scheduledDate;
   }
 
-  static int generateNotificationId(String docId, tz.TZDateTime scheduledTime) {
-    // Make sure the scheduled time is in Riyadh timezone
-    final tz.TZDateTime timeRiyadh = ensureRiyadhTime(scheduledTime);
-
-    final int docHash = docId.hashCode;
-    final int timeHash = timeRiyadh.millisecondsSinceEpoch ~/ 1000;
-    final int combinedHash = (docHash ^ timeHash) & 0x7FFFFFFF;
-
-    debugLog("Generated notification ID: $combinedHash for docId: $docId, time: ${timeRiyadh.toString()}");
-    return combinedHash;
-  }
-
   static String getFormattedTimeWithDate(BuildContext context, tz.TZDateTime dateTime) {
     try {
-      // Ensure we're using Riyadh timezone
       final tz.TZDateTime dateTimeRiyadh = ensureRiyadhTime(dateTime);
-
-      // Current time in Riyadh
       final tz.TZDateTime nowRiyadh = tz.TZDateTime.now(_riyadhTimezone);
-
-      // For debugging timezone issues
       debugLog("Formatting time: Current Riyadh: ${nowRiyadh.toString()}, Target Riyadh: ${dateTimeRiyadh.toString()}");
-
-      // Create date-only objects for comparison (in Riyadh timezone)
       final DateTime todayDate = DateTime(nowRiyadh.year, nowRiyadh.month, nowRiyadh.day);
       final DateTime medicationDate = DateTime(dateTimeRiyadh.year, dateTimeRiyadh.month, dateTimeRiyadh.day);
       final DateTime tomorrowDate = DateTime(todayDate.year, todayDate.month, todayDate.day + 1);
-
-      // Format the time portion
       final TimeOfDay tod = TimeOfDay.fromDateTime(dateTimeRiyadh);
       final int hour = tod.hourOfPeriod == 0 ? 12 : tod.hourOfPeriod;
-      final String minute = tod.minute.toString().padLeft(2, '0');
+      final String minuteStr = tod.minute.toString().padLeft(2, '0');
       final String period = tod.period == DayPeriod.am ? 'صباحاً' : 'مساءً';
-      String timeStr = '$hour:$minute $period';
-
-      // Compare dates for "today", "tomorrow" or specific date display
+      String timeStr = '$hour:$minuteStr $period';
       if (medicationDate.day == tomorrowDate.day &&
           medicationDate.month == tomorrowDate.month &&
           medicationDate.year == tomorrowDate.year) {
-        // If it's tomorrow
         timeStr += " (غداً)";
-        debugLog("Adding tomorrow indicator to time display");
       } else if (medicationDate.day != todayDate.day ||
           medicationDate.month != todayDate.month ||
           medicationDate.year != todayDate.year) {
-        // If it's not today or tomorrow (a future date)
-        final DateFormat dateFormat = DateFormat('dd/MM', 'ar');
-        final String formattedDate = dateFormat.format(medicationDate);
+        final String formattedDate = DateFormat('dd/MM', 'ar').format(medicationDate);
         timeStr += " ($formattedDate)";
-        debugLog("Adding future date indicator: $formattedDate to time display");
       }
-
       debugLog("Final formatted time: $timeStr");
       return timeStr;
     } catch (e, stack) {
       debugLog("Error formatting time: $e");
       debugLog("Stack trace: $stack");
-      // Fallback to basic formatting
       return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
     }
   }
@@ -686,11 +680,8 @@ class AlarmNotificationHelper {
     return result;
   }
 
-  // Special testing method to immediately show a test notification
   static Future<void> showTestNotification() async {
     debugLog("Setting up test notifications");
-
-    // Test 1: Immediate notification
     final int testId1 = 999991;
     try {
       await _service.notificationsPlugin.show(
@@ -715,11 +706,8 @@ class AlarmNotificationHelper {
     } catch (e) {
       debugLog("Error showing immediate test notification: $e");
     }
-
-    // Test 2: Scheduled in 30 seconds
     final int testId2 = 999992;
-    final tz.TZDateTime testTime2 = tz.TZDateTime.now(_riyadhTimezone).add(const Duration(seconds: 30));
-
+    final tz.TZDateTime testTime2 = tz.TZDateTime.now(_riyadhTimezone).add(const Duration(minutes: 1));
     try {
       await scheduleAlarmNotification(
         id: testId2,
@@ -733,19 +721,15 @@ class AlarmNotificationHelper {
     } catch (e) {
       debugLog("Error scheduling test notification: $e");
     }
-
-    // Log pending notifications for verification
     await logPendingNotifications();
     debugLog("Test notifications setup complete");
   }
 
-  // Helper method to parse time strings with flexible format support
   static TimeOfDay? parseTimeString(String timeStr) {
     try {
       String normalizedTime = timeStr.trim();
       bool isPM = false;
       bool isAM = false;
-
       if (normalizedTime.contains('مساء')) {
         isPM = true;
         normalizedTime = normalizedTime.replaceAll('مساءً', '').replaceAll('مساء', '').trim();
@@ -759,15 +743,12 @@ class AlarmNotificationHelper {
         isAM = true;
         normalizedTime = normalizedTime.replaceAll(RegExp(r'[aA][mM]'), '').trim();
       }
-
       final parts = normalizedTime.split(':');
       if (parts.length == 2) {
         int hour = int.parse(parts[0]);
         int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
-
         if (isPM && hour < 12) hour += 12;
-        if (isAM && hour == 12) hour = 0; // 12 AM is 00:00
-
+        if (isAM && hour == 12) hour = 0;
         if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
           return TimeOfDay(hour: hour, minute: minute);
         }
@@ -782,45 +763,25 @@ class AlarmNotificationHelper {
     try {
       final androidPlugin = _service.notificationsPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-
       if (androidPlugin == null) {
         debugLog("Unable to resolve Android plugin implementation");
         return false;
       }
-
-      // This is only available on newer Android versions
       try {
-        // Replace with proper API check for Android 12+
         bool? hasExactAlarm;
-
-        // Try to access whether permission is granted via available methods
         try {
-          // Check if we're on Android 12+ first
           final bool? areNotificationsEnabled = await androidPlugin.areNotificationsEnabled();
           debugLog("Notification permission status: $areNotificationsEnabled");
-
-          // For now, we'll use notification permission as a proxy for exact alarm permission
-          // as the plugin doesn't directly expose the exact alarm permission check
           hasExactAlarm = areNotificationsEnabled;
         } catch (e) {
           debugLog("Error checking notification permissions: $e");
-          // For older Android versions, assume permission is granted
           hasExactAlarm = true;
         }
-
         debugLog("Exact alarm permission status (estimated): $hasExactAlarm");
-
         if (hasExactAlarm == false) {
-          // Show dialog explaining why exact alarms are needed
           final bool shouldRequest = await _showExactAlarmPermissionDialog(context);
           if (shouldRequest) {
-            // On Android 12+, we need to direct users to system settings 
-            // since we can't directly request the permission via the plugin
             await _openAlarmPermissionSettings(context);
-
-            // Check again after potentially opening settings
-            // For now, just assume they granted it (we can't actually check directly)
-            debugLog("Exact alarm permission status after settings redirect: unknown");
             return true;
           }
           return false;
@@ -828,7 +789,6 @@ class AlarmNotificationHelper {
         return hasExactAlarm ?? false;
       } catch (e) {
         debugLog("Error checking exact alarm permission: $e");
-        // Older Android versions don't need this permission
         return true;
       }
     } catch (e) {
@@ -839,8 +799,6 @@ class AlarmNotificationHelper {
 
   static Future<void> _openAlarmPermissionSettings(BuildContext context) async {
     try {
-      // For Android 12+ we should open system settings for SCHEDULE_EXACT_ALARM permission
-      // but the plugin doesn't offer this directly, so we can guide users
       bool? userConfirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -862,15 +820,11 @@ class AlarmNotificationHelper {
           ],
         ),
       );
-
       if (userConfirmed == true) {
         final androidPlugin = _service.notificationsPlugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-
         if (androidPlugin != null) {
-          // Open app settings as we don't have direct access to alarm settings
           await androidPlugin.getNotificationAppLaunchDetails();
-          debugLog("Opened app settings for permission configuration");
         }
       }
     } catch (e) {
