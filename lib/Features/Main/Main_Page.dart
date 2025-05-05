@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -37,7 +36,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   late Animation<double> _fadeInAnimation;
   bool _isAuthenticated = false;
   User? _currentUser;
-  final tz.Location utcPlus3Location = tz.getLocation('Asia/Riyadh'); // Get the UTC+3 location (Saudi Arabia timezone)
+  final tz.Location riyadhTimezone = tz.getLocation('Asia/Riyadh'); // Saudi Arabia timezone
 
   @override
   void initState() {
@@ -139,10 +138,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     await _loadUserName();
     await _scheduleAllUserMedications(_currentUser!.uid);
     await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
-    
+
     // Also ensure periodic checks are set up
     await setupPeriodicCompanionChecks();
-    
+
     await _loadClosestMedDisplayData();
   }
 
@@ -175,10 +174,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           .collection('medicines')
           .get();
 
-      // Use UTC+3 timezone location
-      final tz.TZDateTime now = tz.TZDateTime.now(utcPlus3Location);
+      // Use Riyadh timezone location
+      final tz.TZDateTime now = tz.TZDateTime.now(riyadhTimezone);
 
-      print("[Scheduling] Current time in UTC+3: ${now.toString()}");
+      print("[Scheduling] Current time in Riyadh timezone: ${now.toString()}");
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
@@ -191,19 +190,19 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           continue;
         }
 
-        // Convert timestamps to UTC+3 times
-        final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), utcPlus3Location);
-        final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), utcPlus3Location) : null;
+        // Convert timestamps to Riyadh timezone
+        final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), riyadhTimezone);
+        final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), riyadhTimezone) : null;
 
-        // Date-only comparisons using UTC+3 timezone
-        final tz.TZDateTime todayFloor = tz.TZDateTime(utcPlus3Location, now.year, now.month, now.day);
-        final tz.TZDateTime startDayFloor = tz.TZDateTime(utcPlus3Location, startDate.year, startDate.month, startDate.day);
+        // Date-only comparisons using Riyadh timezone
+        final tz.TZDateTime todayFloor = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day);
+        final tz.TZDateTime startDayFloor = tz.TZDateTime(riyadhTimezone, startDate.year, startDate.month, startDate.day);
 
         if (todayFloor.isBefore(startDayFloor)) {
           continue;
         }
         if (endDate != null) {
-          final tz.TZDateTime endDayFloor = tz.TZDateTime(utcPlus3Location, endDate.year, endDate.month, endDate.day);
+          final tz.TZDateTime endDayFloor = tz.TZDateTime(riyadhTimezone, endDate.year, endDate.month, endDate.day);
           if (todayFloor.isAfter(endDayFloor)) {
             continue;
           }
@@ -227,7 +226,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           final notificationId = AlarmNotificationHelper.generateNotificationId(docId, doseTime);
 
           try {
-            print("[Scheduling] Scheduling notification for med '$medName' at ${doseTime.toString()} (UTC+3)");
+            print("[Scheduling] Scheduling notification for med '$medName' at ${doseTime.toString()} (Riyadh timezone)");
             await AlarmNotificationHelper.scheduleAlarmNotification(
               id: notificationId,
               title: "💊 تذكير بجرعة دواء",
@@ -256,7 +255,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final absoluteNextDoseTime = absoluteNextDose['time'] as tz.TZDateTime;
         final absoluteNextDoseDocId = absoluteNextDose['docId'] as String;
 
-        print("[Scheduling] Storing next dose: ${absoluteNextDoseTime.toString()} (UTC+3) for med $absoluteNextDoseDocId");
+        print("[Scheduling] Storing next dose: ${absoluteNextDoseTime.toString()} (Riyadh timezone) for med $absoluteNextDoseDocId");
 
         // Store the time in ISO format but with explicit timezone info
         await prefs.setString(PREF_NEXT_DOSE_DOC_ID, absoluteNextDoseDocId);
@@ -326,9 +325,9 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (parsedTimesOfDay.isEmpty) return [];
 
-    // Use UTC+3 for all date calculations
-    tz.TZDateTime currentDay = tz.TZDateTime(utcPlus3Location, now.year, now.month, now.day);
-    final tz.TZDateTime startDayFloor = tz.TZDateTime(utcPlus3Location, startDate.year, startDate.month, startDate.day);
+    // Use Riyadh timezone for all date calculations
+    tz.TZDateTime currentDay = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day);
+    final tz.TZDateTime startDayFloor = tz.TZDateTime(riyadhTimezone, startDate.year, startDate.month, startDate.day);
 
     if(currentDay.isBefore(startDayFloor)){
       currentDay = startDayFloor;
@@ -341,7 +340,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       safetyBreak++;
 
       if (endDate != null) {
-        final tz.TZDateTime endDayFloor = tz.TZDateTime(utcPlus3Location, endDate.year, endDate.month, endDate.day);
+        final tz.TZDateTime endDayFloor = tz.TZDateTime(riyadhTimezone, endDate.year, endDate.month, endDate.day);
         if(currentDay.isAfter(endDayFloor)) break;
       }
 
@@ -356,11 +355,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
       if (checkThisDay) {
         for (TimeOfDay tod in parsedTimesOfDay) {
-          // Create the potential dose time in UTC+3
+          // Create the potential dose time in Riyadh timezone
           tz.TZDateTime potentialDoseTime = tz.TZDateTime(
-              utcPlus3Location, currentDay.year, currentDay.month, currentDay.day, tod.hour, tod.minute);
+              riyadhTimezone, currentDay.year, currentDay.month, currentDay.day, tod.hour, tod.minute);
 
-          // Compare using UTC+3 time
+          // Compare using Riyadh timezone
           if (potentialDoseTime.isAfter(now) && potentialDoseTime.isBefore(scheduleUntil)) {
             if (endDate == null || potentialDoseTime.isBefore(endDate)) {
               doseTimes.add(potentialDoseTime);
@@ -397,22 +396,22 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (nextDoseDocId != null && nextDoseTimeIso != null) {
       try {
-        // Parse the stored time with timezone awareness (should be in UTC+3 format)
+        // Parse the stored time with timezone awareness (should be in Riyadh timezone format)
         tz.TZDateTime nextDoseTimeLocal;
 
         try {
           // Try parsing as stored TZDateTime string (new format)
-          nextDoseTimeLocal = tz.TZDateTime.parse(utcPlus3Location, nextDoseTimeIso);
+          nextDoseTimeLocal = tz.TZDateTime.parse(riyadhTimezone, nextDoseTimeIso);
         } catch (_) {
           // Fall back to parsing as UTC ISO string (old format)
           final DateTime nextDoseTimeUTC = DateTime.parse(nextDoseTimeIso);
-          nextDoseTimeLocal = tz.TZDateTime.from(nextDoseTimeUTC, utcPlus3Location);
+          nextDoseTimeLocal = tz.TZDateTime.from(nextDoseTimeUTC, riyadhTimezone);
         }
 
-        // Get current time in UTC+3
-        final tz.TZDateTime nowLocal = tz.TZDateTime.now(utcPlus3Location);
+        // Get current time in Riyadh timezone
+        final tz.TZDateTime nowLocal = tz.TZDateTime.now(riyadhTimezone);
 
-        print("[Confirmation] Now (UTC+3): ${logTimeFormat.format(nowLocal)} vs Next Dose (UTC+3): ${logTimeFormat.format(nextDoseTimeLocal)}");
+        print("[Confirmation] Now (Riyadh timezone): ${logTimeFormat.format(nowLocal)} vs Next Dose (Riyadh timezone): ${logTimeFormat.format(nextDoseTimeLocal)}");
 
         if (nowLocal.isAfter(nextDoseTimeLocal)) {
           confirmationKey = '${PREF_CONFIRMATION_SHOWN_PREFIX}${nextDoseDocId}_${nextDoseTimeIso}';
@@ -504,28 +503,28 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (nextDocId != null && nextTimeIso != null) {
       try {
-        // Parse the time with UTC+3 timezone awareness
+        // Parse the time with Riyadh timezone awareness
         tz.TZDateTime nextTimeLocal;
 
         try {
           // Try parsing as stored TZDateTime string (new format)
-          nextTimeLocal = tz.TZDateTime.parse(utcPlus3Location, nextTimeIso);
+          nextTimeLocal = tz.TZDateTime.parse(riyadhTimezone, nextTimeIso);
         } catch (_) {
           // Fall back to parsing as UTC ISO string (old format)
           final DateTime nextTimeUTC = DateTime.parse(nextTimeIso);
-          nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, utcPlus3Location);
+          nextTimeLocal = tz.TZDateTime.from(nextTimeUTC, riyadhTimezone);
         }
 
-        // Get current time in UTC+3
-        final tz.TZDateTime nowLocal = tz.TZDateTime.now(utcPlus3Location);
+        // Get current time in Riyadh timezone
+        final tz.TZDateTime nowLocal = tz.TZDateTime.now(riyadhTimezone);
 
-        // Get DateTime objects for today and tomorrow in UTC+3 for comparison
+        // Get DateTime objects for today and tomorrow in Riyadh timezone for comparison
         final DateTime todayDate = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
         final DateTime medicationDate = DateTime(nextTimeLocal.year, nextTimeLocal.month, nextTimeLocal.day);
         final DateTime tomorrowDate = todayDate.add(const Duration(days: 1));
 
-        print("[DataLoad Display] Now (UTC+3): ${logTimeFormat.format(nowLocal)}");
-        print("[DataLoad Display] Next Dose (UTC+3): ${logTimeFormat.format(nextTimeLocal)}");
+        print("[DataLoad Display] Now (Riyadh timezone): ${logTimeFormat.format(nowLocal)}");
+        print("[DataLoad Display] Next Dose (Riyadh timezone): ${logTimeFormat.format(nextTimeLocal)}");
         print("[DataLoad Display] Today: $todayDate, Next Dose Day: $medicationDate, Tomorrow: $tomorrowDate");
 
         // Check if the dose time has passed
@@ -549,7 +548,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             displayMedName = doc.data()?['name'] as String? ?? 'دواء غير مسمى';
             displayDocId = nextDocId;
 
-            // Format the time with proper UTC+3 timezone awareness
+            // Format the time with proper Riyadh timezone awareness
             displayMedTime = _formatTimeWithDate(nextTimeLocal);
 
             print("[DataLoad Display] Medicine found: $displayMedName, Formatted time: $displayMedTime");
@@ -588,8 +587,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   // Format time with correct AM/PM and date if needed
   String _formatTimeWithDate(tz.TZDateTime dateTime) {
     try {
-      // Get current time in UTC+3 for comparison
-      final tz.TZDateTime now = tz.TZDateTime.now(utcPlus3Location);
+      // Get current time in Riyadh timezone for comparison
+      final tz.TZDateTime now = tz.TZDateTime.now(riyadhTimezone);
 
       // Compare dates for "today", "tomorrow" or specific date display
       final bool isToday = dateTime.year == now.year &&
@@ -996,10 +995,11 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
   String _getGreeting(int hour) {
     // Use Saudi Arabia's timezone for the greeting
-    final utcPlus3Hour = (DateTime.now().toUtc().hour + 3) % 24;
+    final tz.TZDateTime now = tz.TZDateTime.now(riyadhTimezone);
+    final int riyadhHour = now.hour;
 
-    if (utcPlus3Hour >= 4 && utcPlus3Hour < 12) return "صباح الخير";
-    if (utcPlus3Hour >= 12 && utcPlus3Hour < 17) return "مساء الخير";
+    if (riyadhHour >= 4 && riyadhHour < 12) return "صباح الخير";
+    if (riyadhHour >= 12 && riyadhHour < 17) return "مساء الخير";
     return "مساء الخير";
   }
 
@@ -1404,3 +1404,4 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
+

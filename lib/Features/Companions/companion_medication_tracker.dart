@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -186,11 +184,14 @@ class CompanionMedicationTracker {
       final int notificationId = DateTime.now().microsecondsSinceEpoch % 100000000;
       final payload = "companion_missed_${notificationId.toString()}";
 
+      // Use Riyadh timezone explicitly
+      final tz.Location riyadhTimezone = tz.getLocation('Asia/Riyadh');
+      
       await AlarmNotificationHelper.scheduleAlarmNotification(
         id: notificationId,
         title: "تنبيه: $companionName لم يتناول الدواء",
         body: "يبدو أن $companionName لم يتناول $medicationName المُجدول في $formattedTime. تحقق من حالتهم.",
-        scheduledTime: tz.TZDateTime.now(tz.local).add(const Duration(seconds: 2)),
+        scheduledTime: tz.TZDateTime.now(riyadhTimezone).add(const Duration(seconds: 2)),
         medicationId: payload,
         isCompanionCheck: true,
       );
@@ -330,9 +331,10 @@ class CompanionMedicationTracker {
           .collection('companions')
           .get();
 
-      final tz.Location local = tz.local;
-      final now = tz.TZDateTime.now(local);
-      final todayStart = tz.TZDateTime(local, now.year, now.month, now.day);
+      // Use Riyadh timezone explicitly instead of tz.local
+      final tz.Location riyadhTimezone = tz.getLocation('Asia/Riyadh');
+      final now = tz.TZDateTime.now(riyadhTimezone);
+      final todayStart = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day);
       final todayEnd = todayStart.add(const Duration(days: 1));
       final DateFormat logTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss ZZZZ', 'en_US');
 
@@ -441,7 +443,8 @@ class CompanionMedicationTracker {
       tz.TZDateTime todayEnd,
       DateFormat logTimeFormat
       ) async {
-    final tz.Location local = tz.local;
+    // Use Riyadh timezone explicitly
+    final tz.Location riyadhTimezone = tz.getLocation('Asia/Riyadh');
 
     try {
       final pendingNotifications = await AlarmNotificationHelper.getPendingNotifications();
@@ -460,8 +463,8 @@ class CompanionMedicationTracker {
 
     for (final companion in companionData) {
       for (final medication in companion.medications) {
-        final tzStartDate = tz.TZDateTime.from(medication.startDate, local);
-        final tzEndDate = medication.endDate != null ? tz.TZDateTime.from(medication.endDate!, local) : null;
+        final tzStartDate = tz.TZDateTime.from(medication.startDate, riyadhTimezone);
+        final tzEndDate = medication.endDate != null ? tz.TZDateTime.from(medication.endDate!, riyadhTimezone) : null;
 
         if (now.isBefore(tzStartDate) || (tzEndDate != null && now.isAfter(tzEndDate))) {
           continue;
@@ -494,7 +497,7 @@ class CompanionMedicationTracker {
 
         for (final tod in parsedTimes) {
           // Calculate potential dose time for today
-          tz.TZDateTime doseTime = tz.TZDateTime(local, now.year, now.month, now.day, tod.hour, tod.minute);
+          tz.TZDateTime doseTime = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day, tod.hour, tod.minute);
 
           // If the calculated dose time for today is in the past, calculate it for the next valid day (tomorrow or next week day)
           if (doseTime.isBefore(now)) {
@@ -503,11 +506,11 @@ class CompanionMedicationTracker {
               while(nextDay.weekday != doseTime.weekday) { // Find the next occurrence of that weekday
                 nextDay = nextDay.add(Duration(days:1));
               }
-              doseTime = tz.TZDateTime(local, nextDay.year, nextDay.month, nextDay.day, tod.hour, tod.minute);
+              doseTime = tz.TZDateTime(riyadhTimezone, nextDay.year, nextDay.month, nextDay.day, tod.hour, tod.minute);
             } else { // Daily
               doseTime = doseTime.add(Duration(days:1));
             }
-            print("[Companion Schedule Check] Original dose time ${logTimeFormat.format(tz.TZDateTime(local, now.year, now.month, now.day, tod.hour, tod.minute))} was in the past. Adjusted to next occurrence: ${logTimeFormat.format(doseTime)}");
+            print("[Companion Schedule Check] Original dose time ${logTimeFormat.format(tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day, tod.hour, tod.minute))} was in the past. Adjusted to next occurrence: ${logTimeFormat.format(doseTime)}");
           }
 
 

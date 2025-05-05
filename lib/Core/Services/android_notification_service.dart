@@ -9,7 +9,7 @@ class AndroidNotificationService implements NotificationService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   // Initialize directly instead of using 'late' to avoid initialization errors
-  tz.Location _utcPlus3Location = tz.getLocation('Asia/Riyadh');
+  tz.Location _riyadhTimezone = tz.getLocation('Asia/Riyadh');
   bool _debugMode = true;
   bool _isInitialized = false;
 
@@ -22,12 +22,12 @@ class AndroidNotificationService implements NotificationService {
     try {
       // Initialize timezone database
       tz_init.initializeTimeZones();
-      _utcPlus3Location = tz.getLocation('Asia/Riyadh'); // Saudi Arabia is UTC+3
-      tz.setLocalLocation(_utcPlus3Location); // Set as default timezone
-      debugLog("Timezone data initialized with UTC+3 (Asia/Riyadh)");
+      _riyadhTimezone = tz.getLocation('Asia/Riyadh'); // Saudi Arabia timezone
+      tz.setLocalLocation(_riyadhTimezone); // Set as default timezone
+      debugLog("Timezone data initialized with Riyadh timezone (Asia/Riyadh)");
     } catch (e) {
       debugLog("ERROR initializing timezone data: $e");
-      // If initialization fails, we have already set a default value for _utcPlus3Location
+      // If initialization fails, we have already set a default value for _riyadhTimezone
     }
   }
 
@@ -52,9 +52,9 @@ class AndroidNotificationService implements NotificationService {
     final initSettings = InitializationSettings(android: androidInit, iOS: null);
 
     // Timezone is already initialized in constructor, just log current time
-    final now = tz.TZDateTime.now(_utcPlus3Location);
-    debugLog("Current time in UTC+3: ${now.toString()}");
-    debugLog("Current offset from UTC: ${_utcPlus3Location.currentTimeZone.offset / 3600} hours");
+    final now = tz.TZDateTime.now(_riyadhTimezone);
+    debugLog("Current time in Riyadh: ${now.toString()}");
+    debugLog("Current offset from UTC: ${_riyadhTimezone.currentTimeZone.offset / 3600} hours");
 
     try {
       await _notificationsPlugin.initialize(
@@ -191,7 +191,7 @@ class AndroidNotificationService implements NotificationService {
         // Log exact alarm permission status
         final exactAlarmPermissionStatus = await checkExactAlarmPermission();
         debugLog("Exact alarm permission status: $exactAlarmPermissionStatus");
-        
+
         if (exactAlarmPermissionStatus == false) {
           debugLog("⚠️ IMPORTANT: Exact alarm permission not granted. May affect notification reliability.");
         }
@@ -203,19 +203,19 @@ class AndroidNotificationService implements NotificationService {
       debugLog("Android plugin implementation is null");
     }
   }
-  
+
   // Updated method to check exact alarm permission
   Future<bool?> checkExactAlarmPermission() async {
     try {
       // For Android 12+ (SDK 31+), we should check SCHEDULE_EXACT_ALARM permission
       // But since the plugin doesn't expose this directly, we'll use a proxy check
-      
+
       // For now, we'll use notification permission as a proxy
       // In a real app, you'd use platform channels or method channels to check this permission
       final areNotificationsEnabled = await _notificationsPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.areNotificationsEnabled();
-      
+
       debugLog("Using notifications permission as proxy for exact alarm permission: $areNotificationsEnabled");
       return areNotificationsEnabled;
     } catch (e) {
@@ -251,14 +251,14 @@ class AndroidNotificationService implements NotificationService {
       // Continue anyway since this is just a precaution
     }
 
-    // Ensure scheduledTime is in UTC+3
-    tz.TZDateTime scheduledTimeUtcPlus3 = _ensureUtcPlus3Time(scheduledTime);
+    // Ensure scheduledTime is in Riyadh timezone
+    tz.TZDateTime scheduledTimeRiyadh = _ensureRiyadhTime(scheduledTime);
 
-    final now = tz.TZDateTime.now(_utcPlus3Location);
-    final difference = scheduledTimeUtcPlus3.difference(now);
+    final now = tz.TZDateTime.now(_riyadhTimezone);
+    final difference = scheduledTimeRiyadh.difference(now);
 
-    debugLog("Scheduling notification ID $id for ${scheduledTimeUtcPlus3.toString()} (UTC+3)");
-    debugLog("Current time: ${now.toString()} (UTC+3)");
+    debugLog("Scheduling notification ID $id for ${scheduledTimeRiyadh.toString()} (Riyadh)");
+    debugLog("Current time: ${now.toString()} (Riyadh)");
     debugLog("Time difference: ${difference.inSeconds} seconds");
 
     // Check if this is a special notification type
@@ -330,26 +330,26 @@ class AndroidNotificationService implements NotificationService {
 
     try {
       // Handle past time scheduling
-      if (scheduledTimeUtcPlus3.isBefore(now)) {
+      if (scheduledTimeRiyadh.isBefore(now)) {
         if (repeatInterval == null) {
           // For non-repeating alarms, adjust time to the next day instead of skipping
-          debugLog("ID: $id Scheduled time ${scheduledTimeUtcPlus3.toString()} is past. Adjusting to next day.");
-          scheduledTimeUtcPlus3 = tz.TZDateTime(
-              _utcPlus3Location,
+          debugLog("ID: $id Scheduled time ${scheduledTimeRiyadh.toString()} is past. Adjusting to next day.");
+          scheduledTimeRiyadh = tz.TZDateTime(
+              _riyadhTimezone,
               now.year, now.month, now.day + 1,
-              scheduledTimeUtcPlus3.hour, scheduledTimeUtcPlus3.minute);
+              scheduledTimeRiyadh.hour, scheduledTimeRiyadh.minute);
         } else {
-          debugLog("ID: $id Original time ${scheduledTimeUtcPlus3.toString()} is past. Adjusting for repeat interval $repeatInterval...");
-          scheduledTimeUtcPlus3 = _adjustTimeForRepeat(now, scheduledTimeUtcPlus3, repeatInterval);
-          debugLog("ID: $id Adjusted time: ${scheduledTimeUtcPlus3.toString()}");
+          debugLog("ID: $id Original time ${scheduledTimeRiyadh.toString()} is past. Adjusting for repeat interval $repeatInterval...");
+          scheduledTimeRiyadh = _adjustTimeForRepeat(now, scheduledTimeRiyadh, repeatInterval);
+          debugLog("ID: $id Adjusted time: ${scheduledTimeRiyadh.toString()}");
         }
       }
 
       // For times very close to now (less than 30 seconds), add a small buffer to ensure it fires
-      if (scheduledTimeUtcPlus3.difference(now).inSeconds < 30) {
+      if (scheduledTimeRiyadh.difference(now).inSeconds < 30) {
         // If it's too close, add 30 seconds to ensure it has time to be scheduled
-        scheduledTimeUtcPlus3 = now.add(const Duration(seconds: 30));
-        debugLog("ID: $id Time too close to now, adjusted to: ${scheduledTimeUtcPlus3.toString()}");
+        scheduledTimeRiyadh = now.add(const Duration(seconds: 30));
+        debugLog("ID: $id Time too close to now, adjusted to: ${scheduledTimeRiyadh.toString()}");
       }
 
       // Configure date/time matching components for repeating notifications
@@ -362,13 +362,13 @@ class AndroidNotificationService implements NotificationService {
         debugLog("Using weekly repeat pattern (day of week and time)");
       }
 
-      debugLog("Scheduling notification ID: $id, Time: ${scheduledTimeUtcPlus3.toString()}, "
+      debugLog("Scheduling notification ID: $id, Time: ${scheduledTimeRiyadh.toString()}, "
           "Match: $match, Payload: $medicationId");
 
       // Add a debug verification notification if this is not a test
       if (!isTestNotification && _debugMode) {
         // Schedule a verification notification 10 seconds after the actual one
-        final verificationTime = scheduledTimeUtcPlus3.add(const Duration(seconds: 10));
+        final verificationTime = scheduledTimeRiyadh.add(const Duration(seconds: 10));
         final verificationId = id + 1000000; // Use a different ID with large offset
 
         try {
@@ -392,18 +392,18 @@ class AndroidNotificationService implements NotificationService {
         id,
         title,
         body,
-        scheduledTimeUtcPlus3,
+        scheduledTimeRiyadh,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: medicationId,
         matchDateTimeComponents: match,
       );
 
-      debugLog("Successfully scheduled notification ID $id for ${scheduledTimeUtcPlus3.toString()}");
+      debugLog("Successfully scheduled notification ID $id for ${scheduledTimeRiyadh.toString()}");
 
       // Log the expected notification time in both UTC and device local time
-      final localDateTime = scheduledTimeUtcPlus3.toLocal();
-      debugLog("Expected notification time (UTC+3): ${scheduledTimeUtcPlus3.toString()}");
+      final localDateTime = scheduledTimeRiyadh.toLocal();
+      debugLog("Expected notification time (Riyadh): ${scheduledTimeRiyadh.toString()}");
       debugLog("Expected notification time (Device local): ${localDateTime.toString()}");
 
     } catch (e, stackTrace) {
@@ -413,12 +413,12 @@ class AndroidNotificationService implements NotificationService {
     }
   }
 
-  // Ensure time is in UTC+3
-  tz.TZDateTime _ensureUtcPlus3Time(tz.TZDateTime dateTime) {
-    if (dateTime.location.name != _utcPlus3Location.name) {
-      debugLog("Converting time from ${dateTime.location.name} to UTC+3 (Asia/Riyadh)");
+  // Ensure time is in Riyadh timezone
+  tz.TZDateTime _ensureRiyadhTime(tz.TZDateTime dateTime) {
+    if (dateTime.location.name != _riyadhTimezone.name) {
+      debugLog("Converting time from ${dateTime.location.name} to Riyadh timezone (Asia/Riyadh)");
       final utcTime = dateTime.toUtc();
-      return tz.TZDateTime.from(utcTime, _utcPlus3Location);
+      return tz.TZDateTime.from(utcTime, _riyadhTimezone);
     }
     return dateTime;
   }
@@ -438,32 +438,32 @@ class AndroidNotificationService implements NotificationService {
 
   tz.TZDateTime _nextInstanceOfTime(tz.TZDateTime from, TimeOfDay tod) {
     // Create a date with the same day as 'from' but with the target time
-    tz.TZDateTime sched = tz.TZDateTime(_utcPlus3Location, from.year, from.month, from.day, tod.hour, tod.minute);
+    tz.TZDateTime sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day, tod.hour, tod.minute);
 
     // If the time has already passed today, move to tomorrow
     if (sched.isBefore(from)) {
-      sched = tz.TZDateTime(_utcPlus3Location, from.year, from.month, from.day + 1, tod.hour, tod.minute);
+      sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day + 1, tod.hour, tod.minute);
     }
 
-    debugLog("Next time instance: ${sched.toString()} (UTC+3)");
+    debugLog("Next time instance: ${sched.toString()} (Riyadh)");
     return sched;
   }
 
   tz.TZDateTime _nextInstanceOfWeekday(tz.TZDateTime from, int weekday, TimeOfDay tod) {
     // Start with today at the target time
-    tz.TZDateTime sched = tz.TZDateTime(_utcPlus3Location, from.year, from.month, from.day, tod.hour, tod.minute);
+    tz.TZDateTime sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day, tod.hour, tod.minute);
 
     // If today's time has passed, start from tomorrow
     if (sched.isBefore(from)) {
-      sched = tz.TZDateTime(_utcPlus3Location, from.year, from.month, from.day + 1, tod.hour, tod.minute);
+      sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day + 1, tod.hour, tod.minute);
     }
 
     // Keep adding days until we reach the target weekday
     while (sched.weekday != weekday) {
-      sched = tz.TZDateTime(_utcPlus3Location, sched.year, sched.month, sched.day + 1, tod.hour, tod.minute);
+      sched = tz.TZDateTime(_riyadhTimezone, sched.year, sched.month, sched.day + 1, tod.hour, tod.minute);
     }
 
-    debugLog("Next instance of weekday $weekday: ${sched.toString()} (UTC+3)");
+    debugLog("Next instance of weekday $weekday: ${sched.toString()} (Riyadh)");
     return sched;
   }
 
@@ -506,42 +506,126 @@ class AndroidNotificationService implements NotificationService {
         // We can't directly check exact alarm permissions with the current version
         // So we assume it's enabled if notifications are enabled
         debugLog("NOTE: Cannot programmatically check exact alarm permissions in this version");
-        debugLog("Assuming exact alarms are enabled if notifications are enabled");
-
+        
         return notificationsEnabled;
       } catch (e) {
-        debugLog("ERROR checking permissions: $e");
+        debugLog("Error checking notification permissions: $e");
+        return null;
       }
     }
+    debugLog("Android plugin implementation not available");
     return null;
   }
 
-  // Method to show an immediate test notification (for debugging)
-  Future<void> showTestNotification() async {
-    debugLog("Showing immediate test notification");
+  // Helper method to check if the scheduled time is in the past
+  bool _isScheduledTimeInPast(tz.TZDateTime scheduledTime) {
+    final now = tz.TZDateTime.now(_riyadhTimezone);
+    return scheduledTime.isBefore(now);
+  }
 
-    final int testId = 999999;
+  // Helper method to log notification details
+  void _logNotificationDetails(int id, String title, String body, tz.TZDateTime scheduledTime, String payload) {
+    final now = tz.TZDateTime.now(_riyadhTimezone);
+    final difference = scheduledTime.difference(now);
+    
+    debugLog("Notification Details:");
+    debugLog("- ID: $id");
+    debugLog("- Title: $title");
+    debugLog("- Body: $body");
+    debugLog("- Scheduled Time: ${scheduledTime.toString()} (${difference.inMinutes} minutes from now)");
+    debugLog("- Payload: $payload");
+    debugLog("- Current Time: ${now.toString()}");
+  }
 
+  // Helper method to create notification details
+  AndroidNotificationDetails _createNotificationDetails({
+    required String channelId,
+    required String channelName,
+    required bool isAlarm,
+    bool useFullScreen = false,
+    List<AndroidNotificationAction>? actions,
+  }) {
+    return AndroidNotificationDetails(
+      channelId,
+      channelName,
+      channelDescription: isAlarm ? 'Critical medication reminders' : 'Medication reminders',
+      importance: isAlarm ? Importance.max : Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: isAlarm,
+      enableLights: isAlarm,
+      vibrationPattern: isAlarm ? Int64List.fromList([0, 500, 200, 500]) : null,
+      category: isAlarm ? AndroidNotificationCategory.alarm : AndroidNotificationCategory.reminder,
+      fullScreenIntent: useFullScreen,
+      ongoing: false,
+      autoCancel: true,
+      sound: RawResourceAndroidNotificationSound('medication_alarm'),
+      audioAttributesUsage: isAlarm ? AudioAttributesUsage.alarm : AudioAttributesUsage.notification,
+      visibility: NotificationVisibility.public,
+      actions: actions,
+    );
+  }
+
+  // Method to ensure reliable scheduling
+  Future<void> _ensureReliableScheduling(int id, tz.TZDateTime scheduledTime) async {
+    // Older Android versions may not use exact timing or may kill apps in doze mode
+    // We can use this to add platform-specific workarounds if needed
+    final now = tz.TZDateTime.now(_riyadhTimezone);
+    final difference = scheduledTime.difference(now);
+    
+    if (difference.inHours < 1) {
+      debugLog("Scheduling notification within 1 hour - should be precise.");
+    } else {
+      debugLog("Scheduling notification ${difference.inHours} hours in the future - may be subject to system optimization.");
+    }
+  }
+
+  // Method to request special permissions if needed
+  Future<void> requestSpecialPermissions() async {
+    debugLog("Checking if additional permissions are needed");
+    
     try {
+      final androidPlugin = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+          
+      if (androidPlugin != null) {
+        // For Android 13+ (SDK 33), request proper permissions
+        final bool? result = await androidPlugin.requestNotificationsPermission();
+        debugLog("Notification permission request result: $result");
+      }
+    } catch (e) {
+      debugLog("Error requesting special permissions: $e");
+    }
+  }
+
+  // Method to detect and handle notification problems
+  Future<bool> testNotificationDelivery() async {
+    debugLog("Testing notification delivery...");
+    
+    try {
+      // Create a unique test ID
+      final int testId = DateTime.now().millisecondsSinceEpoch % 10000;
+      
       await _notificationsPlugin.show(
         testId,
-        "⚠️ اختبار فوري للإشعارات",
-        "هذا اختبار فوري للتحقق من عمل نظام الإشعارات. الوقت الحالي: ${DateTime.now().toString()}",
+        "اختبار الإشعارات",
+        "إذا وصلك هذا الإشعار فإن نظام الإشعارات يعمل بشكل صحيح",
         NotificationDetails(
           android: AndroidNotificationDetails(
             'test_notifications',
             'Test Notifications',
             channelDescription: 'For testing notification delivery',
-            importance: Importance.max,
+            importance: Importance.high,
             priority: Priority.high,
           ),
         ),
-        payload: "immediate_test",
       );
-      debugLog("Successfully sent immediate test notification");
+      
+      debugLog("Test notification sent with ID $testId");
+      return true;
     } catch (e) {
-      debugLog("ERROR showing immediate test notification: $e");
-      throw e;
+      debugLog("Error testing notification delivery: $e");
+      return false;
     }
   }
 }

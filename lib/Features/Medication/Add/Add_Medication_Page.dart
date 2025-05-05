@@ -11,7 +11,6 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 // Assuming notification utility is correctly imported from main.dart or its own file
 // Make sure this import path is correct for your project structure
-import 'package:mudhkir_app/main.dart';
 
 import 'Add_Dosage.dart';
 import 'Add_Name_Picture.dart';

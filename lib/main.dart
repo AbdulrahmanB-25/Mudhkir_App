@@ -10,11 +10,10 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mudhkir_app/Features/Settings/SettingsPage.dart';
 import 'package:mudhkir_app/Features/Companions/Companions_Main_Page.dart';
 import 'package:mudhkir_app/Features/Personal_data/Personal_data_Page.dart';
-import 'package:mudhkir_app/Features/Medication/Schedule/dose_schedule_UI.dart'; // Assuming this is correct path
+// Assuming this is correct path
 import 'package:mudhkir_app/Features/Auth/AuthWrapper.dart';
 import 'Core/Services/AlarmNotificationHelper.dart';
 import 'Features/Auth/Forget_Password/ForgetPassword_Page.dart';
@@ -115,7 +114,6 @@ Future<void> main() async {
     print("[Main Init] Error setting timezone 'Asia/Riyadh': $e. Using system default.");
     // Fallback or let system decide
   }
-
 
   // 2. Initialize Firebase
   print("[Main Init] Initializing Firebase...");
