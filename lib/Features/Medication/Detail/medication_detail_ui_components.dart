@@ -22,6 +22,8 @@ class MedicationDetailUIComponents {
   final Function() setReschedulingModeTrue;
   final Function() setReschedulingModeFalse;
   final Function(TimeOfDay) selectSuggestedTime;
+  // Add the new dosage update callback
+  final Function(String, String) updateDosage;
 
   MedicationDetailUIComponents({
     required this.updateState,
@@ -32,6 +34,7 @@ class MedicationDetailUIComponents {
     required this.setReschedulingModeTrue,
     required this.setReschedulingModeFalse,
     required this.selectSuggestedTime,
+    required this.updateDosage,
   });
 
   // Error view when loading fails
@@ -991,6 +994,21 @@ class MedicationDetailUIComponents {
                           color: kPrimaryColor,
                         ),
                       ),
+                      Spacer(),
+                      // Add the edit button
+                      IconButton(
+                        icon: Icon(
+                          Icons.edit,
+                          color: kSecondaryColor,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          updateDosage(dosage, dosageUnit);
+                        },
+                        tooltip: "تعديل الجرعة",
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(),
+                      ),
                     ],
                   ),
                 ),
@@ -1038,7 +1056,7 @@ class MedicationDetailUIComponents {
     final endDate = (medData['endDate'] as Timestamp?)?.toDate();
     final days = (medData['days'] as List<dynamic>?) ?? [];
     final timeSlots = (medData['timeSlots'] as List<dynamic>?) ?? [];
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1184,7 +1202,7 @@ class MedicationDetailUIComponents {
   Widget _buildDaysOfWeekRow(List<dynamic> days) {
     final dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     final dayIndices = days.map((day) => day is int ? day : int.tryParse(day.toString()) ?? 0).toList();
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(7, (index) {
@@ -1225,7 +1243,7 @@ class MedicationDetailUIComponents {
           final minute = int.tryParse(slot['minute'].toString()) ?? 0;
           timeText = TimeUtilities.formatTimeOfDay(TimeOfDay(hour: hour, minute: minute));
         }
-        
+
         return Container(
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
@@ -1257,4 +1275,3 @@ class MedicationDetailUIComponents {
     );
   }
 }
-

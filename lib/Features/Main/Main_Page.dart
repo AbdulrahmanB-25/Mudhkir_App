@@ -139,6 +139,10 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     await _loadUserName();
     await _scheduleAllUserMedications(_currentUser!.uid);
     await CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
+    
+    // Also ensure periodic checks are set up
+    await setupPeriodicCompanionChecks();
+    
     await _loadClosestMedDisplayData();
   }
 

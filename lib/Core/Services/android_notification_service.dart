@@ -147,12 +147,13 @@ class AndroidNotificationService implements NotificationService {
         'companion_medication_alarms',
         'Companion Medication Alarms',
         description: 'Medication reminders for companions',
-        importance: Importance.high,
+        importance: Importance.high, // High importance but not max
         playSound: true,
         enableVibration: true,
         enableLights: true,
         sound: RawResourceAndroidNotificationSound('medication_alarm'),
-        audioAttributesUsage: AudioAttributesUsage.notification, // Use notification for less critical companion alerts
+        vibrationPattern: Int64List.fromList([0, 400, 200, 400]), // Slightly different pattern
+        audioAttributesUsage: AudioAttributesUsage.notification, // Use notification usage for companions
       );
 
       await androidPlugin.createNotificationChannel(companionChannel);
@@ -203,18 +204,24 @@ class AndroidNotificationService implements NotificationService {
     }
   }
   
-  // New method to check exact alarm permission
+  // Updated method to check exact alarm permission
   Future<bool?> checkExactAlarmPermission() async {
     try {
-      // Exact alarm permission check via platform channel (simplified implementation)
-      // In a real app, you would implement this with a platform-specific method channel
+      // For Android 12+ (SDK 31+), we should check SCHEDULE_EXACT_ALARM permission
+      // But since the plugin doesn't expose this directly, we'll use a proxy check
       
-      // For SDK >= 31 (Android 12+)
-      // This is a placeholder - you would need to implement the actual check with platform channels
-      return true; // Assuming granted for now
+      // For now, we'll use notification permission as a proxy
+      // In a real app, you'd use platform channels or method channels to check this permission
+      final areNotificationsEnabled = await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.areNotificationsEnabled();
+      
+      debugLog("Using notifications permission as proxy for exact alarm permission: $areNotificationsEnabled");
+      return areNotificationsEnabled;
     } catch (e) {
       debugLog("Error checking exact alarm permission: $e");
-      return null;
+      // Assume permission is granted on older Android versions
+      return true;
     }
   }
 
@@ -269,7 +276,8 @@ class AndroidNotificationService implements NotificationService {
     } else if (isCompanionCheck) {
       channelId = 'companion_medication_alarms';
       channelName = 'Companion Medication Alarms';
-      useFullScreen = false; // Companion alerts might not need full screen
+      useFullScreen = false; // Companion reminders shouldn't be fullscreen
+      actions = []; // No actions for companion reminders
     } else if (isSnoozed) {
       channelId = 'medication_alarms_v2';
       channelName = 'Medication Alarms';

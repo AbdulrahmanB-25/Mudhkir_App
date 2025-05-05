@@ -447,8 +447,9 @@ class CompanionMedicationTracker {
       final pendingNotifications = await AlarmNotificationHelper.getPendingNotifications();
       for (final notification in pendingNotifications) {
         final payload = notification.payload ?? '';
-        // Cancel only companion reminders, not missed alerts
-        if (payload.startsWith('companion_check_') || (payload.isNotEmpty && !payload.startsWith('companion_missed_') && notification.title?.contains('جرعة مرافق') == true)) {
+        // Cancel all companion notifications (both reminder and check types)
+        if (payload.startsWith('companion_reminder_') || payload.startsWith('companion_check_') || 
+            (payload.isNotEmpty && !payload.startsWith('companion_missed_') && notification.title?.contains('جرعة مرافق') == true)) {
           print("[Companion Schedule] Canceling existing companion notification ID: ${notification.id}");
           await AlarmNotificationHelper.cancelNotification(notification.id);
         }
@@ -512,28 +513,38 @@ class CompanionMedicationTracker {
 
           print("[Companion Schedule Check] Considering Dose Time: ${logTimeFormat.format(doseTime)} (Now: ${logTimeFormat.format(now)})");
 
-          // Schedule if it's after now and within the 48-hour window (or just check if it's after now)
-          // Let's simplify to just schedule if it's in the future
           if (doseTime.isAfter(now)) {
-            // Check against end date if it exists
             if (tzEndDate == null || doseTime.isBefore(tzEndDate)) {
-              print("[Companion Schedule Check] Scheduling dose for ${medication.name} at ${logTimeFormat.format(doseTime)}");
-              // Use a payload indicating it's a check/reminder
-              final checkPayload = "companion_check_${medication.id}";
-              final notificationId = AlarmNotificationHelper.generateNotificationId(checkPayload, doseTime.toUtc());
+              print("[Companion Schedule Check] Scheduling reminder for ${medication.name} at ${logTimeFormat.format(doseTime)}");
+              
+              // Register the check in Firestore for background processing
+              await scheduleCompanionDoseCheck(
+                companionId: companion.companionId,
+                companionName: companion.companionName,
+                medicationId: medication.id,
+                medicationName: medication.name,
+                scheduledTime: doseTime,
+              );
+              print("[Companion Schedule] Added companion dose check to Firestore queue");
+              
+              // Schedule a single notification that serves both as reminder and check
+              final reminderPayload = "companion_reminder_${medication.id}";
+              final notificationId = AlarmNotificationHelper.generateNotificationId(reminderPayload, doseTime);
 
               try {
                 await AlarmNotificationHelper.scheduleAlarmNotification(
                   id: notificationId,
-                  title: "💊 تذكير جرعة مرافق",
-                  body: "حان موعد جرعة ${medication.name} للمرافق ${companion.companionName}.",
+                  title: "⏰ تذكير للمرافق: ${companion.companionName}",
+                  body: "حان الآن موعد جرعة ${medication.name} للمرافق ${companion.companionName}.",
                   scheduledTime: doseTime,
-                  medicationId: checkPayload, // Use the check payload
-                  isCompanionCheck: true,
+                  medicationId: reminderPayload,
+                  isCompanionCheck: true, // Mark as companion notification
                 );
+                print("[Companion Schedule] Successfully scheduled companion notification ID $notificationId");
               } catch (e) {
-                print("[CompanionMedicationTracker] ERROR requesting scheduling for companion notification ID $notificationId: $e");
+                print("[CompanionMedicationTracker] ERROR scheduling companion notification ID $notificationId: $e");
               }
+              
             } else {
               print("[Companion Schedule Check] Skipping dose for ${medication.name} at ${logTimeFormat.format(doseTime)} (After End Date: ${logTimeFormat.format(tzEndDate!)})");
             }
@@ -586,3 +597,4 @@ class CompanionMedicationTracker {
     return null;
   }
 }
+

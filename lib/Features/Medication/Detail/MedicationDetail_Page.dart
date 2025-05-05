@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'dart:ui' as ui;
 
+import '../Schedule/dose_schedule_services.dart';
 import 'medication_detail_services.dart';
 import 'medication_detail_ui_components.dart';
 import 'time_utilities.dart';
@@ -64,6 +65,10 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
   TimeOfDay? _customSelectedTime;
   final TextEditingController _customTimeController = TextEditingController();
 
+  // Add these controllers for the dosage update dialog
+  final TextEditingController _dosageController = TextEditingController();
+  final TextEditingController _dosageUnitController = TextEditingController();
+
   // UI components
   late MedicationDetailUIComponents _uiComponents;
 
@@ -85,6 +90,8 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
       setReschedulingModeTrue: _setReschedulingModeTrue,
       setReschedulingModeFalse: _setReschedulingModeFalse,
       selectSuggestedTime: _selectSuggestedTime,
+      // Add the new dosage update callback
+      updateDosage: _showDosageUpdateDialog,
     );
 
     // Initialize animation controller
@@ -119,6 +126,15 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
 
     _loadMedicationData();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _customTimeController.dispose();
+    _dosageController.dispose();
+    _dosageUnitController.dispose();
+    super.dispose();
   }
 
   // Update state callback for UI components
@@ -157,16 +173,141 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     _logAction("Suggested Time Selected", "Time: ${time.hour}:${time.minute}");
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    _customTimeController.dispose();
-    super.dispose();
+  // Add this new method to show the dosage update dialog
+  Future<void> _showDosageUpdateDialog(String currentDosage, String currentUnit) async {
+    _dosageController.text = currentDosage;
+    _dosageUnitController.text = currentUnit;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(
+            "تعديل الجرعة",
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: kPrimaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _dosageController,
+                  decoration: InputDecoration(
+                    labelText: "مقدار الجرعة",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  textAlign: TextAlign.right,
+                  keyboardType: TextInputType.text,
+                ),
+                SizedBox(height: 12),
+                TextField(
+                  controller: _dosageUnitController,
+                  decoration: InputDecoration(
+                    labelText: "وحدة القياس (مثال: ملغ، حبة)",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  textAlign: TextAlign.right,
+                  keyboardType: TextInputType.text,
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("إلغاء"),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: Text("حفظ"),
+              onPressed: () {
+                _updateMedicationDosage(
+                  _dosageController.text.trim(),
+                  _dosageUnitController.text.trim(),
+                );
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+          ],
+          actionsPadding: EdgeInsets.all(8),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
+        );
+      },
+    );
   }
 
-  // Improved logging helper
-  void _logAction(String action, String details) {
-    print("[DetailPage] $action: $details | Document: ${widget.docId} | Confirmation needed: ${widget.needsConfirmation}");
+  // Add this method to update the medication dosage
+  Future<void> _updateMedicationDosage(String newDosage, String newUnit) async {
+    if (newDosage.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "الرجاء إدخال مقدار الجرعة",
+            textAlign: TextAlign.right,
+          ),
+          backgroundColor: kErrorColor,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _service.updateMedicationInfo(
+        widget.docId,
+        {
+          'dosage': newDosage,
+          'dosageUnit': newUnit,
+        },
+      );
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "تم تحديث الجرعة بنجاح",
+              textAlign: TextAlign.right,
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+        
+        // Load updated data but don't navigate away - dosage update is a minor change
+        _loadMedicationData();
+      } else {
+        _showErrorAndLog(
+          "updating dosage",
+          result.error ?? "فشل تحديث الجرعة",
+          null,
+        );
+      }
+    } catch (e, stack) {
+      _showErrorAndLog("updating dosage", e, stack);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   // Enhanced error handler with logging
@@ -310,11 +451,15 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
         _logAction("Clearing Notification Flag", "Key: ${widget.confirmationKey}");
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(widget.confirmationKey!);
+      }
 
-        if (mounted) {
-          Navigator.pop(context, true);
-          return;
-        }
+      // Force clear the schedule service cache to ensure fresh data when returning
+      try {
+        final doseScheduleService = DoseScheduleServices(user: FirebaseAuth.instance.currentUser);
+        doseScheduleService.clearCache();
+        _logAction("Cache Cleared", "Cleared dose schedule cache for refresh");
+      } catch (e) {
+        _logAction("Cache Clear Error", "Failed to clear cache: $e");
       }
 
       // Show success message
@@ -326,19 +471,25 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
               textAlign: TextAlign.right,
             ),
             backgroundColor: taken ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 1), // Show briefly before popping
           ),
         );
 
-        // Reset for next confirmation if not from notification
-        if (!widget.needsConfirmation) {
-          setState(() {
-            _manualConfirmationTime = TimeOfDay.now();
-            _isProcessingConfirmation = false;
-          });
-        }
+        // Add a slight delay to allow the snackbar to be seen before closing
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            // Return true to indicate successful action to calling page
+            Navigator.pop(context, true);
+          }
+        });
       }
     } catch (e, stack) {
       _showErrorAndLog("processing confirmation", e, stack);
+      if (mounted) {
+        setState(() {
+          _isProcessingConfirmation = false;
+        });
+      }
     }
   }
 
@@ -391,9 +542,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
         _logAction("Cleared Notification Flag", "After rescheduling: ${widget.confirmationKey}");
       }
 
-      // Reload medication data to reflect changes
-      _loadMedicationData();
-
       if (mounted) {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -403,23 +551,25 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
               textAlign: TextAlign.right,
             ),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1), // Show briefly before popping
           ),
         );
 
-        if (widget.needsConfirmation) {
-          Navigator.pop(context, true);
-        } else {
-          setState(() {
-            _isReschedulingMode = false;
-            _isProcessingConfirmation = false;
-            _selectedSuggestedTime = null;
-            _customSelectedTime = null;
-            _customTimeController.clear();
-          });
-        }
+        // Add a slight delay to allow the snackbar to be seen before closing
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            // Return true to indicate successful action to calling page
+            Navigator.pop(context, true);
+          }
+        });
       }
     } catch (e, stack) {
       _showErrorAndLog("rescheduling dose", e, stack);
+      if (mounted) {
+        setState(() {
+          _isProcessingConfirmation = false;
+        });
+      }
     }
   }
 
@@ -482,6 +632,16 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
   }
 
+  // Add this method to handle action logging
+  void _logAction(String action, String details) {
+    final now = DateTime.now().toIso8601String();
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
+    print("[MedicationDetail] [$now] [$userId] $action: $details");
+    
+    // Optional: You could also log to an analytics service or Firebase Analytics here
+    // FirebaseAnalytics.instance.logEvent(name: action, parameters: {'details': details});
+  }
+
   @override
   Widget build(BuildContext context) {
     String appBarTitle = "تفاصيل الدواء";
@@ -512,6 +672,11 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
           ),
           backgroundColor: widget.needsConfirmation ? Colors.orange.shade700 : kPrimaryColor,
           elevation: 0,
+          // Ensure close button is present for non-notification views too
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
           shape: widget.needsConfirmation
               ? null
               : RoundedRectangleBorder(

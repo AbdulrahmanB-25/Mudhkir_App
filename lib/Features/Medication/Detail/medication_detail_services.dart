@@ -204,18 +204,27 @@ class MedicationDetailService {
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
         List<dynamic> missedDoses = List.from(data['missedDoses'] ?? []);
         
+        // Debug logging for tracking issues
+        print("[MedicationDetailService] Current missedDoses before update: ${missedDoses.length} items");
+        print("[MedicationDetailService] Looking for dose at time: ${scheduledTime.toString()}");
+        
         // Check if this time already exists in the array
         int existingIndex = -1;
         for (int i = 0; i < missedDoses.length; i++) {
           if (missedDoses[i] is Map && missedDoses[i].containsKey('scheduled')) {
             Timestamp timestamp = missedDoses[i]['scheduled'] as Timestamp;
             DateTime storedTime = timestamp.toDate();
-            if (storedTime.year == scheduledTime.year && 
-                storedTime.month == scheduledTime.month && 
-                storedTime.day == scheduledTime.day &&
-                storedTime.hour == scheduledTime.hour && 
-                storedTime.minute == scheduledTime.minute) {
+            
+            // More flexible time comparison - allow 1 minute difference
+            bool sameYear = storedTime.year == scheduledTime.year;
+            bool sameMonth = storedTime.month == scheduledTime.month;
+            bool sameDay = storedTime.day == scheduledTime.day;
+            bool sameHour = storedTime.hour == scheduledTime.hour;
+            bool closeMinute = (storedTime.minute - scheduledTime.minute).abs() <= 1;
+            
+            if (sameYear && sameMonth && sameDay && sameHour && closeMinute) {
               existingIndex = i;
+              print("[MedicationDetailService] Found matching dose at index $i: ${storedTime.toString()}");
               break;
             }
           }
@@ -225,24 +234,30 @@ class MedicationDetailService {
           // Update existing entry
           missedDoses[existingIndex]['status'] = status;
           missedDoses[existingIndex]['updatedAt'] = Timestamp.now();
+          print("[MedicationDetailService] Updated existing dose status to: $status");
         } else {
           // Add new entry
-          missedDoses.add({
+          Map<String, dynamic> newEntry = {
             'scheduled': Timestamp.fromDate(scheduledTime),
             'status': status,
             'createdAt': Timestamp.now(),
             'updatedAt': Timestamp.now(),
-          });
+          };
+          missedDoses.add(newEntry);
+          print("[MedicationDetailService] Added new dose entry with status: $status");
         }
         
+        print("[MedicationDetailService] Final missedDoses length: ${missedDoses.length}");
         transaction.update(docRef, {'missedDoses': missedDoses});
       });
       
-      print("[MedicationDetailService] Updated missedDoses for $docId at ${scheduledTime.toString()} to $status");
+      print("[MedicationDetailService] Successfully updated missedDoses for $docId at ${scheduledTime.toString()} to $status");
       
-    } catch (e) {
+    } catch (e, stack) {
       print("[MedicationDetailService] Error updating missedDoses: $e");
-      // Don't rethrow - we don't want this to break the main flow if it fails
+      print("[MedicationDetailService] Stack trace: $stack");
+      // IMPORTANT: We previously silently failed here, but now we'll rethrow for proper error handling
+      throw Exception("Failed to update dose status: $e");
     }
   }
   

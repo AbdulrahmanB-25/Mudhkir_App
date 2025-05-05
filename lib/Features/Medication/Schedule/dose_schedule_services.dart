@@ -250,6 +250,8 @@ class DoseScheduleServices {
     if (user == null) return 'pending';
 
     try {
+      print("[DoseSchedule] Checking status for dose - docId: $docId, time: $timeString, date: ${selectedDay.toString()}");
+      
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
@@ -257,36 +259,52 @@ class DoseScheduleServices {
           .doc(docId)
           .get();
 
-      if (!doc.exists) return 'pending';
+      if (!doc.exists) {
+        print("[DoseSchedule] Document not found: $docId");
+        return 'pending';
+      }
 
       final data = doc.data()!;
       final missedDoses = data['missedDoses'] as List<dynamic>? ?? [];
       final normalizedSelectedDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
 
       final doseTime = TimeUtils.parseTime(timeString);
-      if (doseTime == null) return 'pending';
+      if (doseTime == null) {
+        print("[DoseSchedule] Could not parse time: $timeString");
+        return 'pending';
+      }
+
+      print("[DoseSchedule] Looking for status at ${doseTime.hour}:${doseTime.minute} on ${normalizedSelectedDay.toString()}");
+      print("[DoseSchedule] Found ${missedDoses.length} missedDoses entries to check");
 
       String currentStatus = 'pending';
-      for (var dose in missedDoses) {
+      for (var i = 0; i < missedDoses.length; i++) {
+        var dose = missedDoses[i];
         if (dose is Map<String, dynamic> && dose.containsKey('scheduled') && dose.containsKey('status')) {
           final scheduledTimestamp = dose['scheduled'] as Timestamp?;
           if (scheduledTimestamp != null) {
             final scheduledDate = scheduledTimestamp.toDate();
             final normalizedScheduledDate = DateTime(scheduledDate.year, scheduledDate.month, scheduledDate.day);
 
-            if (scheduledDate.hour == doseTime.hour &&
-                scheduledDate.minute == doseTime.minute &&
-                isSameDay(normalizedScheduledDate, normalizedSelectedDay)) {
+            // More flexible time matching - allow 1 minute difference for edge cases
+            bool sameDay = isSameDay(normalizedScheduledDate, normalizedSelectedDay);
+            bool sameHour = scheduledDate.hour == doseTime.hour;
+            bool closeMinute = (scheduledDate.minute - doseTime.minute).abs() <= 1;
+
+            if (sameDay && sameHour && closeMinute) {
               currentStatus = dose['status'] as String? ?? 'pending';
+              print("[DoseSchedule] Found matching dose at index $i with status: $currentStatus");
               break;
             }
           }
         }
       }
 
+      print("[DoseSchedule] Final status for dose - docId: $docId, time: $timeString: $currentStatus");
       return currentStatus;
-    } catch (e) {
-      print('Error checking dose status for $docId: $e');
+    } catch (e, stack) {
+      print('[DoseSchedule] Error checking dose status for $docId: $e');
+      print('[DoseSchedule] Stack trace: $stack');
       return 'pending';
     }
   }
@@ -310,7 +328,16 @@ class DoseScheduleServices {
       doseTime.minute,
     );
     final targetTimestamp = Timestamp.fromDate(targetDateTime);
-    final newStatus = currentStatus == 'taken' ? 'pending' : 'taken';
+    
+    // Handle all three states: taken → pending → skipped → taken
+    String newStatus;
+    if (currentStatus == 'taken') {
+      newStatus = 'pending';
+    } else if (currentStatus == 'pending') {
+      newStatus = 'skipped';
+    } else {
+      newStatus = 'taken';
+    }
 
     try {
       final docRef = FirebaseFirestore.instance

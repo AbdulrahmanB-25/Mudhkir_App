@@ -15,8 +15,6 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <!-- Features -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
@@ -25,7 +23,7 @@
         android:label="Mudhkir"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Main Activity -->
+        <!-- Flutter Local Notifications: re-register on reboot & update -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="true">
@@ -37,6 +35,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- Android Alarm Manager: schedule & reboot listeners -->
+        <receiver
+            android:name="dev.fluttercommunity.plus.androidalarmmanager.AlarmBroadcastReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="dev.fluttercommunity.plus.androidalarmmanager.ScheduledAlarmBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -56,7 +67,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Firebase Messaging -->
+        <!-- Firebase Messaging defaults -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_ic_notification" />
@@ -65,20 +76,18 @@
             android:value="medication_channel" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_sound"
-            android:resource="@raw/medication_alarm" /> <!-- Ensure this matches your raw sound file -->
+            android:resource="@raw/medication_alarm" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-
-
     </application>
 
-    <!-- Queries -->
+    <!-- Queries (for Android 11+ package visibility) -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
     </queries>
-
 </manifest>

@@ -5,6 +5,8 @@ import 'CompanionMedications_Addation.dart';
 import 'Companion_Details_Page.dart';
 import 'dart:ui' as ui;
 
+import 'companion_medication_tracker.dart';
+
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kErrorColor = Color(0xFFFF6B6B);
@@ -49,6 +51,9 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
       _loadCompanions();
     }
     _animationController.forward();
+
+    // Ensure companion medications are loaded and scheduled on page init
+    CompanionMedicationTracker.fetchAndScheduleCompanionMedications();
   }
 
   @override
@@ -215,8 +220,7 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
                 fontWeight: FontWeight.w700,
                 fontSize: 24,
                 letterSpacing: -0.3,
-                shadows: [Shadow(color: Colors.black26, blurRadius: 2)]
-            ),
+                shadows: [Shadow(color: Colors.black26, blurRadius: 2)]),
           ),
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -286,29 +290,29 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
           ),
         ),
         floatingActionButton: companionDataList.isEmpty
-            ? null  // Don't show FAB when list is empty - only use the in-page button
+            ? null
             : TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.elasticOut,
-                builder: (context, value, child) {
-                  return Transform.scale(
-                    scale: value,
-                    child: child,
-                  );
-                },
-                child: FloatingActionButton.extended(
-                  onPressed: _showAddCompanionDialog,
-                  backgroundColor: kPrimaryColor,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.person_add_rounded),
-                  label: const Text("إضافة مرافق"),
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: child,
+            );
+          },
+          child: FloatingActionButton.extended(
+            onPressed: _showAddCompanionDialog,
+            backgroundColor: kPrimaryColor,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.person_add_rounded),
+            label: const Text("إضافة مرافق"),
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -459,7 +463,7 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Small handle for the bottom sheet look
+          // Small handle
           Center(
             child: Container(
               margin: const EdgeInsets.only(top: 8, bottom: 16),
@@ -471,8 +475,7 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
               ),
             ),
           ),
-
-          // Header with stat cards
+          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 10, 8, 24),
             child: Row(
@@ -500,13 +503,11 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
               ],
             ),
           ),
-
           // Divider
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Divider(color: Colors.grey.shade200, thickness: 1.5),
           ),
-
           // Info text
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
@@ -525,8 +526,7 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
               ],
             ),
           ),
-
-          // List of companions
+          // List
           Expanded(
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
@@ -541,14 +541,11 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
                   builder: (context, value, child) {
                     return Transform.translate(
                       offset: Offset(0, 20 * (1 - value)),
-                      child: Opacity(
-                        opacity: value,
-                        child: child,
-                      ),
+                      child: Opacity(opacity: value, child: child),
                     );
                   },
                   child: _buildDismissibleCard(companion, index),
-                 );
+                );
               },
             ),
           ),
@@ -572,14 +569,8 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Text(
-              "حذف  ",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Icon(Icons.delete_rounded, color: Colors.white),
+            const Text("حذف  ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Icon(Icons.delete_rounded, color: Colors.white),
           ],
         ),
       ),
@@ -590,47 +581,25 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
           builder: (context) => Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
               ),
             ),
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 50,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+                Container(width: 50, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
                 const SizedBox(height: 24),
-                Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.red.shade600,
-                  size: 48,
-                ),
+                Icon(Icons.warning_amber_rounded, color: Colors.red.shade600, size: 48),
                 const SizedBox(height: 16),
-                Text(
-                  "تأكيد الحذف",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade800,
-                  ),
-                ),
+                Text("تأكيد الحذف", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.red.shade800)),
                 const SizedBox(height: 12),
                 Text(
                   "هل تريد بالتأكيد حذف المرافق \"${companion['name']}\"؟\nلن يمكنك استرجاع هذه البيانات لاحقاً.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    height: 1.5,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 16, height: 1.5, color: Colors.grey.shade700),
                 ),
                 const SizedBox(height: 32),
                 Row(
@@ -638,42 +607,16 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context, false),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          side: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        child: Text(
-                          "إلغاء",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
+                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: Colors.grey.shade300)),
+                        child: const Text("إلغاء", style: TextStyle(fontSize: 16, color: Colors.grey)),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade600,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          "نعم، حذف",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
                         onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        child: const Text("نعم، حذف", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -691,38 +634,18 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
   Widget _buildCompanionCard(Map<String, dynamic> companion) {
     final name = companion['name'] ?? '';
     final email = companion['email'] ?? '';
-    final docId = companion['docId'] ?? '';
+    final relationship = companion['relationship'] ?? '';
+    final doseCount = companion['upcomingDoseCount'] ?? 0;
     final initials = name.isNotEmpty
         ? name.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join()
         : '?';
-    final relationship = companion['relationship'] ?? '';
-    final lastSeen = companion['lastSeen'] as DateTime?;
-    final doseCount = companion['upcomingDoseCount'] ?? 0;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white,
-            kPrimaryColor.withOpacity(0.02),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: LinearGradient(colors: [Colors.white, kPrimaryColor.withOpacity(0.02)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(kBorderRadius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: kPrimaryColor.withOpacity(0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)), BoxShadow(color: kPrimaryColor.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 2))],
         border: Border.all(color: kPrimaryColor.withOpacity(0.1), width: 1),
       ),
       child: Material(
@@ -735,149 +658,36 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
           highlightColor: kPrimaryColor.withOpacity(0.05),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _buildCompanionAvatar(initials, true),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: kPrimaryColor,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: kPrimaryColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  Icons.chevron_left_rounded,
-                                  color: kPrimaryColor,
-                                  size: 20,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: kSecondaryColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Icon(
-                                  Icons.email_outlined,
-                                  size: 12,
-                                  color: kSecondaryColor,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  email,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                _buildCompanionAvatar(initials, true),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Expanded(child: Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimaryColor))),
+                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.chevron_left_rounded, size: 20, color: kPrimaryColor)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: kSecondaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.email_outlined, size: 12, color: kSecondaryColor)),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(email, style: TextStyle(fontSize: 13, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ]),
                 ),
-
-                if (relationship.isNotEmpty || doseCount > 0) ...[
-                  const SizedBox(height: 12),
-                  Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      if (relationship.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.people_alt_outlined,
-                                size: 14,
-                                color: Colors.grey.shade700,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                relationship,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      if (doseCount > 0) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: kPrimaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.medication_rounded,
-                                size: 16,
-                                color: kPrimaryColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "$doseCount جرعة قادمة",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: kPrimaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+              ]),
+              if (relationship.isNotEmpty || doseCount > 0) ...[
+                const SizedBox(height: 12),
+                Divider(color: Colors.grey.shade200, thickness: 1),
+                const SizedBox(height: 12),
+                Row(children: [
+                  if (relationship.isNotEmpty) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade300)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.people_alt_outlined, size: 14, color: Colors.grey), const SizedBox(width: 4), Text(relationship, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade700))])),
+                  const Spacer(),
+                  if (doseCount > 0) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: kPrimaryColor.withOpacity(0.3))), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.medication_rounded, size: 16, color: kPrimaryColor), const SizedBox(width: 4), Text("$doseCount جرعة قادمة", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kPrimaryColor))])),
+                ]),
               ],
-            ),
+            ]),
           ),
         ),
       ),
@@ -888,31 +698,13 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [kPrimaryColor, kSecondaryColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: kPrimaryColor.withOpacity(0.4),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-            spreadRadius: -2,
-          ),
-        ],
+        gradient: LinearGradient(colors: [kPrimaryColor, kSecondaryColor], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4), spreadRadius: -2)],
       ),
       child: CircleAvatar(
         backgroundColor: Colors.transparent,
         radius: 30,
-        child: Text(
-          initials.toUpperCase(),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        child: Text(initials.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -928,244 +720,125 @@ class _CompanionsState extends State<Companions> with SingleTickerProviderStateM
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return Container(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 15,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle & title
-                Container(
-                  width: 50,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 16, bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
+        builder: (context, setState) => Container(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, -5))],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 50, height: 4, margin: const EdgeInsets.only(top: 16, bottom: 8), decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.person_add, color: kPrimaryColor)),
+              const SizedBox(width: 12),
+              Text("إضافة مرافق جديد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: kPrimaryColor)),
+            ])),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              child: Form(
+                key: formKey,
+                child: Column(children: [
+                  TextFormField(
+                    controller: nameController,
+                    textDirection: ui.TextDirection.rtl,
+                    decoration: InputDecoration(
+                      labelText: "الاسم",
+                      hintText: "أدخل اسم المرافق",
+                      prefixIcon: const Icon(Icons.person_rounded, color: kPrimaryColor),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(width: 1)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: kPrimaryColor, width: 2)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300, width: 1)),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                    ),
+                    validator: (value) => (value == null || value.trim().isEmpty) ? "الرجاء إدخال الاسم" : null,
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: kPrimaryColor.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.person_add, color: kPrimaryColor),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        "إضافة مرافق جديد",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                          color: kPrimaryColor,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textDirection: ui.TextDirection.ltr,
+                    decoration: InputDecoration(
+                      labelText: "البريد الإلكتروني",
+                      hintText: "أدخل البريد الإلكتروني للمرافق",
+                      prefixIcon: const Icon(Icons.email_rounded, color: kPrimaryColor),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: kPrimaryColor, width: 2)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300, width: 1)),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) return "الرجاء إدخال البريد الإلكتروني";
+                      if (!value.contains('@') || !value.contains('.')) return "الرجاء إدخال بريد إلكتروني صالح";
+                      return null;
+                    },
                   ),
-                ),
-
-                // Form
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: nameController,
-                          textDirection: ui.TextDirection.rtl,
-                          decoration: InputDecoration(
-                            labelText: "الاسم",
-                            hintText: "أدخل اسم المرافق",
-                            prefixIcon: Icon(Icons.person_rounded, color: kPrimaryColor),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(width: 1),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: kPrimaryColor, width: 2),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return "الرجاء إدخال الاسم";
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textDirection: ui.TextDirection.ltr,
-                          decoration: InputDecoration(
-                            labelText: "البريد الإلكتروني",
-                            hintText: "أدخل البريد الإلكتروني للمرافق",
-                            prefixIcon: Icon(Icons.email_rounded, color: kPrimaryColor),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: kPrimaryColor, width: 2),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return "الرجاء إدخال البريد الإلكتروني";
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return "الرجاء إدخال بريد إلكتروني صالح";
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: relationshipController,
-                          textDirection: ui.TextDirection.rtl,
-                          decoration: InputDecoration(
-                            labelText: "صلة القرابة (اختياري)",
-                            hintText: "مثال: زوجة، ابن، أخ",
-                            prefixIcon: Icon(Icons.people_alt_rounded, color: kPrimaryColor),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: kPrimaryColor, width: 2),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                child: const Text("إلغاء", style: TextStyle(fontSize: 16)),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  foregroundColor: Colors.grey.shade700,
-                                ),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: ElevatedButton(
-                                child: const Text(
-                                  "إضافة",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                  backgroundColor: kPrimaryColor,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                onPressed: () async {
-                                  if (formKey.currentState?.validate() ?? false) {
-                                    await companionsRef.add({
-                                      'name': nameController.text.trim(),
-                                      'email': emailController.text.trim().toLowerCase(),
-                                      'relationship': relationshipController.text.trim(),
-                                      'lastSeen': FieldValue.serverTimestamp(),
-                                    });
-                                    Navigator.pop(context);
-                                    _loadCompanions();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Row(
-                                          children: [
-                                            Icon(Icons.check_circle_outline, color: Colors.white),
-                                            const SizedBox(width: 12),
-                                            Text("تمت إضافة المرافق بنجاح"),
-                                          ],
-                                        ),
-                                        backgroundColor: Colors.green.shade700,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        margin: const EdgeInsets.all(10),
-                                        duration: const Duration(seconds: 3),
-                                        action: SnackBarAction(
-                                          label: 'تم',
-                                          textColor: Colors.white,
-                                          onPressed: () {},
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: relationshipController,
+                    textDirection: ui.TextDirection.rtl,
+                    decoration: InputDecoration(
+                      labelText: "صلة القرابة (اختياري)",
+                      hintText: "مثال: زوجة، ابن، أخ",
+                      prefixIcon: const Icon(Icons.people_alt_rounded, color: kPrimaryColor),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: kPrimaryColor, width: 2)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300, width: 1)),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 32),
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16), side: BorderSide(color: Colors.grey.shade300), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        child: const Text("إلغاء", style: TextStyle(fontSize: 16, color: Colors.grey)),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (formKey.currentState?.validate() ?? false) {
+                            await companionsRef.add({
+                              'name': nameController.text.trim(),
+                              'email': emailController.text.trim().toLowerCase(),
+                              'relationship': relationshipController.text.trim(),
+                              'lastSeen': FieldValue.serverTimestamp(),
+                            });
+                            Navigator.pop(context);
+                            _loadCompanions();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(children: const [Icon(Icons.check_circle_outline, color: Colors.white), SizedBox(width: 12), Text("تمت إضافة المرافق بنجاح")]),
+                                backgroundColor: Colors.green.shade700,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                margin: const EdgeInsets.all(10),
+                                duration: const Duration(seconds: 3),
+                                action: SnackBarAction(label: 'تم', textColor: Colors.white, onPressed: () {}),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16), backgroundColor: kPrimaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        child: const Text("إضافة", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ]),
+                ]),
+              ),
             ),
-          );
-        },
+          ]),
+        ),
       ),
     );
   }
 }
-

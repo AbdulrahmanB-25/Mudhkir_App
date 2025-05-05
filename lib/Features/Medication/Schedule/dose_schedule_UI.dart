@@ -365,7 +365,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
     if (mounted) {
       if (success) {
         setState(() {
-          _doseStatus = _doseStatus == 'taken' ? 'pending' : 'taken';
+          _doseStatus = _doseStatus == 'taken' ? 'pending' : _doseStatus == 'skipped' ? 'pending' : 'taken';
           _isLoadingStatus = false;
         });
         widget.onDataChanged();
@@ -598,7 +598,9 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
         side: BorderSide(
           color: _doseStatus == 'taken'
               ? Colors.green.shade300.withOpacity(0.5)
-              : kSecondaryColor.withOpacity(0.2),
+              : _doseStatus == 'skipped'
+                  ? Colors.orange.shade300.withOpacity(0.5)
+                  : kSecondaryColor.withOpacity(0.2),
           width: 1.5,
         ),
       ),
@@ -613,7 +615,9 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
               decoration: BoxDecoration(
                 color: _doseStatus == 'taken'
                     ? Colors.green.shade50.withOpacity(0.3)
-                    : Colors.transparent,
+                    : _doseStatus == 'skipped'
+                        ? Colors.orange.shade50.withOpacity(0.3)
+                        : Colors.transparent,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(kBorderRadius),
                   bottom: _isExpanded ? Radius.zero : Radius.circular(kBorderRadius),
@@ -635,15 +639,23 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
                     icon: Icon(
                       _doseStatus == 'taken'
                           ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked,
+                          : _doseStatus == 'skipped'
+                              ? Icons.not_interested_rounded
+                              : Icons.radio_button_unchecked,
                       size: 28,
                       color: _doseStatus == 'taken'
                           ? Colors.green.shade600
-                          : Colors.grey.shade400,
+                          : _doseStatus == 'skipped'
+                              ? Colors.orange.shade600
+                              : Colors.grey.shade400,
                     ),
                     onPressed: _toggleDoseStatus,
                     padding: EdgeInsets.zero,
-                    tooltip: _doseStatus == 'taken' ? "تم أخذ الجرعة" : "لم تؤخذ الجرعة بعد",
+                    tooltip: _doseStatus == 'taken' 
+                        ? "تم أخذ الجرعة" 
+                        : _doseStatus == 'skipped'
+                            ? "تم تخطي الجرعة"
+                            : "لم تؤخذ الجرعة بعد",
                   ),
                   const SizedBox(width: 12),
 
@@ -699,6 +711,23 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.green.shade800,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            if (_doseStatus == 'skipped')
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "تخطي",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange.shade800,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -967,4 +996,3 @@ class CalendarWidget extends StatelessWidget {
     );
   }
 }
-
