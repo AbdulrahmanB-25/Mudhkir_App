@@ -518,25 +518,17 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         // Get current time in Riyadh timezone
         final tz.TZDateTime nowLocal = tz.TZDateTime.now(riyadhTimezone);
 
-        // Get DateTime objects for today and tomorrow in Riyadh timezone for comparison
+        // Get DateTime objects for today in Riyadh timezone for comparison
         final DateTime todayDate = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
         final DateTime medicationDate = DateTime(nextTimeLocal.year, nextTimeLocal.month, nextTimeLocal.day);
-        final DateTime tomorrowDate = todayDate.add(const Duration(days: 1));
 
         print("[DataLoad Display] Now (Riyadh timezone): ${logTimeFormat.format(nowLocal)}");
         print("[DataLoad Display] Next Dose (Riyadh timezone): ${logTimeFormat.format(nextTimeLocal)}");
-        print("[DataLoad Display] Today: $todayDate, Next Dose Day: $medicationDate, Tomorrow: $tomorrowDate");
+        print("[DataLoad Display] Today: $todayDate, Next Dose Day: $medicationDate");
 
-        // Check if the dose time has passed
-        if (nowLocal.isAfter(nextTimeLocal)) {
-          print("[DataLoad Display] Medication time has passed, clearing data");
-          await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
-          await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
-          displayMedName = '';
-          displayMedTime = '';
-          displayDocId = '';
-        } else {
-          // Time is in the future - fetch and display the medication
+        // Check if the dose time is today
+        if (medicationDate.isAtSameMomentAs(todayDate)) {
+          // Time is today - fetch and display the medication
           final doc = await FirebaseFirestore.instance
               .collection('users')
               .doc(_currentUser!.uid)
@@ -558,6 +550,13 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
             await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
             await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
           }
+        } else {
+          print("[DataLoad Display] Medication is not for today, clearing data");
+          await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
+          await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
+          displayMedName = '';
+          displayMedTime = '';
+          displayDocId = '';
         }
       } catch (e, stackTrace) {
         print("[DataLoad Display] Error processing display data: $e");
