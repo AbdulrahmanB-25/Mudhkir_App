@@ -1,16 +1,19 @@
-# mudhkir_app
+# Mudhkir App
 
-A new Flutter project.
+A Medication Reminder Application built with Flutter.
 
-## Getting Started
+## About
 
-This project is a starting point for a Flutter application.
+Mudhkir is a smart and user-friendly medication reminder app designed to help users, including the elderly, manage their medication schedules effectively. The app features adaptive reminders, medication tracking, and a simple interface to ensure ease of use for everyone.
 
-A few resources to get you started if this is your first Flutter project:
+## Features
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- Medication scheduling and tracking
+- Daily and weekly reminders
+- Companion and caregiver management
+- Calendar integration
+- Health analytics dashboard
+- Custom reminder tones
+- Offline access and multi-device sync
+- Secure data management and privacy
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
