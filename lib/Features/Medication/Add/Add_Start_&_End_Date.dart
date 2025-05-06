@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kErrorColor = Color(0xFFFF6B6B);
@@ -35,6 +34,7 @@ class AddStartEndDatePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dynamically calculate padding based on screen width
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding = screenWidth * 0.06;
     const verticalPadding = 20.0;
@@ -42,6 +42,7 @@ class AddStartEndDatePage extends StatelessWidget {
     return Form(
       key: formKey,
       child: Container(
+        // Main container for the page with background color
         decoration: const BoxDecoration(
           color: kBackgroundColor,
         ),
@@ -51,12 +52,13 @@ class AddStartEndDatePage extends StatelessWidget {
               horizontal: horizontalPadding,
               vertical: verticalPadding,
             ),
-            // Wrap the Column with SingleChildScrollView
             child: SingleChildScrollView(
               child: Column(
+                // Main column for the page content
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Title with gradient effect
                   Center(
                     child: ShaderMask(
                       shaderCallback: (bounds) => LinearGradient(

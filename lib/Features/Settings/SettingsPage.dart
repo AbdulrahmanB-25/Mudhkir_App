@@ -4,9 +4,6 @@ import 'package:http/http.dart' as http;
 
 import '../../Shared/Widgets/bottom_navigation.dart';
 
-
-
-
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kErrorColor = Color(0xFFFF6B6B);
@@ -32,6 +29,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _fetchAppVersion();
   }
 
+  // Fetches the latest app version from GitHub API
   Future<void> _fetchAppVersion() async {
     try {
       final response = await http.get(Uri.parse(
@@ -93,10 +91,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Section headers with dividers
                 _buildSectionHeader("إعدادات التطبيق"),
 
-                /// 🌐 Language Settings
                 SettingTile(
                   icon: Icons.language,
                   title: "اللغة",
@@ -107,7 +103,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 12),
 
-                /// 🔒 Privacy & Security
                 SettingTile(
                   icon: Icons.lock_outline_rounded,
                   title: "الخصوصية والأمان",
@@ -118,7 +113,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 12),
 
-                /// 📞 Contact Support
                 SettingTile(
                   icon: Icons.help_outline_rounded,
                   title: "الدعم والمساعدة",
@@ -129,7 +123,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // App info section
                 _buildSectionHeader("حول التطبيق"),
 
                 SettingTile(
@@ -172,6 +165,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Builds a section header with a colored indicator and divider
   Widget _buildSectionHeader(String title) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,7 +197,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-/// Reusable widget for each setting option.
+// Reusable setting tile widget with icon, title, subtitle and optional trailing widget
 class SettingTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -295,4 +289,3 @@ class SettingTile extends StatelessWidget {
     );
   }
 }
-

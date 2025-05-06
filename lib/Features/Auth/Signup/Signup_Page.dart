@@ -31,6 +31,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    // Initialize animation for UI transitions
     _controller = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
@@ -38,24 +39,23 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
 
+    // Clear error messages when user modifies input fields
     _nameController.addListener(() {
       if (_isSubmitted) setState(() => _nameError = '');
     });
-
     _emailController.addListener(() {
       if (_isSubmitted) setState(() => _emailError = '');
     });
-
     _passwordController.addListener(() {
       if (_isSubmitted) setState(() => _passwordError = '');
     });
-
     _confirmPasswordController.addListener(() {
       if (_isSubmitted) setState(() => _confirmPasswordError = '');
     });
   }
 
   String _validateEmail(String email) {
+    // Validates email format and ensures it's not empty
     if (email.isEmpty) return 'الرجاء إدخال البريد الإلكتروني';
     if (!RegExp(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$").hasMatch(email)) {
       return 'تنسيق البريد الإلكتروني غير صحيح';
@@ -64,6 +64,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
   }
 
   String _validatePassword(String password) {
+    // Validates password strength (length, uppercase, number, special character)
     if (password.isEmpty) return 'الرجاء إدخال كلمة المرور';
     if (password.length < 8) return 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل';
     if (!password.contains(RegExp(r'[A-Z]'))) return 'يجب أن تحتوي على حرف كبير واحد على الأقل';
@@ -75,6 +76,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
   }
 
   void _registerUser() async {
+    // Handles user registration and saves user data to Firestore
     setState(() {
       _isSubmitted = true;
       _nameError = _nameController.text.isEmpty ? 'الرجاء إدخال الاسم' : '';
@@ -83,8 +85,8 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
       _confirmPasswordError = _confirmPasswordController.text.isEmpty
           ? 'الرجاء تأكيد كلمة المرور'
           : (_passwordController.text != _confirmPasswordController.text
-          ? 'كلمتا المرور غير متطابقتين'
-          : '');
+              ? 'كلمتا المرور غير متطابقتين'
+              : '');
       _signupError = '';
     });
 
@@ -94,7 +96,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
         _confirmPasswordError.isEmpty) {
       try {
         UserCredential userCredential =
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
@@ -111,6 +113,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
           Navigator.of(context).pushReplacementNamed('/mainpage');
         }
       } on FirebaseAuthException catch (e) {
+        // Handle Firebase-specific errors during registration
         setState(() {
           if (e.code == 'weak-password') {
             _passwordError = 'كلمة المرور ضعيفة جدًا';
@@ -126,9 +129,11 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // Builds the signup page UI
     return Scaffold(
       body: Stack(
         children: [
+          // Background gradient and decorative elements
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -142,7 +147,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
-          
+
           Positioned(
             top: MediaQuery.of(context).size.height * 0.12,
             left: MediaQuery.of(context).size.width * 0.05,
@@ -179,7 +184,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
-          
+
           // Back Button
           Positioned(
             top: 40,
@@ -189,7 +194,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
               onPressed: () => Navigator.pop(context),
             ),
           ),
-          
+
           // Main Content
           Center(
             child: SingleChildScrollView(
@@ -216,14 +221,14 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                           ],
                         ),
                         child: Icon(
-                          Icons.person_add_rounded,
-                          size: 45, // Reduced from 60
-                          color: Colors.blue.shade800
+                            Icons.person_add_rounded,
+                            size: 45, // Reduced from 60
+                            color: Colors.blue.shade800
                         ),
                       ),
                     ),
                     const SizedBox(height: 20), // Reduced from 30
-                    
+
                     // Title
                     Text(
                       "إنشاء حساب",
@@ -243,7 +248,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                       ),
                     ),
                     const SizedBox(height: 15), // Reduced from 30
-                    
+
                     // Name field with card styling
                     Card(
                       elevation: 4,
@@ -280,7 +285,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         ),
                       ),
                     const SizedBox(height: 10), // Reduced from 16
-                    
+
                     Card(
                       elevation: 4,
                       shadowColor: Colors.blue.shade100,
@@ -318,7 +323,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         ),
                       ),
                     const SizedBox(height: 10),
-                    
+
                     // Password field
                     Card(
                       elevation: 4,
@@ -368,7 +373,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         ),
                       ),
                     const SizedBox(height: 10),
-                    
+
                     // Confirm Password field
                     Card(
                       elevation: 4,
@@ -418,7 +423,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         ),
                       ),
                     const SizedBox(height: 15),
-                    
+
                     // Error message display
                     if (_signupError.isNotEmpty)
                       Container(
@@ -433,13 +438,13 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                           _signupError,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.red.shade700, 
+                            color: Colors.red.shade700,
                             fontSize: 13, // Reduced from 14
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
-                    
+
                     // Signup Button with gradient and elevation
                     Container(
                       margin: const EdgeInsets.only(top: 8),
@@ -488,7 +493,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
                         ),
                       ),
                     ),
-                    
+
                     // Login redirect section
                     Container(
                       margin: const EdgeInsets.only(top: 20, bottom: 15),
@@ -537,6 +542,7 @@ class _SignupState extends State<Signup> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Dispose controllers to free resources
     _controller.dispose();
     _nameController.dispose();
     _emailController.dispose();

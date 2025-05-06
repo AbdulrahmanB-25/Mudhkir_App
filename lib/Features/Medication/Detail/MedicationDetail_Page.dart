@@ -41,60 +41,48 @@ class MedicationDetailPage extends StatefulWidget {
 
 class _MedicationDetailPageState extends State<MedicationDetailPage>
     with SingleTickerProviderStateMixin {
-  // Services
+  // Initialize services, animations, and state variables
   late MedicationDetailService _service;
-
-  // State variables
   Map<String, dynamic>? _medData;
   bool _isLoading = true;
   String _errorMessage = '';
   bool _isProcessingConfirmation = false;
   bool _isReschedulingMode = false;
 
-  // Animation controller for smooth transitions
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Store the specific time being confirmed (in local timezone)
   tz.TZDateTime? _confirmationTimeLocal;
   TimeOfDay? _manualConfirmationTime;
 
-  // For smart rescheduling
   List<TimeOfDay> _suggestedTimes = [];
   TimeOfDay? _selectedSuggestedTime;
   TimeOfDay? _customSelectedTime;
   final TextEditingController _customTimeController = TextEditingController();
 
-  // Add these controllers for the dosage update dialog
   final TextEditingController _dosageController = TextEditingController();
   final TextEditingController _dosageUnitController = TextEditingController();
 
-  // UI components
   late MedicationDetailUIComponents _uiComponents;
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize service
     _service = MedicationDetailService();
 
-    // Initialize UI components with all the needed callbacks
     _uiComponents = MedicationDetailUIComponents(
       updateState: _updateState,
       handleConfirmation: _handleConfirmation,
       handleReschedule: _handleReschedule,
       showCustomTimePickerDialog: _showCustomTimePickerDialog,
       showManualTimePickerDialog: _showManualTimePickerDialog,
-      // Add these new callbacks
       setReschedulingModeTrue: _setReschedulingModeTrue,
       setReschedulingModeFalse: _setReschedulingModeFalse,
       selectSuggestedTime: _selectSuggestedTime,
-      // Add the new dosage update callback
       updateDosage: _showDosageUpdateDialog,
     );
 
-    // Initialize animation controller
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -107,7 +95,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
 
     if (widget.needsConfirmation && widget.confirmationTimeIso != null) {
       try {
-        // Parse the UTC ISO string and convert it to local TZDateTime
         final utcTime = DateTime.parse(widget.confirmationTimeIso!);
         _confirmationTimeLocal = tz.TZDateTime.from(utcTime, tz.local);
         _manualConfirmationTime = TimeOfDay(
@@ -128,6 +115,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     _loadMedicationData();
   }
 
+  // Dispose resources
   @override
   void dispose() {
     _animationController.dispose();
@@ -146,7 +134,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
   }
 
-  // New methods to handle rescheduling state
   void _setReschedulingModeTrue() {
     setState(() {
       _isReschedulingMode = true;
@@ -167,13 +154,222 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
   void _selectSuggestedTime(TimeOfDay time) {
     setState(() {
       _selectedSuggestedTime = time;
-      _customSelectedTime = null; // Clear custom selection
+      _customSelectedTime = null;
       _customTimeController.clear();
     });
     _logAction("Suggested Time Selected", "Time: ${time.hour}:${time.minute}");
   }
 
-  // Add this new method to show the dosage update dialog
+  // Load medication data from Firestore
+  Future<void> _loadMedicationData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      _logAction("Loading Medication", "Fetching document: ${widget.docId}");
+
+      final result = await _service.loadMedicationData(widget.docId);
+
+      if (!mounted) return;
+
+      if (result.success) {
+        setState(() {
+          _medData = result.data;
+          _isLoading = false;
+        });
+
+        _logAction("Medication Data Loaded", "Successfully loaded data");
+
+        _generateSmartReschedulingSuggestions();
+
+        if (!widget.needsConfirmation && _manualConfirmationTime == null) {
+          _manualConfirmationTime = TimeOfDay.now();
+        }
+      } else {
+        _logAction("Medication Load Failed", result.error ?? "Unknown error");
+        setState(() {
+          _isLoading = false;
+          _errorMessage = result.error ?? 'لم يتم العثور على بيانات الدواء.';
+        });
+      }
+    } catch (e, stack) {
+      _showErrorAndLog("loading medication details", e, stack);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'خطأ في تحميل البيانات.';
+        });
+      }
+    }
+  }
+
+  // Handle confirmation of medication dose (taken or skipped)
+  Future<void> _handleConfirmation(bool taken) async {
+    if (!mounted || _isProcessingConfirmation) return;
+
+    setState(() => _isProcessingConfirmation = true);
+    _logAction("Confirmation Action", "User selected: ${taken ? 'TAKEN' : 'SKIPPED'}");
+
+    try {
+      TimeOfDay timeToConfirm = _manualConfirmationTime ?? TimeOfDay.now();
+
+      final result = await _service.recordMedicationConfirmation(
+          widget.docId,
+          timeToConfirm,
+          taken,
+          widget.needsConfirmation ? 'app_confirmation_prompt' : 'manual_confirmation'
+      );
+
+      if (!result.success) {
+        throw Exception(result.error ?? "Failed to record confirmation");
+      }
+
+      _logAction("Confirmation Recorded", "Status: ${taken ? 'TAKEN' : 'SKIPPED'} at ${timeToConfirm.hour}:${timeToConfirm.minute}");
+
+      if (widget.needsConfirmation && widget.confirmationKey != null && widget.confirmationKey!.isNotEmpty) {
+        _logAction("Clearing Notification Flag", "Key: ${widget.confirmationKey}");
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(widget.confirmationKey!);
+      }
+
+      try {
+        final doseScheduleService = DoseScheduleServices(user: FirebaseAuth.instance.currentUser);
+        doseScheduleService.clearCache();
+        _logAction("Cache Cleared", "Cleared dose schedule cache for refresh");
+      } catch (e) {
+        _logAction("Cache Clear Error", "Failed to clear cache: $e");
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              taken ? "تم تسجيل تناول الجرعة بنجاح." : "تم تسجيل تخطي الجرعة.",
+              textAlign: TextAlign.right,
+            ),
+            backgroundColor: taken ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            Navigator.pop(context, true);
+          }
+        });
+      }
+    } catch (e, stack) {
+      _showErrorAndLog("processing confirmation", e, stack);
+      if (mounted) {
+        setState(() {
+          _isProcessingConfirmation = false;
+        });
+      }
+    }
+  }
+
+  // Handle rescheduling of medication dose
+  Future<void> _handleReschedule() async {
+    if (!mounted || _isProcessingConfirmation) return;
+
+    setState(() => _isProcessingConfirmation = true);
+
+    try {
+      final TimeOfDay? selectedTime = _selectedSuggestedTime ?? _customSelectedTime;
+      if (selectedTime == null) {
+        setState(() => _isProcessingConfirmation = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "الرجاء اختيار وقت لإعادة الجدولة.",
+              textAlign: TextAlign.right,
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final dateTime = TimeUtilities.timeOfDayToDateTime(selectedTime);
+
+      if (widget.confirmationTimeIso == null && _medData != null && _medData!.containsKey('times')) {
+        _logAction("Manual Rescheduling", "Selected new time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
+      } else {
+        _logAction("Notification Rescheduling", "New time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
+      }
+
+      final result = await _service.recordMedicationRescheduling(
+          widget.docId,
+          dateTime,
+          widget.confirmationTimeIso,
+          widget.needsConfirmation ? 'app_rescheduling' : 'manual_rescheduling'
+      );
+
+      if (!result.success) {
+        throw Exception(result.error ?? "Failed to reschedule medication");
+      }
+
+      if (widget.needsConfirmation && widget.confirmationKey != null && widget.confirmationKey!.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(widget.confirmationKey!);
+        _logAction("Cleared Notification Flag", "After rescheduling: ${widget.confirmationKey}");
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "تمت إعادة جدولة الجرعة إلى ${TimeUtilities.formatTimeOfDay(selectedTime)} بنجاح.",
+              textAlign: TextAlign.right,
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            Navigator.pop(context, true);
+          }
+        });
+      }
+    } catch (e, stack) {
+      _showErrorAndLog("rescheduling dose", e, stack);
+      if (mounted) {
+        setState(() {
+          _isProcessingConfirmation = false;
+        });
+      }
+    }
+  }
+
+  // Generate smart rescheduling suggestions based on current schedule
+  Future<void> _generateSmartReschedulingSuggestions() async {
+    if (!mounted) return;
+
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return;
+
+      final result = await _service.generateSmartReschedulingSuggestions(
+          userId,
+          widget.docId
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _suggestedTimes = result;
+      });
+    } catch (e, stack) {
+      _showErrorAndLog("generating rescheduling suggestions", e, stack);
+    }
+  }
+
+  // Show a dialog for updating the dosage
   Future<void> _showDosageUpdateDialog(String currentDosage, String currentUnit) async {
     _dosageController.text = currentDosage;
     _dosageUnitController.text = currentUnit;
@@ -250,7 +446,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     );
   }
 
-  // Add this method to update the medication dosage
+  // Update the medication dosage in Firestore
   Future<void> _updateMedicationDosage(String newDosage, String newUnit) async {
     if (newDosage.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -289,8 +485,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
             duration: const Duration(seconds: 1),
           ),
         );
-        
-        // Load updated data but don't navigate away - dosage update is a minor change
+
         _loadMedicationData();
       } else {
         _showErrorAndLog(
@@ -310,7 +505,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
   }
 
-  // Enhanced error handler with logging
   void _showErrorAndLog(String operation, dynamic error, StackTrace? stackTrace) {
     final errorMsg = "Error in $operation: $error";
     print("[DetailPage ERROR] $errorMsg");
@@ -318,13 +512,11 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
       print("[DetailPage ERROR] Stack trace: $stackTrace");
     }
 
-    // Check if user is authenticated
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       print("[DetailPage ERROR] User is not authenticated!");
     }
 
-    // Check if we have a document ID
     if (widget.docId.isEmpty) {
       print("[DetailPage ERROR] Invalid document ID!");
     }
@@ -353,227 +545,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
   }
 
-  Future<void> _loadMedicationData() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-
-    try {
-      _logAction("Loading Medication", "Fetching document: ${widget.docId}");
-
-      final result = await _service.loadMedicationData(widget.docId);
-
-      if (!mounted) return;
-
-      if (result.success) {
-        setState(() {
-          _medData = result.data;
-          _isLoading = false;
-        });
-
-        _logAction("Medication Data Loaded", "Successfully loaded data");
-
-        // Always prepare suggested times for scheduling
-        _generateSmartReschedulingSuggestions();
-
-        // Set default confirmation time for non-confirmation mode
-        if (!widget.needsConfirmation && _manualConfirmationTime == null) {
-          _manualConfirmationTime = TimeOfDay.now();
-        }
-      } else {
-        _logAction("Medication Load Failed", result.error ?? "Unknown error");
-        setState(() {
-          _isLoading = false;
-          _errorMessage = result.error ?? 'لم يتم العثور على بيانات الدواء.';
-        });
-      }
-    } catch (e, stack) {
-      _showErrorAndLog("loading medication details", e, stack);
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'خطأ في تحميل البيانات.';
-        });
-      }
-    }
-  }
-
-  // --- Smart Rescheduling Logic ---
-  Future<void> _generateSmartReschedulingSuggestions() async {
-    if (!mounted) return;
-
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return;
-
-      final result = await _service.generateSmartReschedulingSuggestions(
-          userId,
-          widget.docId
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _suggestedTimes = result;
-      });
-    } catch (e, stack) {
-      _showErrorAndLog("generating rescheduling suggestions", e, stack);
-    }
-  }
-
-  // --- Confirmation and Rescheduling Actions ---
-  Future<void> _handleConfirmation(bool taken) async {
-    if (!mounted || _isProcessingConfirmation) return;
-
-    setState(() => _isProcessingConfirmation = true);
-    _logAction("Confirmation Action", "User selected: ${taken ? 'TAKEN' : 'SKIPPED'}");
-
-    try {
-      TimeOfDay timeToConfirm = _manualConfirmationTime ?? TimeOfDay.now();
-
-      final result = await _service.recordMedicationConfirmation(
-          widget.docId,
-          timeToConfirm,
-          taken,
-          widget.needsConfirmation ? 'app_confirmation_prompt' : 'manual_confirmation'
-      );
-
-      if (!result.success) {
-        throw Exception(result.error ?? "Failed to record confirmation");
-      }
-
-      _logAction("Confirmation Recorded", "Status: ${taken ? 'TAKEN' : 'SKIPPED'} at ${timeToConfirm.hour}:${timeToConfirm.minute}");
-
-      // Clear notification flag if applicable
-      if (widget.needsConfirmation && widget.confirmationKey != null && widget.confirmationKey!.isNotEmpty) {
-        _logAction("Clearing Notification Flag", "Key: ${widget.confirmationKey}");
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(widget.confirmationKey!);
-      }
-
-      // Force clear the schedule service cache to ensure fresh data when returning
-      try {
-        final doseScheduleService = DoseScheduleServices(user: FirebaseAuth.instance.currentUser);
-        doseScheduleService.clearCache();
-        _logAction("Cache Cleared", "Cleared dose schedule cache for refresh");
-      } catch (e) {
-        _logAction("Cache Clear Error", "Failed to clear cache: $e");
-      }
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              taken ? "تم تسجيل تناول الجرعة بنجاح." : "تم تسجيل تخطي الجرعة.",
-              textAlign: TextAlign.right,
-            ),
-            backgroundColor: taken ? Colors.green : Colors.orange,
-            duration: const Duration(seconds: 1), // Show briefly before popping
-          ),
-        );
-
-        // Add a slight delay to allow the snackbar to be seen before closing
-        Future.delayed(const Duration(milliseconds: 1200), () {
-          if (mounted) {
-            // Return true to indicate successful action to calling page
-            Navigator.pop(context, true);
-          }
-        });
-      }
-    } catch (e, stack) {
-      _showErrorAndLog("processing confirmation", e, stack);
-      if (mounted) {
-        setState(() {
-          _isProcessingConfirmation = false;
-        });
-      }
-    }
-  }
-
-  // Handle rescheduling
-  Future<void> _handleReschedule() async {
-    if (!mounted || _isProcessingConfirmation) return;
-
-    setState(() => _isProcessingConfirmation = true);
-
-    try {
-      final TimeOfDay? selectedTime = _selectedSuggestedTime ?? _customSelectedTime;
-      if (selectedTime == null) {
-        setState(() => _isProcessingConfirmation = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "الرجاء اختيار وقت لإعادة الجدولة.",
-              textAlign: TextAlign.right,
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      final dateTime = TimeUtilities.timeOfDayToDateTime(selectedTime);
-      String? originalTimeString;
-      
-      if (widget.confirmationTimeIso == null && _medData != null && _medData!.containsKey('times')) {
-        _logAction("Manual Rescheduling", "Selected new time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
-      } else {
-        _logAction("Notification Rescheduling", "New time: ${selectedTime.hour}:${selectedTime.minute} (${dateTime.toString()})");
-      }
-
-      final result = await _service.recordMedicationRescheduling(
-          widget.docId,
-          dateTime,
-          widget.confirmationTimeIso,
-          widget.needsConfirmation ? 'app_rescheduling' : 'manual_rescheduling'
-      );
-
-      if (!result.success) {
-        throw Exception(result.error ?? "Failed to reschedule medication");
-      }
-
-      // Clear any existing confirmation flag if from notification
-      if (widget.needsConfirmation && widget.confirmationKey != null && widget.confirmationKey!.isNotEmpty) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(widget.confirmationKey!);
-        _logAction("Cleared Notification Flag", "After rescheduling: ${widget.confirmationKey}");
-      }
-
-      if (mounted) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "تمت إعادة جدولة الجرعة إلى ${TimeUtilities.formatTimeOfDay(selectedTime)} بنجاح.",
-              textAlign: TextAlign.right,
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1), // Show briefly before popping
-          ),
-        );
-
-        // Add a slight delay to allow the snackbar to be seen before closing
-        Future.delayed(const Duration(milliseconds: 1200), () {
-          if (mounted) {
-            // Return true to indicate successful action to calling page
-            Navigator.pop(context, true);
-          }
-        });
-      }
-    } catch (e, stack) {
-      _showErrorAndLog("rescheduling dose", e, stack);
-      if (mounted) {
-        setState(() {
-          _isProcessingConfirmation = false;
-        });
-      }
-    }
-  }
-
-  // Time picker dialogs
   Future<void> _showCustomTimePickerDialog() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -597,7 +568,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     if (picked != null && mounted) {
       setState(() {
         _customSelectedTime = picked;
-        _selectedSuggestedTime = null; // Clear suggested selection
+        _selectedSuggestedTime = null;
         _customTimeController.text = TimeUtilities.formatTimeOfDay(picked);
       });
       _logAction("Custom Time Selected", "User picked: ${picked.hour}:${picked.minute}");
@@ -632,14 +603,10 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
   }
 
-  // Add this method to handle action logging
   void _logAction(String action, String details) {
     final now = DateTime.now().toIso8601String();
     final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
     print("[MedicationDetail] [$now] [$userId] $action: $details");
-    
-    // Optional: You could also log to an analytics service or Firebase Analytics here
-    // FirebaseAnalytics.instance.logEvent(name: action, parameters: {'details': details});
   }
 
   @override
@@ -651,7 +618,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
       appBarTitle = "تذكير بجرعة الدواء";
     }
 
-    // Format confirmation time for display
     String confirmationTimeFormatted = '';
     if (_confirmationTimeLocal != null) {
       try {
@@ -663,7 +629,7 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     }
 
     return Directionality(
-      textDirection: ui.TextDirection.rtl, // Apply RTL for Arabic
+      textDirection: ui.TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -672,7 +638,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
           ),
           backgroundColor: widget.needsConfirmation ? Colors.orange.shade700 : kPrimaryColor,
           elevation: 0,
-          // Ensure close button is present for non-notification views too
           leading: IconButton(
             icon: Icon(Icons.arrow_back),
             onPressed: () => Navigator.of(context).pop(),
@@ -729,7 +694,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Confirmation Section (if needed or in reschedule mode)
             if (widget.needsConfirmation && !_isReschedulingMode)
               _uiComponents.buildEnhancedConfirmationSection(
                 _medData!,
@@ -751,7 +715,6 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
                 _isProcessingConfirmation,
               ),
 
-            // Medication Info
             SizedBox(height: kSpacing),
             _uiComponents.buildMedicationInfoCard(_medData!),
             SizedBox(height: kSpacing),
@@ -763,4 +726,3 @@ class _MedicationDetailPageState extends State<MedicationDetailPage>
     );
   }
 }
-

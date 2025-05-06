@@ -74,6 +74,7 @@ class ImageCache {
 }
 
 class EnlargeableImage extends StatefulWidget {
+  // Displays an image that can be enlarged when tapped
   final String imageUrl;
   final double width;
   final double height;
@@ -267,6 +268,7 @@ class _EnlargeableImageState extends State<EnlargeableImage> {
 }
 
 class DoseTile extends StatefulWidget {
+  // Represents a single dose entry in the schedule
   final String medicationName;
   final String nextDose;
   final String docId;
@@ -824,6 +826,7 @@ class _DoseTileState extends State<DoseTile> with SingleTickerProviderStateMixin
 }
 
 class CalendarWidget extends StatelessWidget {
+  // Custom calendar widget for displaying scheduled doses
   final DateTime focusedDay;
   final DateTime selectedDay;
   final CalendarFormat calendarFormat;
@@ -995,3 +998,4 @@ class CalendarWidget extends StatelessWidget {
     );
   }
 }
+

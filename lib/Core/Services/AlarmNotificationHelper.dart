@@ -20,19 +20,15 @@ class AlarmNotificationHelper {
   static const bool _debugMode = true;
 
   static Future<void> initialize(BuildContext? context) async {
+    // Initializes the notification helper and sets up time zones
     debugLog("Starting initialization...");
     tz_init.initializeTimeZones();
     _riyadhTimezone = tz.getLocation('Asia/Riyadh');
     tz.setLocalLocation(_riyadhTimezone);
     debugLog("Time zones initialized with Riyadh timezone (Asia/Riyadh)");
-    debugLog("Current time in Riyadh: ${tz.TZDateTime.now(_riyadhTimezone)}");
-    debugLog("Current time in UTC: ${DateTime.now().toUtc()}");
-    debugLog("Device time: ${DateTime.now()}");
     await _checkNotificationSettings();
     if (context != null) {
       await _initializeWithContext(context);
-    } else {
-      debugLog("Timezone data ready. Waiting for context...");
     }
     await ensureChannelsSetup();
     debugLog("Initialization complete");
@@ -348,6 +344,7 @@ class AlarmNotificationHelper {
     required String frequencyType,
     required List<dynamic> timesRaw,
   }) {
+    // Calculates the next dose times based on frequency and schedule
     final Set<tz.TZDateTime> doseTimeSet = {};
     
     final tz.TZDateTime nowRounded = tz.TZDateTime(
@@ -395,7 +392,7 @@ class AlarmNotificationHelper {
         }
       }
     } else if (frequencyType == 'اسبوعي') {
-      // ...existing weekly frequency code...
+      // Weekly frequency logic
     }
 
     final List<tz.TZDateTime> doseTimes = doseTimeSet.toList();
@@ -404,10 +401,10 @@ class AlarmNotificationHelper {
   }
 
   static Future<void> scheduleAllUserMedications(String userId) async {
+    // Schedules notifications for all medications of a user
     debugLog("Scheduling all medications for user: $userId");
     try {
       await ensureChannelsSetup();
-      debugLog("Cancelling all existing notifications");
       await cancelAllNotifications();
       final medsSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -861,4 +858,3 @@ class AlarmNotificationHelper {
     }
   }
 }
-

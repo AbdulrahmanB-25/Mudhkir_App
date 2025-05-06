@@ -16,13 +16,13 @@ import '../Add/Add_Name_Picture.dart';
 import '../Add/Add_Start_&_End_Date.dart' show AddStartEndDatePage;
 
 class TimeUtils {
+  // Handles time parsing with Arabic AM/PM normalization and formatting
   static final DateFormat _timeFormat = DateFormat('h:mm a', 'ar');
   static final DateFormat _parsingFormat = DateFormat('h:mm a', 'en_US');
 
   static TimeOfDay? parseTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return null;
     try {
-      // Normalize Arabic AM/PM to English for parsing
       String normalizedTime = timeStr
           .replaceAll('صباحاً', 'AM')
           .replaceAll('مساءً', 'PM')
@@ -34,7 +34,7 @@ class TimeUtils {
     } catch (e) {
       try {
         final parts = timeStr.split(':');
-        if(parts.length >= 2) {
+        if (parts.length >= 2) {
           int hour = int.parse(parts[0]);
           int minute = int.parse(parts[1].replaceAll(RegExp(r'[^0-9]'), ''));
           if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
@@ -47,9 +47,9 @@ class TimeUtils {
     }
   }
 
+  // Formats TimeOfDay into Arabic AM/PM for database storage
   static String formatTimeOfDay(TimeOfDay t) {
     final dt = DateTime(2000, 1, 1, t.hour, t.minute);
-    // Always output Arabic AM/PM for DB
     String formatted = _timeFormat.format(dt);
     formatted = formatted
         .replaceAll('AM', 'صباحاً')
@@ -61,6 +61,7 @@ class TimeUtils {
 }
 
 class EditMedicationUtils {
+  // Ensures camera permission is granted, opens app settings if denied
   static Future<void> ensureCameraPermission() async {
     final st = await Permission.camera.request();
     if (!st.isGranted) {
@@ -71,6 +72,7 @@ class EditMedicationUtils {
     }
   }
 
+  // Uploads an image to ImgBB and returns the image URL and delete hash
   static Future<Map<String, String>> uploadToImgBB(File file, String apiKey) async {
     if (apiKey.isEmpty || apiKey == 'YOUR_IMGBB_API_KEY') {
       throw Exception('ImgBB API Key is not configured.');
@@ -95,6 +97,7 @@ class EditMedicationUtils {
     throw Exception('ImgBB upload failed');
   }
 
+  // Deletes an image from ImgBB using the delete hash
   static Future<void> deleteImgBBImage(String deleteHash, String apiKey) async {
     if (apiKey.isEmpty || apiKey == 'YOUR_IMGBB_API_KEY' || deleteHash.isEmpty) {
       print("ImgBB delete skipped: API Key or delete hash missing.");
@@ -170,6 +173,7 @@ class EditMedicationDataProvider {
     this.companionId,
   });
 
+  // Initializes the provider by loading medicine names and medication data
   Future<void> init(String docId) async {
     _isLoading = true;
     try {
@@ -199,6 +203,7 @@ class EditMedicationDataProvider {
     }
   }
 
+  // Loads medication data from Firestore and parses it into the provider's state
   Future<void> loadMedicationData(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
@@ -365,6 +370,7 @@ class EditMedicationDataProvider {
     }
   }
 
+  // Updates medication data in Firestore and schedules notifications
   Future<void> updateMedication(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
@@ -388,7 +394,6 @@ class EditMedicationDataProvider {
     } else {
       print("Image not changed or no original hash, skipping deletion.");
     }
-
 
     final Map<String, dynamic> frequencyDetailsData;
     final List<dynamic> timesData;
@@ -492,6 +497,7 @@ class EditMedicationDataProvider {
     if (_selectedTimes.isNotEmpty && _selectedTimes[0] != null) _autoFillDosageTimes();
   }
 
+  // Automatically fills daily dosage times based on the first time
   void _autoFillDosageTimes() {
     if (_frequencyType != 'يومي' || _selectedTimes.isEmpty || _selectedTimes[0] == null || _frequencyNumber <= 1) return;
     final firstTime = _selectedTimes[0]!;
@@ -506,6 +512,7 @@ class EditMedicationDataProvider {
     }
   }
 
+  // Initializes weekly schedule by syncing selected weekdays and times
   void _initializeWeeklySchedule() {
     if (_frequencyType != 'اسبوعي') return;
     final currentTimes = Map<int, TimeOfDay?>.from(_weeklyTimes);
@@ -518,6 +525,7 @@ class EditMedicationDataProvider {
     }
   }
 
+  // Applies the same time to all selected weekdays
   void applySameTimeToAllWeekdays() {
     if (_frequencyType != 'اسبوعي' || _selectedWeekdays.isEmpty) return;
     final sortedDays = _selectedWeekdays.toList()..sort();
@@ -596,6 +604,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 
+  // Validates the first page of the form
   bool _validatePage1() {
     if (_page1FormKey.currentState == null) return false;
     final isValid = _page1FormKey.currentState!.validate();
@@ -603,6 +612,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     return isValid;
   }
 
+  // Validates the second page of the form, including time selection
   bool _validatePage2() {
     if (_page2FormKey.currentState == null) return false;
     final isFormValid = _page2FormKey.currentState!.validate();
@@ -687,6 +697,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     }
   }
 
+  // Submits the form and updates the medication in Firestore
   void _submitForm() async {
     showDialog(
       context: context,
@@ -820,6 +831,7 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 
+  // Builds the progress bar with navigation between pages
   Widget _buildProgressBar() {
     final List<String> pageTitles = [
       'اسم الدواء والصورة',
@@ -1008,4 +1020,3 @@ class _EditMedicationScreenState extends State<EditMedicationScreen> {
     );
   }
 }
-

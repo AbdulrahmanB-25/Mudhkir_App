@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class TimeUtils {
-  // Cache for parsed times to avoid repeated parsing
+  // Parses a time string or map into a TimeOfDay object
   static final Map<String, TimeOfDay?> _parsedTimeCache = {};
   
   static TimeOfDay? parseTime(dynamic timeInput) {
@@ -60,7 +60,7 @@ class TimeUtils {
     return result;
   }
 
-  // Cache for formatted times
+  // Formats a TimeOfDay object into a localized string
   static final Map<String, String> _formattedTimeCache = {};
   
   static String formatTimeOfDay(BuildContext context, TimeOfDay time) {
@@ -78,3 +78,4 @@ class TimeUtils {
     return formatted;
   }
 }
+

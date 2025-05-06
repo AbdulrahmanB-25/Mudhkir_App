@@ -38,6 +38,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
     _user = FirebaseAuth.instance.currentUser;
     _services = DoseScheduleServices(user: _user);
 
+    // Handle case where user is not logged in
     if (_user == null) {
       print("Error: User not logged in for DoseSchedule.");
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -67,12 +68,13 @@ class _DoseScheduleState extends State<DoseSchedule> {
     });
 
     try {
+      // Calculate the range of dates to fetch doses for
       final year = _focusedDay.year;
       final month = _focusedDay.month;
-
       final fetchStart = DateTime(year, month - 1, 1);
       final fetchEnd = DateTime(year, month + 2, 0);
 
+      // Avoid redundant fetches if data is already cached
       if (_lastFetchStart != null && _lastFetchEnd != null) {
         if (!fetchStart.isBefore(_lastFetchStart!) && !fetchEnd.isAfter(_lastFetchEnd!)) {
           setState(() {
@@ -127,12 +129,14 @@ class _DoseScheduleState extends State<DoseSchedule> {
     await _fetchDosesForVisibleRange();
   }
 
+  // Helper method to retrieve events for a specific day
   List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
     final DateTime normalizedDay = DateTime(day.year, day.month, day.day);
     return _doses[normalizedDay] ?? [];
   }
 
   Widget _buildDateAndDosesHeader() {
+    // Builds the header displaying the selected date and dose count
     final events = _getEventsForDay(_selectedDay);
     final doseCount = events.length;
 
@@ -266,6 +270,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
 
   @override
   Widget build(BuildContext context) {
+    // Main build method for the DoseSchedule page
     if (!_isLoading && _user == null) {
       return Scaffold(
         body: Container(
@@ -427,6 +432,7 @@ class _DoseScheduleState extends State<DoseSchedule> {
   }
 
   Widget _buildDoseList() {
+    // Builds the list of doses for the selected day
     final events = _getEventsForDay(_selectedDay);
 
     if (events.isEmpty) {
@@ -490,4 +496,3 @@ class _DoseScheduleState extends State<DoseSchedule> {
     );
   }
 }
-

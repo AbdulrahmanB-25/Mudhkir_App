@@ -3,9 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../Schedule/time_utils.dart';
 
-
-
-
 const Color kPrimaryColor = Color(0xFF2E86C1);
 const Color kSecondaryColor = Color(0xFF5DADE2);
 const Color kErrorColor = Color(0xFFFF6B6B);
@@ -15,6 +12,7 @@ const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
 
 class AddDosagePage extends StatelessWidget {
+  // Page for adding dosage details and scheduling
   final GlobalKey<FormState> formKey;
   final TextEditingController dosageController;
   final String dosageUnit;
@@ -66,7 +64,7 @@ class AddDosagePage extends StatelessWidget {
     required this.getDayName,
   }) : super(key: key);
 
-  // --- Weekly Schedule Section UI ---
+  // Builds the weekly schedule section
   Widget _buildWeeklyScheduleSection(BuildContext context) {
     // Sort the days according to the week order (Sunday to Saturday in Arabic convention)
     // Using 1=Monday through 7=Sunday ISO standard
@@ -343,6 +341,7 @@ class AddDosagePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Main build method for the page
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding = screenWidth * 0.06;
     const verticalPadding = 20.0;

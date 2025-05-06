@@ -22,6 +22,7 @@ class DoseScheduleServices {
     print("Dose cache cleared."); // Optional: for debugging
   }
 
+  // Fetches doses for a given date range and caches the results
   Future<Map<DateTime, List<Map<String, dynamic>>>> fetchDoses(
       BuildContext context, {DateTime? startRangeDate, DateTime? endRangeDate}) async {
     if (user == null) return {};
@@ -107,6 +108,7 @@ class DoseScheduleServices {
     }
   }
   
+  // Processes daily medications and adds them to the doses map
   void _processDailyMedication(
       Map<DateTime, List<Map<String, dynamic>>> doses,
       DateTime startDate,
@@ -149,6 +151,7 @@ class DoseScheduleServices {
     }
   }
   
+  // Processes weekly medications and adds them to the doses map
   void _processWeeklyMedication(
       Map<DateTime, List<Map<String, dynamic>>> doses,
       DateTime startDate,
@@ -309,6 +312,7 @@ class DoseScheduleServices {
     }
   }
 
+  // Toggles the status of a dose (e.g., taken, skipped, pending)
   Future<bool> toggleDoseStatus(String docId, String timeString, DateTime selectedDay, String currentStatus) async {
     if (user == null) return false;
 
@@ -419,6 +423,7 @@ class DoseScheduleServices {
     }
   }
 
+  // Deletes a medication and its associated image
   Future<bool> deleteMedication(String docId, String imgbbDeleteHash) async {
     if (user == null) return false;
 
@@ -474,4 +479,3 @@ class DoseScheduleServices {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 }
-

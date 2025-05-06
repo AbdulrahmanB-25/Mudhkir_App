@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class TimeUtilities {
-  // Format TimeOfDay for display in Arabic
+  // Format TimeOfDay for display in Arabic (handles AM/PM conversion)
   static String formatTimeOfDay(TimeOfDay time) {
     final int hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final String minute = time.minute.toString().padLeft(2, '0');
@@ -11,20 +11,20 @@ class TimeUtilities {
     return '$hour:$minute $period';
   }
 
-  // Helper method to determine if a time is in the future
+  // Check if a given TimeOfDay is in the future compared to the current time
   static bool isTimeInFuture(TimeOfDay time) {
     final now = TimeOfDay.now();
     return time.hour > now.hour ||
         (time.hour == now.hour && time.minute > now.minute);
   }
 
-  // Helper method to convert TimeOfDay to DateTime for today
+  // Convert TimeOfDay to DateTime for today's date
   static DateTime timeOfDayToDateTime(TimeOfDay time) {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day, time.hour, time.minute);
   }
 
-  // Helper method to convert TimeOfDay to TZDateTime for today
+  // Convert TimeOfDay to TZDateTime for today's date in the local timezone
   static tz.TZDateTime timeOfDayToTZDateTime(TimeOfDay time) {
     final now = tz.TZDateTime.now(tz.local);
     return tz.TZDateTime(
@@ -37,7 +37,7 @@ class TimeUtilities {
     );
   }
 
-  // Helper method to add hours to a TimeOfDay
+  // Add a specified number of hours to a TimeOfDay
   static TimeOfDay addHoursToTime(TimeOfDay time, int hoursToAdd) {
     final totalMinutes = (time.hour * 60 + time.minute) + (hoursToAdd * 60);
     return TimeOfDay(
@@ -46,25 +46,25 @@ class TimeUtilities {
     );
   }
 
-  // Compare two TimeOfDay objects
+  // Compare two TimeOfDay objects (returns negative, zero, or positive)
   static int compareTimeOfDay(TimeOfDay a, TimeOfDay b) {
     if (a.hour != b.hour) return a.hour - b.hour;
     return a.minute - b.minute;
   }
 
-  // Get time difference in minutes between two TimeOfDay objects
+  // Calculate the difference in minutes between two TimeOfDay objects
   static int getTimeDifferenceInMinutes(TimeOfDay time1, TimeOfDay time2) {
     return (time1.hour * 60 + time1.minute) - (time2.hour * 60 + time2.minute);
   }
 
-  // Check if a time is within a certain minute range of another time
+  // Check if two TimeOfDay objects are within a certain minute threshold
   static bool isTimeCloseToOther(
       TimeOfDay time1, TimeOfDay time2, int minuteThreshold) {
     final diff = getTimeDifferenceInMinutes(time1, time2).abs();
     return diff < minuteThreshold;
   }
 
-  // Format a date with Arabic locale
+  // Format a DateTime object into a localized Arabic date string
   static String formatDate(DateTime? date) {
     if (date == null) return "غير محدد";
     try {

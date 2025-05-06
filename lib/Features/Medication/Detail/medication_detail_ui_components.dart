@@ -37,7 +37,7 @@ class MedicationDetailUIComponents {
     required this.updateDosage,
   });
 
-  // Error view when loading fails
+  // Build error view with retry action
   Widget buildErrorView(String errorMessage, Function retryAction) {
     return Center(
       child: Container(
@@ -100,10 +100,10 @@ class MedicationDetailUIComponents {
     );
   }
 
-  // Main action section with confirmation buttons
+  // Build action section for medication confirmation and rescheduling
   Widget buildActionSection(Map<String, dynamic> medData,
       TimeOfDay? manualConfirmationTime,
-      bool isProcessingConfirmation,) {
+      bool isProcessingConfirmation) {
     final medName = medData['name'] ?? 'هذا الدواء';
 
     return Container(
@@ -142,7 +142,6 @@ class MedicationDetailUIComponents {
               ),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(kSpacing),
             child: Column(
@@ -187,7 +186,7 @@ class MedicationDetailUIComponents {
                                 Text(
                                   manualConfirmationTime != null
                                       ? TimeUtilities.formatTimeOfDay(
-                                      manualConfirmationTime)
+                                          manualConfirmationTime)
                                       : "الوقت الحالي",
                                   style: TextStyle(
                                     fontSize: 14,
@@ -218,24 +217,21 @@ class MedicationDetailUIComponents {
                     ),
                   ],
                 ),
-
                 SizedBox(height: 20),
-
-                // Confirmation button with improved feedback
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         icon: isProcessingConfirmation
                             ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white),
-                          ),
-                        )
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
                             : Icon(Icons.check_circle),
                         label: Text(isProcessingConfirmation
                             ? "جاري التأكيد..."
@@ -248,19 +244,18 @@ class MedicationDetailUIComponents {
                           shadowColor: Colors.green.shade300,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                              kBorderRadius / 2,),
+                              kBorderRadius / 2,
+                            ),
                           ),
                         ),
-                        onPressed: isProcessingConfirmation ? null : () =>
-                            handleConfirmation(true),
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () => handleConfirmation(true),
                       ),
                     ),
                   ],
                 ),
-
                 SizedBox(height: 10),
-
-                // Secondary actions
                 Row(
                   children: [
                     Expanded(
@@ -275,15 +270,17 @@ class MedicationDetailUIComponents {
                           shadowColor: kSecondaryColor.withOpacity(0.4),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                              kBorderRadius / 2,),
+                              kBorderRadius / 2,
+                            ),
                           ),
                         ),
-                        onPressed: isProcessingConfirmation ? null : () {
-                          updateState(() {
-                            // Replace with the new callback
-                            setReschedulingModeTrue();
-                          });
-                        },
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () {
+                                updateState(() {
+                                  setReschedulingModeTrue();
+                                });
+                              },
                       ),
                     ),
                     SizedBox(width: 10),
@@ -297,17 +294,17 @@ class MedicationDetailUIComponents {
                           padding: EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                              kBorderRadius / 2,),
+                              kBorderRadius / 2,
+                            ),
                           ),
                         ),
-                        onPressed: isProcessingConfirmation ? null : () =>
-                            handleConfirmation(false),
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () => handleConfirmation(false),
                       ),
                     ),
                   ],
                 ),
-
-                // Show progress indicator when processing
                 if (isProcessingConfirmation)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -317,8 +314,8 @@ class MedicationDetailUIComponents {
                         width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              kPrimaryColor),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(kPrimaryColor),
                         ),
                       ),
                     ),
@@ -331,10 +328,10 @@ class MedicationDetailUIComponents {
     );
   }
 
-  // Confirmation section for notification-driven confirmations
+  // Build enhanced confirmation section for notification-driven confirmations
   Widget buildEnhancedConfirmationSection(Map<String, dynamic> medData,
       String timeFormatted,
-      bool isProcessingConfirmation,) {
+      bool isProcessingConfirmation) {
     final medName = medData['name'] ?? 'هذا الدواء';
     final dosage = medData['dosage'] ?? '';
     final dosageUnit = medData['dosageUnit'] ?? '';
@@ -376,13 +373,11 @@ class MedicationDetailUIComponents {
               ),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(kSpacing),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Medication info row
                 Row(
                   children: [
                     Container(
@@ -423,10 +418,7 @@ class MedicationDetailUIComponents {
                     ),
                   ],
                 ),
-
                 SizedBox(height: 16),
-
-                // Time information
                 if (timeFormatted.isNotEmpty && timeFormatted != "وقت غير صالح")
                   Container(
                     padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
@@ -466,24 +458,21 @@ class MedicationDetailUIComponents {
                       ],
                     ),
                   ),
-
                 SizedBox(height: 24),
-
-                // Action buttons with improved feedback
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         icon: isProcessingConfirmation
                             ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white),
-                          ),
-                        )
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
                             : Icon(Icons.check_circle_outline),
                         label: Text(isProcessingConfirmation
                             ? "جاري التأكيد..."
@@ -496,19 +485,18 @@ class MedicationDetailUIComponents {
                           padding: EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                              kBorderRadius / 2,),
+                              kBorderRadius / 2,
+                            ),
                           ),
                         ),
-                        onPressed: isProcessingConfirmation ? null : () =>
-                            handleConfirmation(true),
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () => handleConfirmation(true),
                       ),
                     ),
                   ],
                 ),
-
                 SizedBox(height: 10),
-
-                // Secondary actions
                 Row(
                   children: [
                     Expanded(
@@ -519,12 +507,13 @@ class MedicationDetailUIComponents {
                           foregroundColor: kSecondaryColor,
                           padding: EdgeInsets.symmetric(vertical: 10),
                         ),
-                        onPressed: isProcessingConfirmation ? null : () {
-                          updateState(() {
-                            // Replace with the new callback
-                            setReschedulingModeTrue();
-                          });
-                        },
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () {
+                                updateState(() {
+                                  setReschedulingModeTrue();
+                                });
+                              },
                       ),
                     ),
                     Expanded(
@@ -535,14 +524,13 @@ class MedicationDetailUIComponents {
                           foregroundColor: kErrorColor,
                           padding: EdgeInsets.symmetric(vertical: 10),
                         ),
-                        onPressed: isProcessingConfirmation ? null : () =>
-                            handleConfirmation(false),
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () => handleConfirmation(false),
                       ),
                     ),
                   ],
                 ),
-
-                // Show progress indicator when processing
                 if (isProcessingConfirmation)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -552,8 +540,8 @@ class MedicationDetailUIComponents {
                         width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              kPrimaryColor),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(kPrimaryColor),
                         ),
                       ),
                     ),
@@ -566,12 +554,12 @@ class MedicationDetailUIComponents {
     );
   }
 
-  // Rescheduling section for time selection
+  // Build rescheduling section with suggested and custom time options
   Widget buildReschedulingSection(List<TimeOfDay> suggestedTimes,
       TimeOfDay? selectedSuggestedTime,
       TimeOfDay? customSelectedTime,
       bool isProcessingConfirmation,
-      TextEditingController customTimeController,) {
+      TextEditingController customTimeController) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -589,7 +577,6 @@ class MedicationDetailUIComponents {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
           Container(
             padding: EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
@@ -609,13 +596,11 @@ class MedicationDetailUIComponents {
               ),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(kSpacing),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Smart scheduling info
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -643,9 +628,7 @@ class MedicationDetailUIComponents {
                     ],
                   ),
                 ),
-
                 SizedBox(height: 20),
-
                 Text(
                   "الأوقات المقترحة",
                   style: TextStyle(
@@ -654,10 +637,7 @@ class MedicationDetailUIComponents {
                     color: Colors.black87,
                   ),
                 ),
-
                 SizedBox(height: 12),
-
-                // Suggested times row
                 Row(
                   children: suggestedTimes.map((time) {
                     final isSelected = selectedSuggestedTime == time;
@@ -665,20 +645,25 @@ class MedicationDetailUIComponents {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: InkWell(
-                          onTap: isProcessingConfirmation ? null : () {
-                            updateState(() {
-                              selectSuggestedTime(time);
-                            });
-                          },
+                          onTap: isProcessingConfirmation
+                              ? null
+                              : () {
+                                  updateState(() {
+                                    selectSuggestedTime(time);
+                                  });
+                                },
                           borderRadius: BorderRadius.circular(
-                            kBorderRadius / 2,),
+                            kBorderRadius / 2,
+                          ),
                           child: Container(
                             padding: EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
-                              color: isSelected ? kPrimaryColor : kPrimaryColor
-                                  .withOpacity(0.1),
+                              color: isSelected
+                                  ? kPrimaryColor
+                                  : kPrimaryColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(
-                                kBorderRadius / 2,),
+                                kBorderRadius / 2,
+                              ),
                               border: Border.all(
                                 color: isSelected
                                     ? kPrimaryColor
@@ -707,10 +692,7 @@ class MedicationDetailUIComponents {
                     );
                   }).toList(),
                 ),
-
                 SizedBox(height: 24),
-
-                // Custom time section
                 Text(
                   "أو حدد وقتًا مخصصًا",
                   style: TextStyle(
@@ -719,10 +701,7 @@ class MedicationDetailUIComponents {
                     color: Colors.black87,
                   ),
                 ),
-
                 SizedBox(height: 12),
-
-                // Custom time picker field
                 InkWell(
                   onTap: isProcessingConfirmation
                       ? null
@@ -755,7 +734,7 @@ class MedicationDetailUIComponents {
                           child: Text(
                             customSelectedTime != null
                                 ? TimeUtilities.formatTimeOfDay(
-                                customSelectedTime)
+                                    customSelectedTime)
                                 : "اضغط لتحديد وقت مخصص",
                             style: TextStyle(
                               fontSize: 15,
@@ -775,10 +754,7 @@ class MedicationDetailUIComponents {
                     ),
                   ),
                 ),
-
                 SizedBox(height: 24),
-
-                // Action buttons
                 Row(
                   children: [
                     Expanded(
@@ -788,12 +764,13 @@ class MedicationDetailUIComponents {
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.grey.shade700,
                         ),
-                        onPressed: isProcessingConfirmation ? null : () {
-                          updateState(() {
-                            // Replace with the new callback
-                            setReschedulingModeFalse();
-                          });
-                        },
+                        onPressed: isProcessingConfirmation
+                            ? null
+                            : () {
+                                updateState(() {
+                                  setReschedulingModeFalse();
+                                });
+                              },
                       ),
                     ),
                     SizedBox(width: 12),
@@ -801,14 +778,14 @@ class MedicationDetailUIComponents {
                       child: ElevatedButton.icon(
                         icon: isProcessingConfirmation
                             ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white),
-                          ),
-                        )
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
                             : Icon(Icons.schedule),
                         label: Text(isProcessingConfirmation
                             ? "جاري الجدولة..."
@@ -821,20 +798,19 @@ class MedicationDetailUIComponents {
                           padding: EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                              kBorderRadius / 2,),
+                              kBorderRadius / 2,
+                            ),
                           ),
                         ),
                         onPressed: (selectedSuggestedTime != null ||
-                            customSelectedTime != null) &&
-                            !isProcessingConfirmation
+                                customSelectedTime != null) &&
+                                !isProcessingConfirmation
                             ? handleReschedule
                             : null,
                       ),
                     ),
                   ],
                 ),
-
-                // Show progress indicator when processing
                 if (isProcessingConfirmation)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -844,8 +820,8 @@ class MedicationDetailUIComponents {
                         width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              kSecondaryColor),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(kSecondaryColor),
                         ),
                       ),
                     ),
@@ -858,6 +834,7 @@ class MedicationDetailUIComponents {
     );
   }
 
+  // Build medication information card with optional image and dosage details
   Widget buildMedicationInfoCard(Map<String, dynamic> medData) {
     final imageUrl = medData['imageUrl'] as String?;
     final medName = medData['name'] ?? 'دواء غير مسمى';
@@ -880,7 +857,6 @@ class MedicationDetailUIComponents {
       ),
       child: Column(
         children: [
-          // Header
           Container(
             padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(
@@ -904,13 +880,11 @@ class MedicationDetailUIComponents {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(kSpacing),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Optional Image
                 if (imageUrl != null && imageUrl.isNotEmpty)
                   Center(
                     child: Padding(
@@ -922,33 +896,35 @@ class MedicationDetailUIComponents {
                           height: 150,
                           width: 150,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              Container(
-                                height: 150,
-                                width: 150,
-                                color: Colors.grey.shade200,
-                                child: Icon(
-                                  Icons.medication_liquid_outlined,
-                                  size: 50,
-                                  color: Colors.grey.shade400,
-                                ),
-                              ),
-                          loadingBuilder: (_, child, loadingProgress) =>
-                          loadingProgress == null
-                              ? child
-                              : Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                                  : null,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 150,
+                            width: 150,
+                            color: Colors.grey.shade200,
+                            child: Icon(
+                              Icons.medication_liquid_outlined,
+                              size: 50,
+                              color: Colors.grey.shade400,
                             ),
                           ),
+                          loadingBuilder: (_, child, loadingProgress) =>
+                              loadingProgress == null
+                                  ? child
+                                  : Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                    .cumulativeBytesLoaded /
+                                                loadingProgress
+                                                    .expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    ),
                         ),
                       ),
                     ),
                   ),
-
                 Center(
                   child: Text(
                     medName,
@@ -960,9 +936,7 @@ class MedicationDetailUIComponents {
                     textAlign: TextAlign.center,
                   ),
                 ),
-
                 SizedBox(height: kSpacing),
-
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -995,7 +969,6 @@ class MedicationDetailUIComponents {
                         ),
                       ),
                       Spacer(),
-                      // Add the edit button
                       IconButton(
                         icon: Icon(
                           Icons.edit,
@@ -1012,7 +985,6 @@ class MedicationDetailUIComponents {
                     ],
                   ),
                 ),
-
                 if (instructions.isNotEmpty &&
                     instructions != 'لا توجد تعليمات.') ...[
                   SizedBox(height: 16),
@@ -1051,6 +1023,7 @@ class MedicationDetailUIComponents {
     );
   }
 
+  // Build schedule information card with start/end dates and time slots
   Widget buildScheduleInfoCard(Map<String, dynamic> medData) {
     final startDate = (medData['startDate'] as Timestamp?)?.toDate();
     final endDate = (medData['endDate'] as Timestamp?)?.toDate();
@@ -1072,7 +1045,6 @@ class MedicationDetailUIComponents {
       ),
       child: Column(
         children: [
-          // Header
           Container(
             padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(
@@ -1096,13 +1068,11 @@ class MedicationDetailUIComponents {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(kSpacing),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Date range
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1160,10 +1130,7 @@ class MedicationDetailUIComponents {
                     ],
                   ),
                 ),
-
                 SizedBox(height: kSpacing),
-
-                // Days of week
                 if (days.isNotEmpty) ...[
                   Text(
                     "أيام الأسبوع:",
@@ -1177,8 +1144,6 @@ class MedicationDetailUIComponents {
                   _buildDaysOfWeekRow(days),
                   SizedBox(height: kSpacing),
                 ],
-
-                // Time slots
                 if (timeSlots.isNotEmpty) ...[
                   Text(
                     "أوقات الجرعات:",
@@ -1199,9 +1164,20 @@ class MedicationDetailUIComponents {
     );
   }
 
+  // Helper methods for building UI components
   Widget _buildDaysOfWeekRow(List<dynamic> days) {
-    final dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-    final dayIndices = days.map((day) => day is int ? day : int.tryParse(day.toString()) ?? 0).toList();
+    final dayNames = [
+      'الأحد',
+      'الإثنين',
+      'الثلاثاء',
+      'الأربعاء',
+      'الخميس',
+      'الجمعة',
+      'السبت'
+    ];
+    final dayIndices = days
+        .map((day) => day is int ? day : int.tryParse(day.toString()) ?? 0)
+        .toList();
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1238,10 +1214,13 @@ class MedicationDetailUIComponents {
       runSpacing: 8,
       children: timeSlots.map<Widget>((slot) {
         String timeText = "غير محدد";
-        if (slot is Map && slot.containsKey('hour') && slot.containsKey('minute')) {
+        if (slot is Map &&
+            slot.containsKey('hour') &&
+            slot.containsKey('minute')) {
           final hour = int.tryParse(slot['hour'].toString()) ?? 0;
           final minute = int.tryParse(slot['minute'].toString()) ?? 0;
-          timeText = TimeUtilities.formatTimeOfDay(TimeOfDay(hour: hour, minute: minute));
+          timeText = TimeUtilities.formatTimeOfDay(
+              TimeOfDay(hour: hour, minute: minute));
         }
 
         return Container(

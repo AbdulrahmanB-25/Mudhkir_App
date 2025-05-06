@@ -42,6 +42,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+    // Initialize animations and notification setup
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -51,18 +52,19 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       curve: Curves.easeIn,
     );
 
-    // Complete the notification initialization with context
+    // Complete notification initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         AlarmNotificationHelper.completeInitialization(context);
       }
     });
 
+    // Listen for authentication state changes
     FirebaseAuth.instance.authStateChanges().listen((user) {
       _handleAuthStateChange(user);
     });
 
-    // Subscribe to Firestore medicines collection and schedule immediately
+    // Subscribe to Firestore medicines collection and schedule notifications
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       FirebaseFirestore.instance
@@ -80,6 +82,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   Future<void> _initializePage() async {
+    // Handles initial page setup and animations
     if (!mounted) return;
     setState(() => _isInitializing = true);
 
@@ -171,9 +174,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
   }
 
   Future<void> _scheduleAllUserMedications(String userId) async {
-    if (!mounted) {
-      return;
-    }
+    // Schedules all user medications with notifications
+    if (!mounted) return;
 
     try {
       await AlarmNotificationHelper.ensureChannelsSetup();
@@ -193,10 +195,7 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
           .collection('medicines')
           .get();
 
-      // Use Riyadh timezone location
       final tz.TZDateTime now = tz.TZDateTime.now(riyadhTimezone);
-
-      print("[Scheduling] Current time in Riyadh timezone: ${now.toString()}");
 
       for (var doc in medsSnapshot.docs) {
         final data = doc.data();
@@ -205,27 +204,16 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final startTimestamp = data['startDate'] as Timestamp?;
         final endTimestamp = data['endDate'] as Timestamp?;
 
-        if (startTimestamp == null) {
-          continue;
-        }
+        if (startTimestamp == null) continue;
 
-        // Convert timestamps to Riyadh timezone
         final tz.TZDateTime startDate = tz.TZDateTime.from(startTimestamp.toDate(), riyadhTimezone);
         final tz.TZDateTime? endDate = endTimestamp != null ? tz.TZDateTime.from(endTimestamp.toDate(), riyadhTimezone) : null;
 
-        // Date-only comparisons using Riyadh timezone
         final tz.TZDateTime todayFloor = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day);
         final tz.TZDateTime startDayFloor = tz.TZDateTime(riyadhTimezone, startDate.year, startDate.month, startDate.day);
 
-        if (todayFloor.isBefore(startDayFloor)) {
-          continue;
-        }
-        if (endDate != null) {
-          final tz.TZDateTime endDayFloor = tz.TZDateTime(riyadhTimezone, endDate.year, endDate.month, endDate.day);
-          if (todayFloor.isAfter(endDayFloor)) {
-            continue;
-          }
-        }
+        if (todayFloor.isBefore(startDayFloor)) continue;
+        if (endDate != null && todayFloor.isAfter(tz.TZDateTime(riyadhTimezone, endDate.year, endDate.month, endDate.day))) continue;
 
         final frequencyType = data['frequencyType'] as String? ?? 'يومي';
         final List<dynamic> timesRaw = data['times'] ?? [];
@@ -234,18 +222,18 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final tz.TZDateTime scheduleUntil = now.add(scheduleWindow);
 
         List<tz.TZDateTime> nextDoseTimes = _calculateNextDoseTimes(
-            now: now,
-            scheduleUntil: scheduleUntil,
-            startDate: startDate,
-            endDate: endDate,
-            frequencyType: frequencyType,
-            timesRaw: timesRaw);
+          now: now,
+          scheduleUntil: scheduleUntil,
+          startDate: startDate,
+          endDate: endDate,
+          frequencyType: frequencyType,
+          timesRaw: timesRaw,
+        );
 
         for (tz.TZDateTime doseTime in nextDoseTimes) {
           final notificationId = AlarmNotificationHelper.generateNotificationId(docId, doseTime);
 
           try {
-            print("[Scheduling] Scheduling notification for med '$medName' at ${doseTime.toString()} (Riyadh timezone)");
             await AlarmNotificationHelper.scheduleAlarmNotification(
               id: notificationId,
               title: "💊 تذكير بجرعة دواء",
@@ -274,17 +262,12 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
         final absoluteNextDoseTime = absoluteNextDose['time'] as tz.TZDateTime;
         final absoluteNextDoseDocId = absoluteNextDose['docId'] as String;
 
-        print("[Scheduling] Storing next dose: ${absoluteNextDoseTime.toString()} (Riyadh timezone) for med $absoluteNextDoseDocId");
-
-        // Store the time in ISO format but with explicit timezone info
         await prefs.setString(PREF_NEXT_DOSE_DOC_ID, absoluteNextDoseDocId);
         await prefs.setString(PREF_NEXT_DOSE_TIME_ISO, absoluteNextDoseTime.toString());
-
       } else {
         await prefs.remove(PREF_NEXT_DOSE_DOC_ID);
         await prefs.remove(PREF_NEXT_DOSE_TIME_ISO);
       }
-
     } catch (e) {
       print("[Scheduling] ERROR fetching or processing medications: $e");
       final prefs = await SharedPreferences.getInstance();
@@ -301,9 +284,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
     required String frequencyType,
     required List<dynamic> timesRaw,
   }) {
+    // Calculates the next dose times based on frequency and schedule
     List<tz.TZDateTime> doseTimes = [];
-
-    // Create a clean "now" time with 0 seconds for better comparison
     final tz.TZDateTime nowRounded = tz.TZDateTime(
       riyadhTimezone,
       now.year,
@@ -312,11 +294,8 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
       now.hour,
       now.minute,
       0,
-      0
+      0,
     );
-    
-    print("[Scheduling Calc] Now exact: ${now.toString()}");
-    print("[Scheduling Calc] Now rounded: ${nowRounded.toString()}");
 
     List<TimeOfDay> parsedTimesOfDay = [];
     List<int>? weeklyDays;
@@ -359,7 +338,6 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
     if (parsedTimesOfDay.isEmpty) return [];
 
-    // Use Riyadh timezone for all date calculations
     tz.TZDateTime currentDay = tz.TZDateTime(riyadhTimezone, now.year, now.month, now.day);
     final tz.TZDateTime startDayFloor = tz.TZDateTime(riyadhTimezone, startDate.year, startDate.month, startDate.day);
 
@@ -389,43 +367,33 @@ class _MainPageState extends State<MainPage> with SingleTickerProviderStateMixin
 
       if (checkThisDay) {
         for (TimeOfDay tod in parsedTimesOfDay) {
-          // Create the potential dose time in Riyadh timezone with zero seconds and milliseconds
           tz.TZDateTime potentialDoseTime = tz.TZDateTime(
-              riyadhTimezone, 
-              currentDay.year, 
-              currentDay.month, 
-              currentDay.day, 
-              tod.hour, 
-              tod.minute,
-              0, // Explicitly zero out seconds
-              0  // Explicitly zero out milliseconds
+            riyadhTimezone,
+            currentDay.year,
+            currentDay.month,
+            currentDay.day,
+            tod.hour,
+            tod.minute,
+            0,
+            0,
           );
 
-          // More precise comparison with now
-          final bool isExactlyNow = potentialDoseTime.year == nowRounded.year && 
-                                   potentialDoseTime.month == nowRounded.month && 
-                                   potentialDoseTime.day == nowRounded.day &&
-                                   potentialDoseTime.hour == nowRounded.hour && 
-                                   potentialDoseTime.minute == nowRounded.minute;
-                                   
+          final bool isExactlyNow = potentialDoseTime.year == nowRounded.year &&
+              potentialDoseTime.month == nowRounded.month &&
+              potentialDoseTime.day == nowRounded.day &&
+              potentialDoseTime.hour == nowRounded.hour &&
+              potentialDoseTime.minute == nowRounded.minute;
+
           final bool isInFuture = potentialDoseTime.isAfter(nowRounded) || isExactlyNow;
 
-          // Compare using Riyadh timezone and include exact current time
           if (isInFuture && potentialDoseTime.isBefore(scheduleUntil)) {
             if (endDate == null || potentialDoseTime.isBefore(endDate)) {
-              print("[Scheduling Calc] Adding dose time: ${potentialDoseTime.toString()}, isExactlyNow: $isExactlyNow");
               doseTimes.add(potentialDoseTime);
             }
-          } else {
-            print("[Scheduling Calc] Skipping dose time: ${potentialDoseTime.toString()} (not in valid time range)");
           }
         }
       }
       currentDay = currentDay.add(const Duration(days: 1));
-    }
-
-    if (safetyBreak >= maxDaysToCheck) {
-      print("[Scheduling Calc] Warning: Reached max days to check ($maxDaysToCheck).");
     }
 
     doseTimes = doseTimes.toSet().toList();
@@ -1492,4 +1460,3 @@ class EnhancedActionCard extends StatelessWidget {
     );
   }
 }
-

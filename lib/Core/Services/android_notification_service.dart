@@ -26,6 +26,7 @@ class AndroidNotificationService implements NotificationService {
       void Function(NotificationResponse) onNotificationResponse,
       void Function(NotificationResponse)? onBackgroundNotificationResponse
       ) async {
+    // Initializes the notification service and sets up channels
     if (_isInitialized) return;
     var androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     var initSettings = InitializationSettings(android: androidInit);
@@ -41,6 +42,7 @@ class AndroidNotificationService implements NotificationService {
 
   @override
   Future<void> setupNotificationChannels() async {
+    // Creates notification channels for different types of reminders
     var androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin == null) return;
     await androidPlugin.createNotificationChannel(AndroidNotificationChannel(
@@ -52,7 +54,7 @@ class AndroidNotificationService implements NotificationService {
         enableVibration: true,
         enableLights: true,
         sound: RawResourceAndroidNotificationSound('medication_alarm'),
-        vibrationPattern: Int64List.fromList([0,500,200,500]),
+        vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
         audioAttributesUsage: AudioAttributesUsage.alarm
     ));
     await androidPlugin.createNotificationChannel(AndroidNotificationChannel(
@@ -115,28 +117,14 @@ class AndroidNotificationService implements NotificationService {
     required bool isCompanionCheck,
     RepeatInterval? repeatInterval
   }) async {
-    if (!_isInitialized) {}
-    
-    // Cancel any existing notification with this ID first to prevent duplicates
+    // Schedules a notification with exact timing and handles edge cases
+    if (!_isInitialized) return;
+
+    // Cancel any existing notification with this ID to prevent duplicates
     await _notificationsPlugin.cancel(id);
-    
-    // Get current time with full precision for comparison
+
+    // Adjusts scheduled time if it's in the past or exactly now
     final nowExact = tz.TZDateTime.now(_riyadhTimezone);
-    
-    // Clean current time (zero seconds for comparison)
-    final now = tz.TZDateTime(
-      _riyadhTimezone,
-      nowExact.year,
-      nowExact.month,
-      nowExact.day,
-      nowExact.hour,
-      nowExact.minute,
-      0,
-      0
-    );
-    
-    // Create a clean time with seconds and milliseconds zeroed out
-    // Change from final to var so it can be reassigned
     var scheduled = tz.TZDateTime(
         _riyadhTimezone,
         scheduledTime.year,
@@ -144,150 +132,68 @@ class AndroidNotificationService implements NotificationService {
         scheduledTime.day,
         scheduledTime.hour,
         scheduledTime.minute,
-        0, // Explicitly zero out seconds
-        0  // Explicitly zero out milliseconds
+         0, // Explicitly zero out seconds
+         0  // Explicitly zero out milliseconds
     );
-    
+
     print("Android Service - Scheduling notification:");
     print("- ID: $id");
     print("- Current time exact: ${nowExact.toString()}");
-    print("- Current time rounded: ${now.toString()}");
     print("- Scheduled time: ${scheduled.toString()}");
-    print("- Difference in minutes: ${scheduled.difference(now).inMinutes}");
-    print("- Difference in seconds: ${scheduled.difference(nowExact).inSeconds}");
-    
-    // Check if time is exactly now (same minute)
-    final isExactlyNow = scheduled.year == now.year &&
-                        scheduled.month == now.month &&
-                        scheduled.day == now.day &&
-                        scheduled.hour == now.hour &&
-                        scheduled.minute == now.minute;
-                        
-    if (isExactlyNow) {
-      print("Time is exactly now, scheduling immediate notification");
-      _notificationsPlugin.show(
-        id,
-        title,
-        body,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            'medication_alarms_v2',
-            'Medication Alarms',
-            channelDescription: 'Critical medication reminders',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-            sound: RawResourceAndroidNotificationSound('medication_alarm'),
-            audioAttributesUsage: AudioAttributesUsage.alarm,
-          ),
-        ),
-        payload: medicationId,
-      );
-      return;
-    }
-    
-    // Check if the time is in the past
-    if (scheduled.isBefore(now)) {
-      print("Scheduled time is in the past");
-      
+
+    if (scheduled.isBefore(nowExact)) {
+      // Adjust time for repeating notifications or move to the next day
       if (repeatInterval == null) {
-        // For non-repeating notifications, move to tomorrow at the same time
         scheduled = tz.TZDateTime(
             _riyadhTimezone,
-            now.year,
-            now.month,
-            now.day + 1,
+            nowExact.year,
+            nowExact.month,
+            nowExact.day + 1,
             scheduled.hour,
             scheduled.minute,
-            0, // Keep seconds at zero
-            0  // Keep milliseconds at zero
+            0,
+            0
         );
         print("Adjusted to tomorrow: ${scheduled.toString()}");
       } else {
-        // For repeating notifications, find the next occurrence
         scheduled = repeatInterval == RepeatInterval.daily
-            ? _nextInstanceOfTime(now, TimeOfDay(hour: scheduled.hour, minute: scheduled.minute))
-            : _nextInstanceOfWeekday(now, scheduled.weekday, TimeOfDay(hour: scheduled.hour, minute: scheduled.minute));
+            ? _nextInstanceOfTime(nowExact, TimeOfDay(hour: scheduled.hour, minute: scheduled.minute))
+            : _nextInstanceOfWeekday(nowExact, scheduled.weekday, TimeOfDay(hour: scheduled.hour, minute: scheduled.minute));
         print("Adjusted to next occurrence: ${scheduled.toString()}");
       }
     }
-    
-    // Final safety check - if by some calculation error we still have a past time
-    if (scheduled.isBefore(nowExact)) {
-      print("SAFETY CHECK: Time is still in the past after adjustment");
-      scheduled = tz.TZDateTime(
-        _riyadhTimezone,
-        nowExact.year,
-        nowExact.month,
-        nowExact.day,
-        nowExact.hour,
-        nowExact.minute + 1, // Schedule for next minute
-        0,
-        0
-      );
-      print("Safety adjusted to one minute from now: ${scheduled.toString()}");
-    }
-    
-    // Configure match components for repeating notifications
-    DateTimeComponents? match;
-    if (repeatInterval == RepeatInterval.daily) {
-      match = DateTimeComponents.time;
-    } else if (repeatInterval == RepeatInterval.weekly) {
-      match = DateTimeComponents.dayOfWeekAndTime;
-    }
-    
-    // Determine the appropriate channel
-    var channelId = isCompanionCheck
-        ? 'companion_medication_alarms'
-        : isSnoozed
-        ? 'medication_alarms_v2'
-        : repeatInterval == RepeatInterval.daily
-        ? 'daily_reminders_v2'
-        : repeatInterval == RepeatInterval.weekly
-        ? 'weekly_reminders_v2'
-        : 'medication_alarms_v2';
-        
-    // Configure notification details
-    var useFullScreen = !isCompanionCheck;
-    var actions = <AndroidNotificationAction>[
-      AndroidNotificationAction('TAKE_ACTION', 'Take Now'),
-      AndroidNotificationAction('SNOOZE_ACTION', 'Snooze (5 min)')
-    ];
+
+    // Configures notification details and schedules it
     var androidDetails = AndroidNotificationDetails(
-        channelId,
-        channelId == 'daily_reminders_v2' ? 'Daily Reminders' :
-        channelId == 'weekly_reminders_v2' ? 'Weekly Reminders' :
-        channelId == 'companion_medication_alarms' ? 'Companion Medication Alarms' :
-        channelId == 'test_notifications' ? 'Test Notifications' :
+        'medication_alarms_v2',
         'Medication Alarms',
-        channelDescription: 'Medication reminder notifications',
+        channelDescription: 'Critical medication reminders',
         importance: Importance.max,
         priority: Priority.high,
-        category: AndroidNotificationCategory.alarm,
-        fullScreenIntent: useFullScreen,
         playSound: true,
+        enableVibration: true,
         sound: RawResourceAndroidNotificationSound('medication_alarm'),
-        audioAttributesUsage: isCompanionCheck ? AudioAttributesUsage.notification : AudioAttributesUsage.alarm,
-        visibility: NotificationVisibility.public,
-        actions: isCompanionCheck ? [] : actions
+        audioAttributesUsage: AudioAttributesUsage.alarm,
     );
     var details = NotificationDetails(android: androidDetails);
-    
-    // Schedule the notification with exact timing even in doze mode
-    print("Final scheduled time: ${scheduled.toString()}");
+
     await _notificationsPlugin.zonedSchedule(
         id,
         title,
         body,
         scheduled,
         details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Use exact timing even when device is in doze mode
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: medicationId,
-        matchDateTimeComponents: match
+        matchDateTimeComponents: repeatInterval == RepeatInterval.daily
+            ? DateTimeComponents.time
+            : repeatInterval == RepeatInterval.weekly
+                ? DateTimeComponents.dayOfWeekAndTime
+                : null
     );
   }
 
+  // Helper to calculate the next instance of a time for repeating notifications
   tz.TZDateTime _nextInstanceOfTime(tz.TZDateTime from, TimeOfDay tod) {
     var sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day, tod.hour, tod.minute, 0, 0); // Zero seconds
     if (sched.isBefore(from)) {
@@ -296,6 +202,7 @@ class AndroidNotificationService implements NotificationService {
     return sched;
   }
 
+  // Helper to calculate the next instance of a weekday for weekly notifications
   tz.TZDateTime _nextInstanceOfWeekday(tz.TZDateTime from, int weekday, TimeOfDay tod) {
     var sched = tz.TZDateTime(_riyadhTimezone, from.year, from.month, from.day, tod.hour, tod.minute, 0, 0); // Zero seconds
     if (sched.isBefore(from)) {
@@ -327,4 +234,3 @@ class AndroidNotificationService implements NotificationService {
     return await _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.areNotificationsEnabled();
   }
 }
-

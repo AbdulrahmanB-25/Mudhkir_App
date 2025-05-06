@@ -14,6 +14,7 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    // Initialize animation with easing curve for smooth logo appearance
     _controller = AnimationController(
       duration: Duration(seconds: 2),
       vsync: this,
@@ -27,7 +28,6 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -42,7 +42,6 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
             ),
           ),
 
-          // Decorative pill shapes in background
           Positioned(
             top: MediaQuery.of(context).size.height * 0.12,
             left: MediaQuery.of(context).size.width * 0.05,
@@ -80,13 +79,12 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
             ),
           ),
 
-          // Main Content in a Column
           Center(
             child: SingleChildScrollView(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated Logo
+                  // Apply scale animation to the logo for entrance effect
                   ScaleTransition(
                     scale: _animation,
                     child: Container(
@@ -225,7 +223,7 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
             ),
           ),
 
-          // Social Media Icons at the Bottom (Wrapped in Stack)
+          // Position social icons absolutely at bottom of screen
           Positioned(
             bottom: 20,
             left: 0,
@@ -246,6 +244,7 @@ class _WelcomeState extends State<Welcome> with SingleTickerProviderStateMixin {
     );
   }
 
+  // Helper method to create consistent social icons with shadow effect
   Widget _buildSocialIcon(IconData icon) {
     return Container(
       padding: EdgeInsets.all(10),

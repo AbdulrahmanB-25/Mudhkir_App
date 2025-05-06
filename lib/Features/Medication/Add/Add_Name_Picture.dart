@@ -10,6 +10,7 @@ const double kBorderRadius = 16.0;
 const double kSpacing = 18.0;
 
 class MedicineAutocomplete extends StatefulWidget {
+  // Autocomplete widget for medicine name suggestions
   final List<String> suggestions;
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -71,6 +72,7 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
     super.dispose();
   }
 
+  // Highlights matching text in suggestions
   Widget _highlightMatchingText(String text, String query) {
     if (query.isEmpty || !text.toLowerCase().contains(query.toLowerCase())) {
       return Text(
@@ -129,14 +131,13 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
+    // Dynamically calculate height for suggestions dropdown
     final bool hasMoreResults = _filteredSuggestions.length > _initialDisplayCount;
     final int displayItemCount = _filteredSuggestions.isEmpty ? 0 : _filteredSuggestions.length.clamp(1, _initialDisplayCount);
     final double calculatedHeight = displayItemCount * 60.0;
     final double totalHeight = calculatedHeight + (hasMoreResults && displayItemCount > 0 ? 30.0 : 0.0);
-
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -323,6 +324,7 @@ class _MedicineAutocompleteState extends State<MedicineAutocomplete> {
 }
 
 class AddNamePicturePage extends StatefulWidget {
+  // Page for adding medicine name and picture
   final GlobalKey<FormState> formKey;
   final TextEditingController nameController;
   final Future<List<String>> medicineNamesFuture;
@@ -363,6 +365,7 @@ class _AddNamePicturePageState extends State<AddNamePicturePage> {
     super.dispose();
   }
 
+  // Builds the image picker widget
   Widget _buildImagePicker(BuildContext context, double screenWidth) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -535,9 +538,9 @@ class _AddNamePicturePageState extends State<AddNamePicturePage> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
+    // Main build method for the page
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding = screenWidth * 0.06;
     const verticalPadding = 20.0;

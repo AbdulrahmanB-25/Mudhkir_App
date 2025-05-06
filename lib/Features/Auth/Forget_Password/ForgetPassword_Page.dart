@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class ForgetPassword extends StatefulWidget {
   final bool fromPersonalData;
-  
+
   const ForgetPassword({super.key, this.fromPersonalData = false});
 
   @override
@@ -13,7 +13,7 @@ class ForgetPassword extends StatefulWidget {
 class _ForgetPasswordState extends State<ForgetPassword> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-  
+
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
@@ -23,6 +23,7 @@ class _ForgetPasswordState extends State<ForgetPassword> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
+    // Initialize animation for UI transitions
     _controller = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
@@ -38,7 +39,7 @@ class _ForgetPasswordState extends State<ForgetPassword> with SingleTickerProvid
     super.dispose();
   }
 
-  // Reset password logic
+  // Handles the password reset logic and error handling
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -91,7 +92,7 @@ class _ForgetPasswordState extends State<ForgetPassword> with SingleTickerProvid
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient
+          // Background gradient and decorative elements
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(

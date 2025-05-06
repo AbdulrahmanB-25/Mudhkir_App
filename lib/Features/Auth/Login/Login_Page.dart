@@ -23,6 +23,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    // Initialize animation for UI transitions
     _controller = AnimationController(
       duration: Duration(seconds: 2),
       vsync: this,
@@ -30,6 +31,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
 
+    // Clear error messages when user modifies input fields
     _emailController.addListener(() {
       if (_isSubmitted) {
         setState(() {
@@ -50,6 +52,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
   }
 
   String _validateEmail(String email) {
+    // Validates email format and ensures it's not empty
     if (email.isEmpty) {
       return 'الرجاء إدخال البريد الإلكتروني';
     }
@@ -60,6 +63,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
   }
 
   String _validatePassword(String password) {
+    // Validates password length
     if (password.isEmpty) {
       return 'الرجاء إدخال كلمة المرور';
     }
@@ -70,6 +74,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
   }
 
   void _login() async {
+    // Handles user login and error handling
     setState(() {
       _isSubmitted = true;
       _emailError = _validateEmail(_emailController.text);
@@ -100,10 +105,11 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // Builds the login page UI
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient
+          // Background gradient and decorative elements
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -448,9 +454,11 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Dispose controllers to free resources
     _controller.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 }
+

@@ -7,8 +7,7 @@ import 'android_notification_service.dart';
 import 'ios_notification_service.dart';
 
 /// Abstract class defining the interface for platform-specific notification services.
-/// Implementations handle scheduling and managing notifications appropriately for
-/// each supported platform (Android/iOS).
+/// Handles scheduling, managing, and interacting with notifications.
 abstract class NotificationService {
   /// Factory constructor that returns the appropriate platform-specific implementation
   factory NotificationService() {
@@ -23,8 +22,6 @@ abstract class NotificationService {
   /// Access to the underlying notification plugin
   FlutterLocalNotificationsPlugin get notificationsPlugin;
 
-  /// Setup and initialization methods
-
   /// Initialize the notification service with callbacks for handling interactions
   Future<void> initialize(
       BuildContext context,
@@ -38,8 +35,6 @@ abstract class NotificationService {
   /// Request necessary permissions from the user to show notifications
   Future<void> requestPermissions();
 
-  /// Notification scheduling methods
-
   /// Schedule a medication alarm notification with specific parameters
   Future<void> scheduleAlarmNotification({
     required int id,
@@ -51,8 +46,6 @@ abstract class NotificationService {
     required bool isCompanionCheck,
     RepeatInterval? repeatInterval,
   });
-
-  /// Notification management methods
 
   /// Cancel a specific notification by ID
   Future<void> cancelNotification(int id);
