@@ -1,59 +1,52 @@
 plugins {
     id("com.android.application")
-    id("com.google.gms.google-services")
-    id("kotlin-android")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.mudhkir_app"
-    compileSdk = 35
-    ndkVersion = "27.0.12077973"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        // Required by flutter_local_notifications for scheduled notifications.
         isCoreLibraryDesugaringEnabled = true
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
         applicationId = "com.example.mudhkir_app"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
+        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
+        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
+        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
+        // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        multiDexEnabled = true
-        manifestPlaceholders["ALARM_PERMISSION"] = true
     }
 
     buildTypes {
-        getByName("release") {
-            // Removed the debug signing configuration
-        }
-    }
-
-    sourceSets {
-        getByName("main") {
-            res.srcDirs("src/main/res", "src/main/res/raw") // Ensure raw directory is included
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
 
-dependencies {
-    implementation("com.google.android.gms:play-services-base:18.2.0") // Ensure Google Play Services is included
-    implementation("com.google.android.gms:play-services-tasks:18.0.2") // Required for permissions
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.google.firebase:firebase-firestore-ktx:24.10.2") // Update Firestore
-    implementation("com.google.firebase:firebase-firestore:24.10.2")
-    implementation("androidx.work:work-runtime-ktx:2.8.1") // For background tasks
-    implementation("com.google.android.gms:play-services-tasks:18.0.2") // For exact alarms
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
 }
 
 flutter {
     source = "../.."
 }
 
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+}
