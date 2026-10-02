@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:timezone/timezone.dart' as tz;
 
 import '../../core/utils/clock.dart';
 import '../../data/repositories/dose_log_repository.dart';
@@ -73,8 +72,6 @@ class MedicationDetailViewModel extends ChangeNotifier {
     final taken = relevant.where((l) => l.status == DoseLogStatus.taken).length;
     return taken / relevant.length;
   }
-
-  tz.Location get location => tz.local;
 
   Future<void> end() => _medications.end(medicationId);
   Future<void> resume() => _medications.resume(medicationId);

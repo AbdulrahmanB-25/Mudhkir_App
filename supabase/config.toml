@@ -1,0 +1,17 @@
+# Supabase CLI settings (optional: only needed for `supabase start` / `db push`).
+# Hosted project: https://supabase.com/dashboard/project/emvpjqtaylchpmaugipy
+project_id = "mudhkir"
+
+[api]
+schemas = ["public", "graphql_public"]
+
+[auth]
+site_url = "http://localhost"
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[storage]
+file_size_limit = "5MiB"

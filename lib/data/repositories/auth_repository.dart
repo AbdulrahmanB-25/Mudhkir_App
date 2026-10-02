@@ -135,9 +135,25 @@ class AuthRepository extends ChangeNotifier {
   /// Deletes the account and all its cloud data (required by the App Store
   /// for apps that offer sign-up).
   Future<void> deleteAccount() => _guard(() async {
+    await _deletePhotos();
     await _cloud.rpc<void>('delete_my_account');
     await _cloud.auth.signOut();
   });
+
+  /// Photos live in Storage under `{uid}/{medicationId}/`; database rows are
+  /// removed by the account deletion itself.
+  Future<void> _deletePhotos() async {
+    final uid = _user?.id;
+    if (uid == null) return;
+    final bucket = _cloud.storage.from('medication-images');
+    final paths = <String>[];
+    for (final folder in await bucket.list(path: uid)) {
+      for (final file in await bucket.list(path: '$uid/${folder.name}')) {
+        paths.add('$uid/${folder.name}/${file.name}');
+      }
+    }
+    if (paths.isNotEmpty) await bucket.remove(paths);
+  }
 
   Future<T> _guard<T>(Future<T> Function() action) async {
     try {

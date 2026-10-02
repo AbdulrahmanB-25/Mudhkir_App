@@ -7,8 +7,10 @@ import '../../app/router.dart';
 import '../../core/config/env.dart';
 import '../../core/notifications/reminder_service.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../data/sync/sync_service.dart';
+import '../../domain/models/profile.dart';
 import '../../l10n/app_localizations.dart';
 import '../shared/common_widgets.dart';
 import '../shared/formatters.dart';
@@ -94,12 +96,21 @@ class _AccountCard extends StatelessWidget {
     return Card(
       child: Column(
         children: [
-          ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
-            title: Text(auth.displayName ?? l10n.myAccount),
-            subtitle: Text(auth.email ?? ''),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => context.push(Routes.profile),
+          WatchBuilder<Profile?>(
+            streamKey: auth.ownerId,
+            create: () => context.read<ProfileRepository>().watch(auth.ownerId),
+            builder: (context, snapshot) {
+              final name = snapshot.data?.name ?? auth.displayName;
+              return ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+                title: Text(
+                  name == null || name.isEmpty ? l10n.myAccount : name,
+                ),
+                subtitle: Text(auth.email ?? ''),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.push(Routes.profile),
+              );
+            },
           ),
           const Divider(height: 1),
           WatchBuilder<int>(
