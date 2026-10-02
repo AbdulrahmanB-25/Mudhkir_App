@@ -1,0 +1,9 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          # Store DateTime values as ISO-8601 text (UTC) for readability and
+          # predictable time-zone handling.
+          store_date_time_values_as_text: true
+          named_parameters: true

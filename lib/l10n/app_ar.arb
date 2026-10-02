@@ -1,0 +1,470 @@
+{
+  "@@locale": "ar",
+  "appTitle": "مُذكِّر",
+  "listSeparator": "، ",
+  "@listSeparator": {
+    "description": "Joins items in a list"
+  },
+  "tabHome": "الرئيسية",
+  "tabSchedule": "الجدول",
+  "tabCompanions": "المرافقون",
+  "tabSettings": "الإعدادات",
+  "actionTake": "تناولت الجرعة",
+  "actionSkip": "تخطي",
+  "actionReschedule": "تأجيل",
+  "actionUndo": "تراجع",
+  "actionMedicationDetails": "تفاصيل الدواء",
+  "actionCancel": "إلغاء",
+  "actionSave": "حفظ",
+  "actionNext": "التالي",
+  "actionBack": "رجوع",
+  "actionDelete": "حذف",
+  "actionOk": "حسناً",
+  "actionAllow": "سماح",
+  "actionAccept": "قبول",
+  "actionDecline": "رفض",
+  "moreActions": "إجراءات أخرى",
+  "notificationActionTake": "تناولتها ✓",
+  "notificationActionSnooze": "ذكّرني بعد ١٠ دقائق",
+  "notificationActionSkip": "تخطي",
+  "notificationChannelDoses": "تذكير الأدوية",
+  "notificationChannelDosesDescription": "تنبيهات بمواعيد جرعات أدويتك",
+  "notificationChannelCompanions": "تنبيهات المرافقين",
+  "notificationChannelCompanionsDescription": "تنبيه عندما يفوّت من ترافقه جرعة",
+  "notificationDoseTitle": "💊 حان موعد {name}",
+  "@notificationDoseTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationDoseBody": "الجرعة: {amount} {unit}",
+  "@notificationDoseBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationTestTitle": "💊 تذكير تجريبي",
+  "notificationTestBody": "التذكيرات تعمل بشكل صحيح.",
+  "companionMissedTitle": "جرعة فائتة لـ {name}",
+  "@companionMissedTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "companionMissedBody": "لم يتم تسجيل جرعة {medication} لـ {name}.",
+  "@companionMissedBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "medication": {
+        "type": "String"
+      }
+    }
+  },
+  "dosageUnitName": "{unit, select, mg{ملغم} g{غرام} ml{مل} tablet{حبة} unit{وحدة} other{{unit}}}",
+  "@dosageUnitName": {
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "statusTaken": "تم تناولها",
+  "statusSkipped": "تم تخطيها",
+  "statusMissed": "فائتة",
+  "statusDue": "حان موعدها",
+  "statusUpcoming": "قادمة",
+  "doseMarkedTaken": "تم تسجيل الجرعة ✓",
+  "doseMarkedSkipped": "تم تخطي الجرعة",
+  "doseMarkedPending": "أُعيدت الجرعة إلى الانتظار",
+  "doseRescheduled": "تم تأجيل الجرعة",
+  "rescheduleHelp": "اختر الوقت الجديد للجرعة",
+  "rescheduledFrom": "مؤجلة من {time}",
+  "@rescheduledFrom": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "rescheduledTo": "أُجّلت إلى {time}",
+  "@rescheduledTo": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "recordedAt": "سُجّلت الساعة {time}",
+  "@recordedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "doseAt": "جرعة {time}",
+  "@doseAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "goodMorning": "صباح الخير",
+  "goodEvening": "مساء الخير",
+  "greetingWithName": "{greeting}، {name}",
+  "@greetingWithName": {
+    "placeholders": {
+      "greeting": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "addMedication": "إضافة دواء",
+  "addFirstMedication": "أضف دواءك الأول",
+  "homeEmptyTitle": "لا توجد أدوية بعد",
+  "homeEmptyMessage": "أضف أدويتك وسيذكّرك مُذكِّر بمواعيدها حتى بدون إنترنت.",
+  "todayDoses": "جرعات اليوم",
+  "takenOfTotal": "{taken} من {total}",
+  "@takenOfTotal": {
+    "placeholders": {
+      "taken": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "noDosesToday": "لا توجد جرعات اليوم",
+  "nextDose": "الجرعة القادمة",
+  "doseDueNow": "حان موعد جرعتك الآن",
+  "noUpcomingDoses": "لا توجد جرعات قادمة. أحسنت!",
+  "myMedications": "أدويتي",
+  "accountBannerTitle": "احفظ بياناتك في السحابة",
+  "accountBannerMessage": "أنشئ حساباً مجانياً لحفظ نسخة احتياطية ومشاركة جدولك مع المرافقين.",
+  "notificationsOffTitle": "التنبيهات متوقفة",
+  "exactAlarmsOffTitle": "التذكير في الوقت المحدد غير مسموح",
+  "permissionBannerMessage": "قد لا تصلك تذكيرات الأدوية في وقتها.",
+  "scheduleTitle": "جدول الأدوية",
+  "calendarMonth": "شهر",
+  "calendarWeek": "أسبوع",
+  "today": "اليوم",
+  "noDosesThisDay": "لا توجد جرعات في هذا اليوم",
+  "currentMedications": "الأدوية الحالية",
+  "finishedMedications": "الأدوية المنتهية",
+  "timesPerDay": "{count, plural, =1{مرة يومياً} =2{مرتان يومياً} few{{count} مرات يومياً} other{{count} مرة يومياً}}",
+  "@timesPerDay": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editMedication": "تعديل الدواء",
+  "stepOf": "الخطوة {current} من {total}: {title}",
+  "@stepOf": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "stepNamePhoto": "الاسم والصورة",
+  "stepDosage": "الجرعة والمواعيد",
+  "stepDates": "المدة",
+  "medicationNameLabel": "اسم الدواء",
+  "medicationNameHint": "ابدأ بالكتابة للبحث، مثال: Panadol",
+  "medicationPhotoLabel": "صورة الدواء (اختياري)",
+  "medicationPhotoHint": "صورة العلبة تساعدك على التعرف على الدواء. تُحفظ على جهازك.",
+  "takePhoto": "الكاميرا",
+  "chooseFromGallery": "المعرض",
+  "removePhoto": "إزالة الصورة",
+  "photoError": "تعذر الحصول على الصورة",
+  "dosageLabel": "مقدار الجرعة",
+  "dosageHint": "مثال: 500",
+  "frequencyLabel": "التكرار",
+  "frequencyDaily": "يومي",
+  "frequencyWeekly": "أسبوعي",
+  "timesPerDayLabel": "عدد المرات في اليوم",
+  "doseNumber": "الجرعة {number}",
+  "@doseNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "chooseTime": "اختر الوقت",
+  "autoFilledTime": "تم ضبطه تلقائياً",
+  "autoFillHint": "عند اختيار وقت الجرعة الأولى توزَّع باقي الجرعات على اليوم بالتساوي، ويمكنك تعديلها.",
+  "weekdaysLabel": "أيام الأسبوع",
+  "maxWeekdaysReached": "يمكنك اختيار ٦ أيام كحد أقصى. للجرعات اليومية اختر \"يومي\".",
+  "applySameTime": "استخدم وقت اليوم الأول لبقية الأيام",
+  "setFirstDayTimeFirst": "حدد وقت اليوم الأول أولاً",
+  "startDateLabel": "تاريخ البدء",
+  "hasEndDate": "للدواء تاريخ انتهاء",
+  "endDateLabel": "تاريخ الانتهاء",
+  "notesLabel": "ملاحظات (اختياري)",
+  "notesHint": "مثال: بعد الأكل",
+  "summaryTitle": "ملخص",
+  "fromDate": "من {date}",
+  "@fromDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fromToDate": "من {start} إلى {end}",
+  "@fromToDate": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "issueNameRequired": "الرجاء إدخال اسم الدواء",
+  "issueDosageRequired": "الرجاء إدخال مقدار الجرعة",
+  "issueTimesRequired": "الرجاء تحديد جميع أوقات الجرعات",
+  "issueWeekdaysRequired": "الرجاء اختيار يوم واحد على الأقل",
+  "issueEndBeforeStart": "تاريخ الانتهاء قبل تاريخ البدء",
+  "medicationAdded": "تمت إضافة الدواء",
+  "medicationUpdated": "تم حفظ التعديلات",
+  "medicationNotFound": "لم يتم العثور على الدواء",
+  "endMedication": "إنهاء الدواء",
+  "endMedicationConfirm": "ستتوقف تذكيرات هذا الدواء ويبقى سجله محفوظاً.",
+  "resumeMedication": "استئناف الدواء",
+  "deleteMedication": "حذف الدواء",
+  "deleteMedicationConfirm": "سيتم حذف الدواء وسجله نهائياً.",
+  "medicationDeleted": "تم حذف الدواء",
+  "medicationFinished": "انتهى هذا الدواء ولن تصلك تذكيرات له.",
+  "historyTitle": "السجل",
+  "noHistory": "لا يوجد سجل بعد",
+  "adherence": "الالتزام {percent}٪",
+  "@adherence": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "welcomeTitle": "مرحباً بك في مُذكِّر",
+  "welcomeSubtitle": "تذكير بسيط وموثوق بمواعيد أدويتك.",
+  "featureRemindersTitle": "تذكير في الوقت المحدد",
+  "featureRemindersText": "تنبيه بصوت واضح مع أزرار: تناولت، أجّل، تخطَّ.",
+  "featureOfflineTitle": "يعمل بدون إنترنت",
+  "featureOfflineText": "بياناتك محفوظة على جهازك أولاً.",
+  "featureCompanionsTitle": "المرافقون",
+  "featureCompanionsText": "يمكن لأحد أفراد العائلة متابعة جرعاتك وتنبيهه إن فاتتك جرعة.",
+  "startWithoutAccount": "ابدأ الآن بدون حساب",
+  "signIn": "تسجيل الدخول",
+  "createAccount": "إنشاء حساب",
+  "signOut": "تسجيل الخروج",
+  "signInTitle": "تسجيل الدخول",
+  "signInSubtitle": "سجّل دخولك لمزامنة بياناتك والتواصل مع مرافقيك.",
+  "signUpTitle": "حساب جديد",
+  "signUpSubtitle": "الحساب مجاني ويحفظ نسخة احتياطية من بياناتك.",
+  "signUpGuestDataNote": "الأدوية التي أضفتها على هذا الجهاز ستنتقل إلى حسابك.",
+  "nameLabel": "الاسم",
+  "emailLabel": "البريد الإلكتروني",
+  "passwordLabel": "كلمة المرور",
+  "confirmPasswordLabel": "تأكيد كلمة المرور",
+  "currentPasswordLabel": "كلمة المرور الحالية",
+  "newPasswordLabel": "كلمة المرور الجديدة",
+  "forgotPassword": "نسيت كلمة المرور؟",
+  "noAccountSignUp": "ليس لديك حساب؟ أنشئ حساباً",
+  "haveAccountSignIn": "لديك حساب؟ سجّل الدخول",
+  "confirmEmailTitle": "تأكيد البريد الإلكتروني",
+  "confirmEmailMessage": "أرسلنا رابط تأكيد إلى {email}. افتح الرابط ثم سجّل الدخول.",
+  "@confirmEmailMessage": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "forgotPasswordTitle": "استعادة كلمة المرور",
+  "forgotPasswordSubtitle": "أدخل بريدك وسنرسل لك رمزاً لتعيين كلمة مرور جديدة.",
+  "enterResetCode": "أدخل الرمز المرسل إلى بريدك وكلمة المرور الجديدة.",
+  "sendResetCode": "إرسال الرمز",
+  "resendCode": "إعادة إرسال الرمز",
+  "resetCodeLabel": "الرمز",
+  "resetCodeSent": "تم إرسال الرمز إلى بريدك",
+  "changePassword": "تغيير كلمة المرور",
+  "passwordChanged": "تم تغيير كلمة المرور",
+  "validationRequired": "هذا الحقل مطلوب",
+  "validationEmail": "الرجاء إدخال بريد إلكتروني صحيح",
+  "validationPasswordLength": "كلمة المرور يجب ألا تقل عن ٨ أحرف",
+  "validationPasswordsDiffer": "كلمتا المرور غير متطابقتين",
+  "errorInvalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+  "errorEmailNotConfirmed": "الرجاء تأكيد بريدك الإلكتروني أولاً",
+  "errorEmailInUse": "هذا البريد مسجل مسبقاً",
+  "errorWeakPassword": "كلمة المرور ضعيفة، اختر كلمة أقوى",
+  "errorInvalidCode": "الرمز غير صحيح أو منتهي الصلاحية",
+  "errorRateLimited": "محاولات كثيرة، حاول بعد قليل",
+  "errorNetwork": "لا يوجد اتصال بالإنترنت",
+  "errorCloudUnavailable": "الخدمة السحابية غير مفعّلة في هذه النسخة",
+  "errorUnknown": "حدث خطأ غير متوقع، حاول مرة أخرى",
+  "accountSection": "الحساب",
+  "remindersSection": "التذكيرات",
+  "languageSection": "اللغة",
+  "aboutSection": "حول التطبيق",
+  "guestMode": "تستخدم التطبيق بدون حساب",
+  "guestModeHint": "بياناتك على هذا الجهاز فقط. سجّل الدخول للنسخ الاحتياطي.",
+  "offlineOnlyHint": "بياناتك محفوظة على هذا الجهاز.",
+  "myAccount": "حسابي",
+  "syncInProgress": "جارٍ المزامنة…",
+  "syncOffline": "بدون اتصال — ستتم المزامنة لاحقاً",
+  "syncError": "تعذرت المزامنة",
+  "syncNever": "لم تتم المزامنة بعد",
+  "syncLast": "آخر مزامنة: {time}",
+  "@syncLast": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncPending": "{count, plural, =1{تغيير واحد بانتظار الرفع} =2{تغييران بانتظار الرفع} few{{count} تغييرات بانتظار الرفع} other{{count} تغيير بانتظار الرفع}}",
+  "@syncPending": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncNow": "زامن الآن",
+  "notificationsPermission": "السماح بالتنبيهات",
+  "notificationsPermissionHint": "مطلوب لتصلك تذكيرات الأدوية",
+  "exactAlarmsHint": "اسمح بالمنبهات والتذكيرات لتصل التنبيهات في وقتها تماماً.",
+  "testReminder": "تذكير تجريبي",
+  "testReminderHint": "سيصلك تنبيه بعد دقيقة",
+  "testReminderScheduled": "سيصلك التذكير خلال دقيقة",
+  "privacyTitle": "خصوصيتك",
+  "privacyText": "تُحفظ بياناتك على جهازك. عند تسجيل الدخول تُنسخ بشكل آمن إلى حسابك ولا يراها إلا من توافق على مشاركتها معه.",
+  "contactUs": "تواصل معنا",
+  "appVersion": "الإصدار {version}",
+  "@appVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "profileTitle": "الملف الشخصي",
+  "notSet": "غير محدد",
+  "changeEmail": "تغيير البريد الإلكتروني",
+  "emailChangeSent": "أرسلنا رابط تأكيد إلى {email}",
+  "@emailChangeSent": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "emailChangePending": "بانتظار تأكيد {email}",
+  "@emailChangePending": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "signOutConfirm": "سيتم حذف بيانات حسابك من هذا الجهاز، وتبقى محفوظة في حسابك.",
+  "signOutPendingWarning": "{count, plural, =1{يوجد تغيير واحد لم يُرفع بعد وسيُفقد إذا سجلت الخروج الآن.} other{يوجد {count} تغييرات لم تُرفع بعد وستُفقد إذا سجلت الخروج الآن.}}",
+  "@signOutPendingWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deleteAccount": "حذف الحساب",
+  "deleteAccountConfirm": "سيتم حذف حسابك وجميع بياناته من السحابة نهائياً. لا يمكن التراجع.",
+  "accountDeleted": "تم حذف الحساب",
+  "addCompanion": "إضافة مرافق",
+  "editCompanion": "تعديل بيانات المرافق",
+  "removeCompanion": "إزالة المرافق",
+  "removeCompanionConfirm": "لن تتمكن من متابعة أدوية {name} بعد الآن.",
+  "@removeCompanionConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "companionsNeedCloudTitle": "المرافقون يحتاجون اتصالاً بالسحابة",
+  "companionsNeedCloudMessage": "هذه النسخة تعمل بدون سحابة. أضف إعدادات Supabase لتفعيل المرافقين.",
+  "companionsSignInTitle": "تابع أدوية من تحب",
+  "companionsSignInMessage": "سجّل الدخول لإضافة مرافق ومتابعة جرعاته وتلقي تنبيه إذا فاتته جرعة.",
+  "noCompanionsTitle": "لا يوجد مرافقون بعد",
+  "noCompanionsMessage": "أضف أحد أفراد عائلتك عن طريق بريده الإلكتروني المسجل في مُذكِّر.",
+  "incomingRequests": "طلبات المتابعة",
+  "peopleICareFor": "أتابع أدويتهم",
+  "invitesSent": "دعوات مرسلة",
+  "peopleCaringForMe": "يتابعون أدويتي",
+  "waitingForAcceptance": "بانتظار الموافقة",
+  "cancelInvite": "إلغاء الدعوة",
+  "canSeeYourMedications": "يستطيع رؤية أدويتك وجرعاتك",
+  "stopSharing": "إيقاف المشاركة",
+  "stopSharingConfirm": "لن يتمكن {name} من رؤية أدويتك بعد الآن.",
+  "@stopSharingConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "requestMessage": "طلب متابعة من {name}",
+  "@requestMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "requestExplanation": "عند القبول سيرى جدول أدويتك وجرعاتك، ويتلقى تنبيهاً إذا فاتتك جرعة.",
+  "inviteExplanation": "أدخل البريد الإلكتروني لحساب الشخص في مُذكِّر. سيصله طلب للموافقة.",
+  "companionEmailLabel": "البريد الإلكتروني للمرافق",
+  "companionNameLabel": "الاسم الظاهر",
+  "relationshipLabel": "صلة القرابة (اختياري)",
+  "relationshipHint": "مثال: الوالدة",
+  "sendInvite": "إرسال الدعوة",
+  "inviteSent": "تم إرسال الدعوة",
+  "inviteNotFound": "لا يوجد حساب بهذا البريد في مُذكِّر",
+  "inviteSelf": "لا يمكنك إضافة نفسك",
+  "inviteAlreadyLinked": "هذا الشخص مضاف مسبقاً",
+  "companionNotAvailable": "لا يمكن عرض بيانات هذا المرافق",
+  "addMedicationFor": "دواء لـ {name}",
+  "@addMedicationFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
+}

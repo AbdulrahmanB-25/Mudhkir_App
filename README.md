@@ -1,46 +1,59 @@
-# Mudhkir - Medication Tracking and Reminder Application
+# مُذكِّر · Mudhkir
 
-Mudhkir is a smart, user-friendly, and Arabic-localized medication management application designed to assist individuals—especially elderly and middle-aged users—in managing their medication routines. The app offers adaptive reminders, caregiver notifications, and a simplified interface to improve adherence and overall health outcomes.
+An Arabic-first medication reminder app for older adults and the family members who look after them. Mudhkir began as a 2024–25 graduation project and was rebuilt in 2026 as an **offline-first** Flutter app for **Android and iOS**.
 
-## About the Project
+- **Works without internet or an account.** Everything is stored on the phone in SQLite.
+- **On-time reminders.** Reminders ring with a clear alarm and have **Taken / Snooze 10 min / Skip** buttons, which work even when the app is closed.
+- **Optional free cloud account (Supabase).** It gives you a backup, sync between devices, and **companions**: a family member you approve can follow your doses and is alerted when you miss one.
+- **Arabic RTL interface** with English as a second language, large touch targets, and the Tajawal font.
 
-Medication adherence is critical yet challenging for patients managing complex regimens. Mudhkir addresses these challenges by offering:
-
-- Adaptive reminders that adjust based on user behavior.
-- Caregiver integration for collaborative care.
-- Arabic language support and elder-friendly UI.
-- Cost-effective alternative to physical dispensers.
-- Seamless real-time syncing and accessibility.
+> To set up and run the app, see **[RUNNING.md](RUNNING.md)**.
 
 ## Features
 
-- **User-Centric Medication Tracking**: Easy-to-use schedule management with medication images.
-- **Adaptive Reminder System**: Smart notifications that align with user routines and adjust if doses are missed.
-- **Caregiver Support Tools**: Real-time alerts and shared access to user schedules.
-- **Companion System**: Allows linking caregivers for collaborative management.
-- **Secure Authentication and Data Privacy**: Managed by Firebase with encrypted user data.
-- **Offline Access and Sync**: Users can manage medication even without internet, syncing when back online.
-- **Simple and Accessible UI**: RTL support, large buttons, and clear navigation designed for elderly users.
+| Area | What you can do |
+|---|---|
+| Medications | 3-step wizard: name (autocomplete from ~5,000 trade names), photo, dose and unit, daily (1–6 times, auto-spaced) or weekly schedule, start/end date, notes. Edit, stop, resume or delete. |
+| Doses | Home shows the next dose and today's list. Mark a dose taken, skip it, reschedule it, or undo. The history shows an adherence %. |
+| Calendar | Month or week view with coloured dots (all taken / planned / missed) and the doses for the selected day. |
+| Reminders | Exact alarms with a custom sound. A rolling 7-day window is rescheduled whenever data changes. Reminders follow the device's time zone. |
+| Account | Guest mode, sign up, sign in, password reset by emailed code, change email or password, delete account. |
+| Companions | Invite someone by email. They accept the request, and you can then see their calendar, record doses for them, and add or edit their medications. You get an alert when they miss a dose. |
+| Settings | Language (Arabic / English), notification permissions, test reminder, sync status, privacy note. |
 
-## Technology Stack
+## Architecture
 
-| Technology | Purpose |
-|------------|---------|
-| Flutter | Frontend UI Development |
-| Dart | Application Logic |
-| Firebase Auth | User Authentication |
-| Cloud Firestore | Real-time Database |
-| ImgBB API | Image Uploading |
-| Codemagic | CI/CD and iOS Testing |
-| Figma | UI/UX Design |
-| Git & GitHub | Version Control |
+```
+lib/
+  app/        App widget, go_router routes, theme, dependency wiring (provider)
+  core/       config (env), notifications (reminders + action handler), time zone, utils
+  data/
+    local/        drift (SQLite) tables + generated code: the source of truth
+    repositories/ medications, dose logs, profile, companions, settings, auth
+    remote/       Supabase access (tables, storage, RPC) behind RemoteStore
+    sync/         SyncService: push dirty rows, pull by checkpoint, newest edit wins
+    services/     on-device photo store, medicine-name catalog
+  domain/     plain models + DoseCalculator (pure, unit-tested schedule logic)
+  services/   ReminderCoordinator, CompanionMonitor, background tasks (workmanager)
+  features/   one folder per screen: view + ChangeNotifier view model
+  l10n/       app_ar.arb (template), app_en.arb
+supabase/     SQL migrations: schema, row-level security, triggers, storage
+test/         unit, repository, sync (fake server) and widget tests
+```
 
-## System Overview
+**How a change flows.** The UI calls a repository, which writes to SQLite and marks the row `dirty`. Drift streams update every screen at once, and the `ReminderCoordinator` reschedules notifications. When the user is signed in and online, `SyncService` uploads dirty rows and pulls changes from other devices and from caregivers. If the same row was edited in both places, the newer `updated_at` wins; the server enforces this with a trigger.
 
-### Architecture
-Mudhkir uses a modular design with a feature-first architecture for maintainability and scalability. Core components include:
+**Security.** Supabase row-level security lets each user see only their own rows. A caregiver sees a patient's medications and dose logs only after the patient accepts the link, and only the patient can accept it. Photos are kept in a private bucket under `{owner}/…`.
 
-- **Frontend (Flutter)**: User interface and notification handling.
-- **Backend (Firebase & ImgBB)**: Authentication, data storage, and image handling.
-- **Notifications**: Local notifications using scheduled triggers.
-- **Companion System**: Linked user access for caregivers.
+## Development
+
+```bash
+fvm install && fvm use           # Flutter 3.47.6 (see .fvmrc)
+flutter pub get
+flutter analyze && flutter test
+dart run build_runner build      # only after changing lib/data/local/tables.dart
+```
+
+## History
+
+The 2024–25 version used Firebase Auth/Firestore, ImgBB for photos, and Android-only background checks. The 2026 rewrite replaced those with an on-device database and optional Supabase sync. It also fixed a crash on first launch, removed API keys that had been committed to the repo, and added iOS support.
