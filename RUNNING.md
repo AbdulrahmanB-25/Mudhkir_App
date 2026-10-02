@@ -1,5 +1,7 @@
 # Running Mudhkir
 
+> **On Windows with an Android phone?** Follow the short guide in **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**. A script installs everything for you.
+
 ## 1. Install the tools (once)
 
 | Tool | Version | Notes |
