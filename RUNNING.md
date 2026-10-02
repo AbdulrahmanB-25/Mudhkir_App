@@ -24,32 +24,18 @@ fvm flutter pub get                       # or just `flutter pub get`
 
 ## 3. Choose how to run
 
-### A. Fully offline (no account, no setup)
+### A. Normal run (cloud on)
 
 ```bash
 flutter run
 ```
 
-Every feature works except sign-in, sync and companions; the app shows that these need the cloud.
+The app is already connected to the **mudhkir** Supabase project (`emvpjqtaylchpmaugipy`), because its URL and publishable key are built in (`lib/core/config/env.dart`). That key is meant to ship inside apps; row-level security protects the data. Any run button in Android Studio works, and you don't need `env.json`.
 
-### B. With the cloud (Supabase)
+### B. Fully offline, or a different Supabase project
 
-1. Create `env.json` in the project folder. It is git-ignored, so it never gets committed:
-
-   ```json
-   {
-     "SUPABASE_URL": "https://emvpjqtaylchpmaugipy.supabase.co",
-     "SUPABASE_PUBLISHABLE_KEY": "<Project Settings → API Keys → publishable key>"
-   }
-   ```
-
-   The project **mudhkir** (`emvpjqtaylchpmaugipy`) already exists in your Supabase account, and its schema is already applied. The publishable key is safe to ship inside the app, because row-level security protects the data.
-
-2. Run:
-
-   ```bash
-   flutter run --dart-define-from-file=env.json
-   ```
+- Offline only (no sign-in, sync or companions): `flutter run --dart-define=SUPABASE_URL=`
+- Another project: copy `env.example.json` to `env.json`, fill it in, and run `flutter run --dart-define-from-file=env.json`
 
 ### Picking a device
 

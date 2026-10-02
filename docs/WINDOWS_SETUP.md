@@ -22,7 +22,7 @@ Two moments need you:
   2. Accept all licenses → **Finish**. Wait until the downloads are done.
   3. On the Welcome screen click **Plugins**, search **Flutter**, click **Install** (Dart installs with it), then **Restart IDE**.
   4. Close Android Studio and press **Enter** in PowerShell.
-- **The script asks for your Supabase key.** Paste the *publishable key* (`sb_publishable_…`), or press Enter to use the app offline only. You can find the key in the Supabase dashboard → project **mudhkir** → *Project Settings* → *API Keys*. It's also in the `env.json` file I sent you in chat.
+- **The script asks for your Supabase key.** Just press **Enter**: the app already has the mudhkir project built in. Only paste a key if you want to use a different Supabase project.
 
 It ends by printing `flutter doctor`. Everything except "Visual Studio", "Chrome" and "Xcode" should be ✓; you don't need those three for Android.
 
@@ -47,7 +47,7 @@ It ends by printing `flutter doctor`. Everything except "Visual Studio", "Chrome
 
 1. Open Android Studio → **Open** → choose the `Mudhkir_App` folder → *Trust Project*.
 2. If a banner says *"Flutter SDK path not configured"*, set it to `C:\src\flutter`.
-3. On the top toolbar, pick your **phone** in the device dropdown and **Mudhkir** in the configuration dropdown (it already passes `--dart-define-from-file=env.json`).
+3. On the top toolbar, pick your **phone** in the device dropdown and **Mudhkir** (or `main.dart`, either works) in the configuration dropdown.
 4. Press the green **▶ Run**. The first build takes 5–10 minutes; after that it's quicker. Press **⚡ Hot reload** after editing code.
 
 When the app opens on your phone:
@@ -64,6 +64,6 @@ When the app opens on your phone:
 | `Android license status unknown` | Run `flutter doctor --android-licenses` and answer `y` to each question. |
 | Build stuck at "Running Gradle task" | The first build downloads Gradle and its libraries (about 1 GB). Wait; check the Wi-Fi. |
 | `INSTALL_FAILED_USER_RESTRICTED` (Xiaomi) | Turn on **Install via USB** in Developer options and sign in to a Mi account. |
-| Sign-in says "cloud not set up" | `env.json` is empty. Put the URL and publishable key in it (see `env.example.json`) and run again. |
+| Sign-up says to check your email, but no email arrives | In the Supabase dashboard → *Authentication* → *Sign In / Providers* → *Email*, turn off **Confirm email** while testing. The free plan sends only a few emails per hour. |
 
 Still stuck? Copy the red error text and send it to me.
